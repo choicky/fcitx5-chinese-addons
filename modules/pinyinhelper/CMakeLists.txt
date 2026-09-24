@@ -2,6 +2,7 @@ set(PINYINHELPER_SOURCES
     pinyinhelper.cpp
     pinyinlookup.cpp
     stroke.cpp
+    moqi.cpp
 )
 add_fcitx5_addon(pinyinhelper ${PINYINHELPER_SOURCES})
 target_link_libraries(pinyinhelper 
@@ -29,6 +30,21 @@ fcitx5_download(py-stroke-download "${PY_STROKE_URL}" "${PY_STROKE_TAR}"
 fcitx5_extract(py-stroke-extract "${PY_STROKE_TAR}" DEPENDS py-stroke-download
   OUTPUT ${PY_STROKE_TGT})
 install(FILES "${PY_STROKE_TGT}" DESTINATION "${FCITX_INSTALL_PKGDATADIR}/pinyinhelper")
+
+set(MOQI_TABLE_COMMIT 6d8ba8f1c57466f358e682baefe11bbd0fe389ab)
+set(MOQI_TABLE_TGT "${CMAKE_CURRENT_BINARY_DIR}/moqima_gb18030.txt")
+set(MOQI_TABLE_URL
+  "https://raw.githubusercontent.com/gaboolic/moqima-tables/${MOQI_TABLE_COMMIT}/moqima_gb18030.txt")
+fcitx5_download(moqi-table-download "${MOQI_TABLE_URL}" "moqima_gb18030.txt"
+  66deab4aaba1285e3c85eb3a364c21bc08db1911b61df8e934f0d006ca7e7923)
+add_custom_command(
+  OUTPUT "${MOQI_TABLE_TGT}"
+  COMMAND ${CMAKE_COMMAND} -E copy_if_different
+          "${CMAKE_CURRENT_BINARY_DIR}/moqima_gb18030.txt"
+          "${MOQI_TABLE_TGT}"
+  DEPENDS moqi-table-download)
+add_custom_target(moqi-table ALL DEPENDS "${MOQI_TABLE_TGT}")
+install(FILES "${MOQI_TABLE_TGT}" DESTINATION "${FCITX_INSTALL_PKGDATADIR}/pinyinhelper")
 
 set(PY_TABLE_VER 20121124)
 set(PY_TABLE_TGT "${CMAKE_CURRENT_BINARY_DIR}/py_table.mb")
