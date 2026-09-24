@@ -51,9 +51,15 @@ int main() {
     auto moqiA =
         pinyinhelper->call<fcitx::IPinyinHelper::reverseLookupMoQi>("啊");
     FCITX_ASSERT(moqiA == "kk") << moqiA;
+    auto moqiExtB =
+        pinyinhelper->call<fcitx::IPinyinHelper::reverseLookupMoQi>("𠀀");
+    FCITX_ASSERT(moqiExtB == "av") << moqiExtB;
     auto moqiInvalid =
         pinyinhelper->call<fcitx::IPinyinHelper::reverseLookupMoQi>("AB");
     FCITX_ASSERT(moqiInvalid.empty()) << moqiInvalid;
+    auto moqiMissing =
+        pinyinhelper->call<fcitx::IPinyinHelper::reverseLookupMoQi>("😀");
+    FCITX_ASSERT(moqiMissing.empty()) << moqiMissing;
 
     return 0;
 }
