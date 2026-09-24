@@ -37,13 +37,8 @@ set(MOQI_TABLE_URL
   "https://raw.githubusercontent.com/gaboolic/moqima-tables/${MOQI_TABLE_COMMIT}/moqima_gb18030.txt")
 fcitx5_download(moqi-table-download "${MOQI_TABLE_URL}" "moqima_gb18030.txt"
   66deab4aaba1285e3c85eb3a364c21bc08db1911b61df8e934f0d006ca7e7923)
-add_custom_command(
-  OUTPUT "${MOQI_TABLE_TGT}"
-  COMMAND ${CMAKE_COMMAND} -E copy_if_different
-          "${CMAKE_CURRENT_BINARY_DIR}/moqima_gb18030.txt"
-          "${MOQI_TABLE_TGT}"
-  DEPENDS moqi-table-download)
-add_custom_target(moqi-table ALL DEPENDS "${MOQI_TABLE_TGT}")
+add_custom_target(moqi-table ALL)
+add_dependencies(moqi-table moqi-table-download)
 install(FILES "${MOQI_TABLE_TGT}" DESTINATION "${FCITX_INSTALL_PKGDATADIR}/pinyinhelper")
 
 set(PY_TABLE_VER 20121124)
