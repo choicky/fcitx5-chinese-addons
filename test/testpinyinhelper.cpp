@@ -45,5 +45,15 @@ int main() {
         pinyinhelper->call<fcitx::IPinyinHelper::prettyStrokeString>("54321");
     FCITX_ASSERT(result5 == "𠃍㇏丿丨一");
 
+    auto moqiNi =
+        pinyinhelper->call<fcitx::IPinyinHelper::reverseLookupMoQi>("你");
+    FCITX_ASSERT(moqiNi == "re") << moqiNi;
+    auto moqiA =
+        pinyinhelper->call<fcitx::IPinyinHelper::reverseLookupMoQi>("啊");
+    FCITX_ASSERT(moqiA == "kk") << moqiA;
+    auto moqiInvalid =
+        pinyinhelper->call<fcitx::IPinyinHelper::reverseLookupMoQi>("AB");
+    FCITX_ASSERT(moqiInvalid.empty()) << moqiInvalid;
+
     return 0;
 }
