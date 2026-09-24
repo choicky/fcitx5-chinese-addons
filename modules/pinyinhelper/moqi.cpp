@@ -25,8 +25,8 @@ void MoQi::loadAsync() {
 
     loadFuture_ = std::async(std::launch::async, []() {
         libime::DATrie<int32_t> reverseDict;
-        auto file = StandardPaths::global().open(StandardPathsType::PkgData,
-                                                 "pinyinhelper/moqima_gb18030.txt");
+        auto file = StandardPaths::global().open(
+            StandardPathsType::PkgData, "pinyinhelper/moqima_gb18030.txt");
         if (!file.isValid()) {
             throw std::runtime_error("Failed to open MoQi table");
         }
