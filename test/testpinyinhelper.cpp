@@ -47,7 +47,7 @@ int main() {
 
     auto moqiNi =
         pinyinhelper->call<fcitx::IPinyinHelper::reverseLookupMoQi>("你");
-    FCITX_ASSERT(moqiNi == "re") << moqiNi;
+    FCITX_ASSERT(moqiNi == "rx") << moqiNi;
     auto moqiA =
         pinyinhelper->call<fcitx::IPinyinHelper::reverseLookupMoQi>("啊");
     FCITX_ASSERT(moqiA == "kk") << moqiA;
