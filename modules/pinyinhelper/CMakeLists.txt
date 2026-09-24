@@ -32,7 +32,7 @@ fcitx5_extract(py-stroke-extract "${PY_STROKE_TAR}" DEPENDS py-stroke-download
 install(FILES "${PY_STROKE_TGT}" DESTINATION "${FCITX_INSTALL_PKGDATADIR}/pinyinhelper")
 
 set(MOQI_TABLE_COMMIT 6d8ba8f1c57466f358e682baefe11bbd0fe389ab)
-set(MOQI_TABLE_TGT "${CMAKE_CURRENT_BINARY_DIR}/moqima_gb18030.txt")
+set(MOQI_TABLE_TGT "${CMAKE_CURRENT_SOURCE_DIR}/moqima_gb18030.txt")
 set(MOQI_TABLE_URL
   "https://raw.githubusercontent.com/gaboolic/moqima-tables/${MOQI_TABLE_COMMIT}/moqima_gb18030.txt")
 fcitx5_download(moqi-table-download "${MOQI_TABLE_URL}" "moqima_gb18030.txt"
