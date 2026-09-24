@@ -7,9 +7,9 @@
 #ifndef _PINYINHELPER_PINYINHELPER_H_
 #define _PINYINHELPER_PINYINHELPER_H_
 
+#include "moqi.h"
 #include "pinyinhelper_public.h"
 #include "pinyinlookup.h"
-#include "moqi.h"
 #include "stroke.h"
 #include <fcitx-config/configuration.h>
 #include <fcitx-utils/event.h>
