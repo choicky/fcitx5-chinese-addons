@@ -9,6 +9,7 @@
 
 #include "pinyinhelper_public.h"
 #include "pinyinlookup.h"
+#include "moqi.h"
 #include "stroke.h"
 #include <fcitx-config/configuration.h>
 #include <fcitx-utils/event.h>
@@ -31,6 +32,8 @@ public:
     std::string reverseLookupStroke(const std::string &input);
     std::string prettyStrokeString(const std::string &input);
     void loadStroke();
+    void loadMoQi();
+    std::string reverseLookupMoQi(const std::string &input);
 
     FCITX_ADDON_EXPORT_FUNCTION(PinyinHelper, lookup);
     FCITX_ADDON_EXPORT_FUNCTION(PinyinHelper, fullLookup);
@@ -38,6 +41,8 @@ public:
     FCITX_ADDON_EXPORT_FUNCTION(PinyinHelper, loadStroke);
     FCITX_ADDON_EXPORT_FUNCTION(PinyinHelper, reverseLookupStroke);
     FCITX_ADDON_EXPORT_FUNCTION(PinyinHelper, prettyStrokeString);
+    FCITX_ADDON_EXPORT_FUNCTION(PinyinHelper, loadMoQi);
+    FCITX_ADDON_EXPORT_FUNCTION(PinyinHelper, reverseLookupMoQi);
 
     FCITX_ADDON_DEPENDENCY_LOADER(quickphrase, instance_->addonManager());
     FCITX_ADDON_DEPENDENCY_LOADER(clipboard, instance_->addonManager());
@@ -47,6 +52,7 @@ private:
     Instance *instance_;
     PinyinLookup lookup_;
     Stroke stroke_;
+    MoQi moqi_;
     std::unique_ptr<EventSource> deferEvent_;
     std::unique_ptr<HandlerTableEntry<QuickPhraseProviderCallback>> handler_;
 };
