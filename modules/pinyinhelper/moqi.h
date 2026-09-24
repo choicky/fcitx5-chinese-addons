@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: 2026 Choicky
+ * SPDX-FileCopyrightText: 2026 choicky
  *
  * SPDX-License-Identifier: LGPL-2.1-or-later
  */
