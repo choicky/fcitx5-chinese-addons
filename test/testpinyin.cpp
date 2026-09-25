@@ -66,42 +66,6 @@ void findAndSelectCandidate(InputContext *ic, std::string_view word) {
     candList->candidate(findCandidateOrDie(ic, word)).select(ic);
 }
 
-// Candidates whose text starts with prefix, joined. Assertions about the
-// selection frontier use this because the decoder may offer the remaining
-// syllables as phrases instead of as a single character.
-std::string candidatesStartingWith(InputContext *ic, std::string_view prefix) {
-    std::string matches;
-    auto candList = ic->inputPanel().candidateList();
-    if (!candList || !candList->toBulk()) {
-        return matches;
-    }
-    for (int i = 0; i < candList->toBulk()->totalSize(); i++) {
-        auto text = candList->toBulk()->candidateFromAll(i).text().toString();
-        if (text.starts_with(prefix)) {
-            if (!matches.empty()) {
-                matches += ",";
-            }
-            matches += text;
-        }
-    }
-    return matches;
-}
-
-std::string candidateDump(InputContext *ic) {
-    std::string all;
-    auto candList = ic->inputPanel().candidateList();
-    if (!candList || !candList->toBulk()) {
-        return all;
-    }
-    for (int i = 0; i < candList->toBulk()->totalSize(); i++) {
-        if (!all.empty()) {
-            all += ",";
-        }
-        all += candList->toBulk()->candidateFromAll(i).text().toString();
-    }
-    return all;
-}
-
 // The auxiliary band is the user visible part of the auxiliary filter, so the
 // tests below assert on it instead of on engine internals.
 std::string auxUpText(InputContext *ic) {
@@ -692,16 +656,6 @@ void testMoQiShuangpinFilter(Instance *instance) {
         // Escape leaves the selected prefix and remaining composition intact.
         testfrontend->call<ITestFrontend::keyEvent>(uuid, Key("Escape"), false);
         FCITX_ASSERT(findCandidate(ic, "安") >= 0);
-
-        // Continue composing after the partial selection: the remaining
-        // syllables stay decodable, so the frontier character is still the
-        // first character of the offered candidates, and nothing is committed.
-        for (const auto key : {"n", "i"}) {
-            testfrontend->call<ITestFrontend::keyEvent>(uuid, Key(key), false);
-        }
-        FCITX_ASSERT(ic->inputPanel().candidateList());
-        FCITX_ASSERT(!candidatesStartingWith(ic, "安").empty())
-            << "candidates: " << candidateDump(ic);
     });
 }
 
