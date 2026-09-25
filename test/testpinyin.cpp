@@ -66,6 +66,12 @@ void findAndSelectCandidate(InputContext *ic, std::string_view word) {
     candList->candidate(findCandidateOrDie(ic, word)).select(ic);
 }
 
+// The auxiliary band is the user visible part of the auxiliary filter, so the
+// tests below assert on it instead of on engine internals.
+std::string auxUpText(InputContext *ic) {
+    return ic->inputPanel().auxUp().toString();
+}
+
 void sendControlSpace(AddonInstance *testfrontend, InputContext *ic) {
     for (int i = 0; i < 2; i++) {
         testfrontend->call<ITestFrontend::keyEvent>(ic->uuid(),
@@ -666,10 +672,7 @@ void testAuxiliaryFilterEntryGuards(Instance *instance) {
 
         // The trigger key without any composition must not enter the filter.
         testfrontend->call<ITestFrontend::keyEvent>(uuid, Key("`"), false);
-        auto *emptyList = ic->inputPanel().candidateList().get();
-        if (emptyList && emptyList->toTabbed()) {
-            FCITX_ASSERT(!emptyList->toTabbed()->inAuxiliaryFilterMode());
-        }
+        FCITX_ASSERT(auxUpText(ic).empty());
 
         // Disabled must keep the trigger key inert for an active composition.
         RawConfig disabled;
@@ -680,9 +683,7 @@ void testAuxiliaryFilterEntryGuards(Instance *instance) {
         }
         findCandidateOrDie(ic, "西安");
         testfrontend->call<ITestFrontend::keyEvent>(uuid, Key("`"), false);
-        auto *tabbed = ic->inputPanel().candidateList()->toTabbed();
-        FCITX_ASSERT(tabbed);
-        FCITX_ASSERT(!tabbed->inAuxiliaryFilterMode());
+        FCITX_ASSERT(auxUpText(ic).empty());
         FCITX_ASSERT(findCandidate(ic, "西安") >= 0);
 
         // Leave the configuration as the other filter tests expect it.
@@ -711,20 +712,18 @@ void testMoQiFilterBufferLimit(Instance *instance) {
             testfrontend->call<ITestFrontend::keyEvent>(uuid, Key(key), false);
         }
         findCandidateOrDie(ic, "西安");
-        auto *tabbed = ic->inputPanel().candidateList()->toTabbed();
-        FCITX_ASSERT(tabbed);
 
         testfrontend->call<ITestFrontend::keyEvent>(uuid, Key("`"), false);
         testfrontend->call<ITestFrontend::keyEvent>(uuid, Key("a"), false);
         testfrontend->call<ITestFrontend::keyEvent>(uuid, Key("k"), false);
-        FCITX_ASSERT(tabbed->auxiliaryFilterBuffer() == "ak");
+        FCITX_ASSERT(auxUpText(ic).ends_with("ak"));
         FCITX_ASSERT(findCandidate(ic, "西安") >= 0);
 
         // MoQi codes are two letters long, so a third letter must be ignored
         // instead of leaking into the pinyin composition.
         testfrontend->call<ITestFrontend::keyEvent>(uuid, Key("b"), false);
-        FCITX_ASSERT(tabbed->inAuxiliaryFilterMode());
-        FCITX_ASSERT(tabbed->auxiliaryFilterBuffer() == "ak");
+        FCITX_ASSERT(!auxUpText(ic).empty());
+        FCITX_ASSERT(auxUpText(ic).ends_with("ak"));
         FCITX_ASSERT(findCandidate(ic, "西安") >= 0);
     });
 }
@@ -748,21 +747,19 @@ void testMoQiFilterNoMatch(Instance *instance) {
             testfrontend->call<ITestFrontend::keyEvent>(uuid, Key(key), false);
         }
         findCandidateOrDie(ic, "西安");
-        auto *tabbed = ic->inputPanel().candidateList()->toTabbed();
-        FCITX_ASSERT(tabbed);
 
         // No frontier character carries a MoQi code starting with "zz", so
         // matching candidates must be filtered out rather than kept.
         testfrontend->call<ITestFrontend::keyEvent>(uuid, Key("`"), false);
         testfrontend->call<ITestFrontend::keyEvent>(uuid, Key("z"), false);
         testfrontend->call<ITestFrontend::keyEvent>(uuid, Key("z"), false);
-        FCITX_ASSERT(tabbed->auxiliaryFilterBuffer() == "zz");
+        FCITX_ASSERT(auxUpText(ic).ends_with("zz"));
         FCITX_ASSERT(ic->inputPanel().candidateList());
         FCITX_ASSERT(findCandidate(ic, "西安") < 0);
 
         // Leaving the filter restores the unfiltered candidate list.
         testfrontend->call<ITestFrontend::keyEvent>(uuid, Key("Escape"), false);
-        FCITX_ASSERT(!tabbed->inAuxiliaryFilterMode());
+        FCITX_ASSERT(auxUpText(ic).empty());
         FCITX_ASSERT(findCandidate(ic, "西安") >= 0);
     });
 }
@@ -786,19 +783,17 @@ void testMoQiFilterModifierKeys(Instance *instance) {
             testfrontend->call<ITestFrontend::keyEvent>(uuid, Key(key), false);
         }
         findCandidateOrDie(ic, "西安");
-        auto *tabbed = ic->inputPanel().candidateList()->toTabbed();
-        FCITX_ASSERT(tabbed);
 
         testfrontend->call<ITestFrontend::keyEvent>(uuid, Key("`"), false);
         testfrontend->call<ITestFrontend::keyEvent>(uuid, Key("a"), false);
-        FCITX_ASSERT(tabbed->auxiliaryFilterBuffer() == "a");
+        FCITX_ASSERT(auxUpText(ic).ends_with("a"));
 
         // Key combinations are swallowed while filtering: they must not reach
         // the composition nor change the MoQi buffer.
         testfrontend->call<ITestFrontend::keyEvent>(uuid, Key("Control+a"),
                                                     false);
-        FCITX_ASSERT(tabbed->inAuxiliaryFilterMode());
-        FCITX_ASSERT(tabbed->auxiliaryFilterBuffer() == "a");
+        FCITX_ASSERT(!auxUpText(ic).empty());
+        FCITX_ASSERT(auxUpText(ic).ends_with("a"));
         FCITX_ASSERT(findCandidate(ic, "西安") >= 0);
     });
 }
@@ -822,24 +817,22 @@ void testMoQiFilterPageNavigation(Instance *instance) {
             testfrontend->call<ITestFrontend::keyEvent>(uuid, Key(key), false);
         }
         findCandidateOrDie(ic, "西安");
-        auto *tabbed = ic->inputPanel().candidateList()->toTabbed();
-        FCITX_ASSERT(tabbed);
 
         // Previous page on the first page with an empty buffer leaves the
         // filter while keeping the composition.
         testfrontend->call<ITestFrontend::keyEvent>(uuid, Key("`"), false);
-        FCITX_ASSERT(tabbed->inAuxiliaryFilterMode());
+        FCITX_ASSERT(!auxUpText(ic).empty());
         testfrontend->call<ITestFrontend::keyEvent>(uuid, Key(FcitxKey_minus),
                                                     false);
-        FCITX_ASSERT(!tabbed->inAuxiliaryFilterMode());
+        FCITX_ASSERT(auxUpText(ic).empty());
         FCITX_ASSERT(findCandidate(ic, "西安") >= 0);
 
         // Next page keeps the filter active.
         testfrontend->call<ITestFrontend::keyEvent>(uuid, Key("`"), false);
-        FCITX_ASSERT(tabbed->inAuxiliaryFilterMode());
+        FCITX_ASSERT(!auxUpText(ic).empty());
         testfrontend->call<ITestFrontend::keyEvent>(uuid, Key(FcitxKey_equal),
                                                     false);
-        FCITX_ASSERT(tabbed->inAuxiliaryFilterMode());
+        FCITX_ASSERT(!auxUpText(ic).empty());
         FCITX_ASSERT(findCandidate(ic, "西安") >= 0);
     });
 }
