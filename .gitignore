@@ -3,6 +3,7 @@ build*/
 !.git*
 .git/
 *.tar.*
+/modules/pinyinhelper/moqima_gb18030.txt
 *.kdev4
 *.kate-swp
 *.orig
