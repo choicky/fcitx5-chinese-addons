@@ -292,8 +292,9 @@ void testAuxiliaryFilterConfigContract(Instance *instance) {
         const auto path = [&root](std::string_view child) {
             return root + "/AuxiliaryFilter/" + std::string(child);
         };
-        FCITX_ASSERT(*description.valueByPath(path("Type")) == "String");
-        FCITX_ASSERT(*description.valueByPath(path("IsEnum")) == "True");
+        // Android parses Fcitx's native Enum descriptor as ConfigEnum and
+        // renders it with the generic ListPreference implementation.
+        FCITX_ASSERT(*description.valueByPath(path("Type")) == "Enum");
         FCITX_ASSERT(*description.valueByPath(path("DefaultValue")) ==
                      "Stroke");
         FCITX_ASSERT(*description.valueByPath(path("Enum/0")) == "Disabled");
