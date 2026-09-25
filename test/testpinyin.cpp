@@ -22,6 +22,7 @@
 #include <fcitx/addonmanager.h>
 #include <fcitx/candidateaction.h>
 #include <fcitx/inputcontext.h>
+#include <fcitx/inputmethodengine.h>
 #include <fcitx/inputmethodgroup.h>
 #include <fcitx/inputmethodmanager.h>
 #include <fcitx/inputpanel.h>
@@ -272,6 +273,56 @@ void testForget(Instance *instance) {
         FCITX_ASSERT(actions[0].id() == 0);
         actionable->triggerAction(cand, 0);
         FCITX_ASSERT(ic->inputPanel().candidateList());
+    });
+}
+
+void testAuxiliaryFilterConfigContract(Instance *instance) {
+    instance->eventDispatcher().schedule([instance]() {
+        auto *pinyin = instance->addonManager().addon("pinyin");
+        FCITX_ASSERT(pinyin);
+        auto *entry = instance->inputMethodManager().entry("pinyin");
+        FCITX_ASSERT(entry);
+        auto *engine = reinterpret_cast<InputMethodEngine *>(pinyin);
+        auto *configuration = engine->getConfigForInputMethod(*entry);
+        FCITX_ASSERT(configuration);
+
+        RawConfig description;
+        configuration->dumpDescription(description);
+        const std::string root = configuration->typeName();
+        const auto path = [&root](std::string_view child) {
+            return root + "/AuxiliaryFilter/" + std::string(child);
+        };
+        FCITX_ASSERT(*description.valueByPath(path("Type")) == "String");
+        FCITX_ASSERT(*description.valueByPath(path("IsEnum")) == "True");
+        FCITX_ASSERT(*description.valueByPath(path("DefaultValue")) ==
+                     "Stroke");
+        FCITX_ASSERT(*description.valueByPath(path("Enum/0")) == "Disabled");
+        FCITX_ASSERT(*description.valueByPath(path("Enum/1")) == "Stroke");
+        FCITX_ASSERT(*description.valueByPath(path("Enum/2")) == "MoQi");
+        FCITX_ASSERT(description.valueByPath(path("EnumI18n/0")));
+        FCITX_ASSERT(description.valueByPath(path("EnumI18n/1")));
+        FCITX_ASSERT(description.valueByPath(path("EnumI18n/2")));
+
+        for (const auto value : {"Disabled", "Stroke", "MoQi"}) {
+            RawConfig config;
+            configuration->save(config);
+            config.setValueByPath("AuxiliaryFilter", value);
+            engine->setConfigForInputMethod(*entry, config);
+
+            RawConfig current;
+            engine->getConfigForInputMethod(*entry)->save(current);
+            FCITX_ASSERT(*current.valueByPath("AuxiliaryFilter") == value);
+
+            pinyin->reloadConfig();
+            RawConfig persisted;
+            engine->getConfigForInputMethod(*entry)->save(persisted);
+            FCITX_ASSERT(*persisted.valueByPath("AuxiliaryFilter") == value);
+        }
+
+        RawConfig config;
+        configuration->save(config);
+        config.setValueByPath("AuxiliaryFilter", "Stroke");
+        engine->setConfigForInputMethod(*entry, config);
     });
 }
 
@@ -883,6 +934,7 @@ int main() {
     testSelectByChar(&instance);
     testUppercase(&instance);
     testForget(&instance);
+    testAuxiliaryFilterConfigContract(&instance);
     testActionInStrokeFilter(&instance);
     testDisabledAuxiliaryFilter(&instance);
     testPinyinTabFilter(&instance);
