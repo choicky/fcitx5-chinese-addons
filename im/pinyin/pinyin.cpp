@@ -1640,9 +1640,8 @@ void PinyinEngine::updateFilter(InputContext *inputContext) {
         aux.append(_("[Stroke Filtering]"));
         aux.append(pinyinhelper()->call<IPinyinHelper::prettyStrokeString>(
             pinyinTabbed->auxiliaryFilterBuffer()));
-    } else if (pinyinTabbed &&
-               pinyinTabbed->auxiliaryFilterMode() ==
-                   AuxiliaryFilterMode::MoQi) {
+    } else if (pinyinTabbed && pinyinTabbed->auxiliaryFilterMode() ==
+                                   AuxiliaryFilterMode::MoQi) {
         aux.append(_("[MoQi Filtering]"));
         aux.append(pinyinTabbed->auxiliaryFilterBuffer());
     }
@@ -1799,7 +1798,8 @@ bool PinyinEngine::handleAuxiliaryFilter(
     auto *state = inputContext->propertyFor(&factory_);
     auto *pinyinTabbed = currentPinyinTabbed(inputContext);
 
-    if (!pinyinTabbed || !pinyinhelper() || state->mode_ != PinyinMode::Normal) {
+    if (!pinyinTabbed || !pinyinhelper() ||
+        state->mode_ != PinyinMode::Normal) {
         return false;
     }
 
@@ -1863,8 +1863,11 @@ bool PinyinEngine::handleAuxiliaryFilter(
         event.key().check(FcitxKey_s) || event.key().check(FcitxKey_n) ||
         event.key().check(FcitxKey_z)) {
         static const std::unordered_map<FcitxKeySym, char> strokeMap{
-            {FcitxKey_h, '1'}, {FcitxKey_s, '2'}, {FcitxKey_p, '3'},
-            {FcitxKey_n, '4'}, {FcitxKey_z, '5'}};
+            {FcitxKey_h, '1'},
+            {FcitxKey_s, '2'},
+            {FcitxKey_p, '3'},
+            {FcitxKey_n, '4'},
+            {FcitxKey_z, '5'}};
         if (auto iter = strokeMap.find(event.key().sym());
             iter != strokeMap.end()) {
             pinyinTabbed->pushAuxiliaryFilter(iter->second);
