@@ -33,6 +33,8 @@ namespace fcitx {
 
 class PinyinEngine;
 
+enum class AuxiliaryFilterMode { None, Stroke, MoQi };
+
 class PinyinPredictCandidateWord : public CandidateWord {
 public:
     PinyinPredictCandidateWord(PinyinEngine *engine, std::string word);
@@ -298,24 +300,23 @@ public:
     std::span<const CandidateAction> tabActions() override;
 
     void triggerTabAction(int id) override;
-    bool inStrokeFilterMode() const { return strokeFilterMode_; }
-    bool inMoQiFilterMode() const { return moqiFilterMode_; }
+    AuxiliaryFilterMode auxiliaryFilterMode() const {
+        return auxiliaryFilterMode_;
+    }
+    bool inAuxiliaryFilterMode() const {
+        return auxiliaryFilterMode_ != AuxiliaryFilterMode::None;
+    }
     bool hasFilter() const {
-        return checked() || !strokeBuffer_.empty() || !moqiBuffer_.empty();
+        return checked() || !auxiliaryFilterBuffer_.empty();
     }
-    const std::string &strokeBuffer() const {
-        return strokeBuffer_.userInput();
+    const std::string &auxiliaryFilterBuffer() const {
+        return auxiliaryFilterBuffer_.userInput();
     }
-    const std::string &moqiBuffer() const { return moqiBuffer_.userInput(); }
-    void setStrokeFilterMode();
-    void resetStrokeFilterMode();
-    void pushStroke(char stroke);
+    void setAuxiliaryFilterMode(AuxiliaryFilterMode mode);
+    void resetAuxiliaryFilterMode();
+    void pushAuxiliaryFilter(char code);
     // Return whether pop is successful.
-    bool popStroke();
-    void setMoQiFilterMode();
-    void resetMoQiFilterMode();
-    void pushMoQi(char code);
-    bool popMoQi();
+    bool popAuxiliaryFilter();
 
     bool checked() const {
         return checkedPinyinActionId_.has_value() || checkedSingleAction_;
@@ -324,8 +325,7 @@ public:
     bool filter(const CandidateWord &candidate) const;
 
 private:
-    void triggerStrokeAction(int id);
-    void triggerMoQiAction(int id);
+    void triggerAuxiliaryFilterAction(int id);
     void triggerMainAction(int id);
     bool filterByCheckedAction(const CandidateWord &candidate) const;
     bool filterByStroke(const CandidateWord &candidate) const;
@@ -360,10 +360,8 @@ private:
     std::vector<CandidateAction> moqiActions_;
     std::optional<int> checkedPinyinActionId_ = std::nullopt;
     bool checkedSingleAction_ = false;
-    bool strokeFilterMode_ = false;
-    InputBuffer strokeBuffer_;
-    bool moqiFilterMode_ = false;
-    InputBuffer moqiBuffer_;
+    AuxiliaryFilterMode auxiliaryFilterMode_ = AuxiliaryFilterMode::None;
+    InputBuffer auxiliaryFilterBuffer_;
     std::vector<std::unordered_set<int>> actionIdToCandidates_;
 };
 

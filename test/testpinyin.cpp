@@ -413,6 +413,12 @@ void testPinyinTabFilter(Instance *instance) {
 
 void testMoQiTabFilter(Instance *instance) {
     instance->eventDispatcher().schedule([instance]() {
+        auto *pinyin = instance->addonManager().addon("pinyin");
+        FCITX_ASSERT(pinyin);
+        RawConfig config;
+        config.setValueByPath("AuxiliaryFilter", "MoQi");
+        pinyin->setConfig(config);
+
         auto *testfrontend = instance->addonManager().addon("testfrontend");
         auto uuid =
             testfrontend->call<ITestFrontend::createInputContext>("testapp");
@@ -435,7 +441,8 @@ void testMoQiTabFilter(Instance *instance) {
             return iter->id();
         };
 
-        tabbed->triggerTabAction(findAction("墨奇"));
+        // The configured grave key is the generic Auxiliary Filter trigger.
+        testfrontend->call<ITestFrontend::keyEvent>(uuid, Key("grave"), false);
         testfrontend->call<ITestFrontend::keyEvent>(uuid, Key("a"), false);
         FCITX_ASSERT(findCandidate(ic, "西安") >= 0);
         testfrontend->call<ITestFrontend::keyEvent>(uuid, Key("k"), false);
@@ -483,6 +490,12 @@ void testMoQiTabFilter(Instance *instance) {
 
 void testMoQiShuangpinFilter(Instance *instance) {
     instance->eventDispatcher().schedule([instance]() {
+        auto *pinyin = instance->addonManager().addon("pinyin");
+        FCITX_ASSERT(pinyin);
+        RawConfig config;
+        config.setValueByPath("AuxiliaryFilter", "MoQi");
+        pinyin->setConfig(config);
+
         auto *testfrontend = instance->addonManager().addon("testfrontend");
         auto uuid =
             testfrontend->call<ITestFrontend::createInputContext>("testapp");

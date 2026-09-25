@@ -125,6 +125,11 @@ enum class CorrectionLayout {
 
 FCITX_CONFIG_ENUM_NAME_WITH_I18N(CorrectionLayout, N_("None"), N_("QWERTY"))
 
+enum class AuxiliaryFilter { Disabled, Stroke, MoQi };
+
+FCITX_CONFIG_ENUM_NAME_WITH_I18N(AuxiliaryFilter, N_("Disabled"), N_("Stroke"),
+                                 N_("MoQi"))
+
 FCITX_CONFIGURATION(
     FuzzyConfig, Option<bool> ue{this, "VE_UE", _("ue -> ve"), true};
     Option<bool> commonTypo{this, "NG_GN", _("Common Typo"), true};
@@ -312,10 +317,13 @@ FCITX_CONFIGURATION(
     Option<bool> useBackSpaceToUnselect{
         this, "BackSpaceToUnselect", _("Use BackSpace to cancel the selection"),
         true};
-    KeyListOption selectByStroke{
+    OptionWithAnnotation<AuxiliaryFilter, AuxiliaryFilterI18NAnnotation>
+        auxiliaryFilter{this, "AuxiliaryFilter", _("Auxiliary Filter"),
+                        AuxiliaryFilter::Stroke};
+    KeyListOption auxiliaryFilterTrigger{
         this,
         "FilterByStroke",
-        _("Filter by stroke"),
+        _("Auxiliary Filter Trigger"),
         {Key("grave")},
         KeyListConstrain({KeyConstrainFlag::AllowModifierLess})};
     Option<int, IntConstrain> nbest{this, "Number of sentence",
@@ -464,10 +472,8 @@ private:
     bool handleCandidateList(KeyEvent &event,
                              const std::shared_future<uint32_t> &keyChr);
     bool handleNextPage(KeyEvent &event) const;
-    bool handleMoQiFilter(KeyEvent &event,
-                          const std::shared_future<uint32_t> &keyChr);
-    bool handleStrokeFilter(KeyEvent &event,
-                            const std::shared_future<uint32_t> &keyChr);
+    bool handleAuxiliaryFilter(KeyEvent &event,
+                               const std::shared_future<uint32_t> &keyChr);
     bool handleForgetCandidate(KeyEvent &event);
     bool handlePunc(KeyEvent &event,
                     const std::shared_future<uint32_t> &keyChr);

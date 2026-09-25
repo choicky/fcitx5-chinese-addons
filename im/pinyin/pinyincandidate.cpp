@@ -487,10 +487,10 @@ PinyinTabbedCandidateList::PinyinTabbedCandidateList(
       candidateList_(candidateList) {}
 
 std::span<const CandidateAction> PinyinTabbedCandidateList::tabActions() {
-    if (inStrokeFilterMode()) {
+    if (auxiliaryFilterMode_ == AuxiliaryFilterMode::Stroke) {
         return strokeActions_;
     }
-    if (inMoQiFilterMode()) {
+    if (auxiliaryFilterMode_ == AuxiliaryFilterMode::MoQi) {
         return moqiActions_;
     }
     if (!actions_) {
@@ -599,15 +599,24 @@ void PinyinTabbedCandidateList::buildTabActions() {
 
     actions.push_back(std::move(separator));
 
-    CandidateAction stroke;
-    stroke.setId(STROKE_ACTION);
-    stroke.setText("笔画");
-    actions.push_back(std::move(stroke));
-
-    CandidateAction moqi;
-    moqi.setId(MOQI_ACTION);
-    moqi.setText("墨奇");
-    actions.push_back(std::move(moqi));
+    switch (*engine_->config().auxiliaryFilter) {
+    case AuxiliaryFilter::Stroke: {
+        CandidateAction stroke;
+        stroke.setId(STROKE_ACTION);
+        stroke.setText("笔画");
+        actions.push_back(std::move(stroke));
+        break;
+    }
+    case AuxiliaryFilter::MoQi: {
+        CandidateAction moqi;
+        moqi.setId(MOQI_ACTION);
+        moqi.setText("墨奇");
+        actions.push_back(std::move(moqi));
+        break;
+    }
+    case AuxiliaryFilter::Disabled:
+        break;
+    }
 
     actions_ = std::move(actions);
 
@@ -655,67 +664,54 @@ void PinyinTabbedCandidateList::triggerTabAction(int id) {
         return;
     }
 
-    if (inStrokeFilterMode()) {
-        triggerStrokeAction(id);
-    } else if (inMoQiFilterMode()) {
-        triggerMoQiAction(id);
+    if (inAuxiliaryFilterMode()) {
+        triggerAuxiliaryFilterAction(id);
     } else {
         triggerMainAction(id);
     }
 }
 
-void PinyinTabbedCandidateList::triggerStrokeAction(int id) {
-    assert(inStrokeFilterMode());
+void PinyinTabbedCandidateList::triggerAuxiliaryFilterAction(int id) {
+    assert(inAuxiliaryFilterMode());
 
-    switch (id) {
-    case STROKE_SUB_ACTION_H:
-    case STROKE_SUB_ACTION_S:
-    case STROKE_SUB_ACTION_P:
-    case STROKE_SUB_ACTION_N:
-    case STROKE_SUB_ACTION_Z:
-        pushStroke(STROKE_SUB_ACTION_H - id + '1');
-        break;
-    case STROKE_SUB_ACTION_RETURN:
-        resetStrokeFilterMode();
-        break;
-    default:
+    if (auxiliaryFilterMode_ == AuxiliaryFilterMode::Stroke) {
+        switch (id) {
+        case STROKE_SUB_ACTION_H:
+        case STROKE_SUB_ACTION_S:
+        case STROKE_SUB_ACTION_P:
+        case STROKE_SUB_ACTION_N:
+        case STROKE_SUB_ACTION_Z:
+            pushAuxiliaryFilter(STROKE_SUB_ACTION_H - id + '1');
+            break;
+        case STROKE_SUB_ACTION_RETURN:
+            resetAuxiliaryFilterMode();
+            break;
+        default:
+            return;
+        }
         return;
+    }
+
+    if (auxiliaryFilterMode_ == AuxiliaryFilterMode::MoQi) {
+        if (id <= MOQI_SUB_ACTION_A && id > MOQI_SUB_ACTION_RETURN) {
+            pushAuxiliaryFilter(MOQI_SUB_ACTION_A - id + 'a');
+        } else if (id == MOQI_SUB_ACTION_RETURN) {
+            resetAuxiliaryFilterMode();
+        }
     }
 }
 
-void PinyinTabbedCandidateList::triggerMoQiAction(int id) {
-    assert(inMoQiFilterMode());
-
-    if (id <= MOQI_SUB_ACTION_A && id > MOQI_SUB_ACTION_RETURN) {
-        pushMoQi(MOQI_SUB_ACTION_A - id + 'a');
-    } else if (id == MOQI_SUB_ACTION_RETURN) {
-        resetMoQiFilterMode();
-    }
-}
-
-void PinyinTabbedCandidateList::pushMoQi(char code) {
-    if (moqiBuffer_.size() >= 2) {
+void PinyinTabbedCandidateList::pushAuxiliaryFilter(char code) {
+    if (auxiliaryFilterMode_ == AuxiliaryFilterMode::MoQi &&
+        auxiliaryFilterBuffer_.size() >= 2) {
         return;
     }
-    moqiBuffer_.type(code);
+    auxiliaryFilterBuffer_.type(code);
     engine_->updateFilter(inputContext_);
 }
 
-bool PinyinTabbedCandidateList::popMoQi() {
-    if (moqiBuffer_.backspace()) {
-        engine_->updateFilter(inputContext_);
-        return true;
-    }
-    return false;
-}
-
-void PinyinTabbedCandidateList::pushStroke(char stroke) {
-    strokeBuffer_.type(stroke);
-    engine_->updateFilter(inputContext_);
-}
-
-bool PinyinTabbedCandidateList::popStroke() {
-    if (strokeBuffer_.backspace()) {
+bool PinyinTabbedCandidateList::popAuxiliaryFilter() {
+    if (auxiliaryFilterBuffer_.backspace()) {
         engine_->updateFilter(inputContext_);
         return true;
     }
@@ -741,9 +737,9 @@ void PinyinTabbedCandidateList::triggerMainAction(int id) {
     std::optional<int> checkableActionIndex;
     // negative id is special action.
     if (id == STROKE_ACTION) {
-        setStrokeFilterMode();
+        setAuxiliaryFilterMode(AuxiliaryFilterMode::Stroke);
     } else if (id == MOQI_ACTION) {
-        setMoQiFilterMode();
+        setAuxiliaryFilterMode(AuxiliaryFilterMode::MoQi);
     } else if (checkableActionIndex = idToActionIndex(id);
                !checkableActionIndex) {
         return;
@@ -814,7 +810,8 @@ bool PinyinTabbedCandidateList::filterByStroke(
         return true;
     }
 
-    if (!inStrokeFilterMode() || strokeBuffer_.empty()) {
+    if (auxiliaryFilterMode_ != AuxiliaryFilterMode::Stroke ||
+        auxiliaryFilterBuffer_.empty()) {
         return true;
     }
 
@@ -832,7 +829,7 @@ bool PinyinTabbedCandidateList::filterByStroke(
             std::string chr(iter.charRange().first, iter.charRange().second);
             auto stroke = engine_->pinyinhelper()
                               ->call<IPinyinHelper::reverseLookupStroke>(chr);
-            if (stroke.starts_with(strokeBuffer_.userInput())) {
+            if (stroke.starts_with(auxiliaryFilterBuffer_.userInput())) {
                 return true;
             }
         }
@@ -842,8 +839,9 @@ bool PinyinTabbedCandidateList::filterByStroke(
 
 bool PinyinTabbedCandidateList::filterByMoQi(
     const CandidateWord &candidate) const {
-    if (!engine_->pinyinhelper() || !inMoQiFilterMode() ||
-        moqiBuffer_.empty()) {
+    if (!engine_->pinyinhelper() ||
+        auxiliaryFilterMode_ != AuxiliaryFilterMode::MoQi ||
+        auxiliaryFilterBuffer_.empty()) {
         return true;
     }
 
@@ -862,7 +860,7 @@ bool PinyinTabbedCandidateList::filterByMoQi(
     std::string chr(iter.charRange().first, iter.charRange().second);
     auto code =
         engine_->pinyinhelper()->call<IPinyinHelper::reverseLookupMoQi>(chr);
-    return code.starts_with(moqiBuffer_.userInput());
+    return code.starts_with(auxiliaryFilterBuffer_.userInput());
 }
 
 bool PinyinTabbedCandidateList::filter(const CandidateWord &candidate) const {
@@ -870,29 +868,16 @@ bool PinyinTabbedCandidateList::filter(const CandidateWord &candidate) const {
            filterByMoQi(candidate);
 }
 
-void PinyinTabbedCandidateList::setMoQiFilterMode() {
-    strokeBuffer_.clear();
-    strokeFilterMode_ = false;
-    moqiBuffer_.clear();
-    moqiFilterMode_ = true;
-}
-
-void PinyinTabbedCandidateList::resetMoQiFilterMode() {
-    moqiBuffer_.clear();
-    moqiFilterMode_ = false;
+void PinyinTabbedCandidateList::setAuxiliaryFilterMode(
+    AuxiliaryFilterMode mode) {
+    auxiliaryFilterBuffer_.clear();
+    auxiliaryFilterMode_ = mode;
     engine_->updateFilter(inputContext_);
 }
 
-void PinyinTabbedCandidateList::setStrokeFilterMode() {
-    moqiBuffer_.clear();
-    moqiFilterMode_ = false;
-    strokeBuffer_.clear();
-    strokeFilterMode_ = true;
-}
-
-void PinyinTabbedCandidateList::resetStrokeFilterMode() {
-    strokeBuffer_.clear();
-    strokeFilterMode_ = false;
+void PinyinTabbedCandidateList::resetAuxiliaryFilterMode() {
+    auxiliaryFilterBuffer_.clear();
+    auxiliaryFilterMode_ = AuxiliaryFilterMode::None;
     engine_->updateFilter(inputContext_);
 }
 
