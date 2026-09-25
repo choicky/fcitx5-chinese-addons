@@ -299,7 +299,10 @@ public:
 
     void triggerTabAction(int id) override;
     bool inStrokeFilterMode() const { return strokeFilterMode_; }
-    bool hasFilter() const { return checked() || !strokeBuffer_.empty(); }
+    bool inMoQiFilterMode() const { return moqiFilterMode_; }
+    bool hasFilter() const {
+        return checked() || !strokeBuffer_.empty() || !moqiBuffer_.empty();
+    }
     const std::string &strokeBuffer() const {
         return strokeBuffer_.userInput();
     }
@@ -308,6 +311,10 @@ public:
     void pushStroke(char stroke);
     // Return whether pop is successful.
     bool popStroke();
+    void setMoQiFilterMode();
+    void resetMoQiFilterMode();
+    void pushMoQi(char code);
+    bool popMoQi();
 
     bool checked() const {
         return checkedPinyinActionId_.has_value() || checkedSingleAction_;
@@ -317,9 +324,11 @@ public:
 
 private:
     void triggerStrokeAction(int id);
+    void triggerMoQiAction(int id);
     void triggerMainAction(int id);
     bool filterByCheckedAction(const CandidateWord &candidate) const;
     bool filterByStroke(const CandidateWord &candidate) const;
+    bool filterByMoQi(const CandidateWord &candidate) const;
 
     std::optional<int> idToActionIndex(int id) const;
 
@@ -335,6 +344,9 @@ private:
         STROKE_SUB_ACTION_Z = -7,
         STROKE_SUB_ACTION_RETURN = -8,
         SEPARATOR_ACTION = -9,
+        MOQI_ACTION = -10,
+        MOQI_SUB_ACTION_A = -11,
+        MOQI_SUB_ACTION_RETURN = -37,
     };
 
     PinyinEngine *engine_;
@@ -344,10 +356,13 @@ private:
     // Lazily initialized actions, since it requires scan all actions.
     std::optional<std::vector<CandidateAction>> actions_;
     std::vector<CandidateAction> strokeActions_;
+    std::vector<CandidateAction> moqiActions_;
     std::optional<int> checkedPinyinActionId_ = std::nullopt;
     bool checkedSingleAction_ = false;
     bool strokeFilterMode_ = false;
     InputBuffer strokeBuffer_;
+    bool moqiFilterMode_ = false;
+    InputBuffer moqiBuffer_;
     std::vector<std::unordered_set<int>> actionIdToCandidates_;
 };
 
