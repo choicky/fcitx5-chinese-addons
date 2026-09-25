@@ -43,12 +43,7 @@ add_custom_command(
   COMMAND "${CMAKE_COMMAND}" -E copy_if_different "${MOQI_TABLE_SRC}" "${MOQI_TABLE_TGT}"
   DEPENDS moqi-table-download "${MOQI_TABLE_SRC}")
 add_custom_target(moqi-table ALL DEPENDS "${MOQI_TABLE_TGT}")
-# fcitx5-android installs only the "config" component of an addon into the
-# APK assets, so the MoQi table has to be tagged with that component to be
-# packaged on Android. A plain `cmake --install` for desktop builds installs
-# every component, so desktop behaviour is unchanged.
-install(FILES "${MOQI_TABLE_TGT}" DESTINATION "${FCITX_INSTALL_PKGDATADIR}/pinyinhelper"
-  COMPONENT config)
+install(FILES "${MOQI_TABLE_TGT}" DESTINATION "${FCITX_INSTALL_PKGDATADIR}/pinyinhelper")
 
 set(PY_TABLE_VER 20121124)
 set(PY_TABLE_TGT "${CMAKE_CURRENT_BINARY_DIR}/py_table.mb")
