@@ -481,6 +481,65 @@ void testMoQiTabFilter(Instance *instance) {
     });
 }
 
+void testMoQiShuangpinFilter(Instance *instance) {
+    instance->eventDispatcher().schedule([instance]() {
+        auto *testfrontend = instance->addonManager().addon("testfrontend");
+        auto uuid =
+            testfrontend->call<ITestFrontend::createInputContext>("testapp");
+        auto *ic = instance->inputContextManager().findByUUID(uuid);
+        FCITX_ASSERT(ic);
+        instance->setCurrentInputMethod(ic, "shuangpin", true);
+
+        auto enterMoQi = [ic]() {
+            auto *tabbed = ic->inputPanel().candidateList()->toTabbed();
+            FCITX_ASSERT(tabbed);
+            auto actions = tabbed->tabActions();
+            auto moqi = std::ranges::find_if(
+                actions, [](const auto &a) { return a.text() == "墨奇"; });
+            FCITX_ASSERT(moqi != actions.end());
+            tabbed->triggerTabAction(moqi->id());
+        };
+
+        // Ziranma uses "xi" for xi and "an" for an.
+        for (const auto key : {"x", "i", "a", "n"}) {
+            testfrontend->call<ITestFrontend::keyEvent>(uuid, Key(key), false);
+        }
+        findCandidateOrDie(ic, "西安");
+
+        enterMoQi();
+        testfrontend->call<ITestFrontend::keyEvent>(uuid, Key("a"), false);
+        testfrontend->call<ITestFrontend::keyEvent>(uuid, Key("k"), false);
+        FCITX_ASSERT(findCandidate(ic, "西安") >= 0);
+
+        // Backspace removes the MoQi buffer first, then exits MoQi mode.
+        for (int i = 0; i < 3; i++) {
+            testfrontend->call<ITestFrontend::keyEvent>(uuid, Key("BackSpace"),
+                                                        false);
+            FCITX_ASSERT(findCandidate(ic, "西安") >= 0);
+        }
+
+        // Select the first syllable, then continue composing the next one.
+        testfrontend->call<ITestFrontend::keyEvent>(uuid, Key("Escape"), false);
+        for (const auto key : {"x", "i"}) {
+            testfrontend->call<ITestFrontend::keyEvent>(uuid, Key(key), false);
+        }
+        findAndSelectCandidate(ic, "西");
+        for (const auto key : {"a", "n"}) {
+            testfrontend->call<ITestFrontend::keyEvent>(uuid, Key(key), false);
+        }
+        FCITX_ASSERT(findCandidate(ic, "安") >= 0);
+
+        enterMoQi();
+        testfrontend->call<ITestFrontend::keyEvent>(uuid, Key("b"), false);
+        testfrontend->call<ITestFrontend::keyEvent>(uuid, Key("n"), false);
+        FCITX_ASSERT(findCandidate(ic, "安") >= 0);
+
+        // Escape leaves the selected prefix and remaining composition intact.
+        testfrontend->call<ITestFrontend::keyEvent>(uuid, Key("Escape"), false);
+        FCITX_ASSERT(findCandidate(ic, "安") >= 0);
+    });
+}
+
 void testPinyinTabFilterWithSeparator(Instance *instance) {
     instance->eventDispatcher().schedule([instance]() {
         auto *pinyin = instance->addonManager().addon("pinyin");
@@ -767,6 +826,7 @@ int main() {
     testActionInStrokeFilter(&instance);
     testPinyinTabFilter(&instance);
     testMoQiTabFilter(&instance);
+    testMoQiShuangpinFilter(&instance);
     testPinyinTabFilterWithSeparator(&instance);
     testPin(&instance);
     testQuickPhraseTrigger(&instance);
