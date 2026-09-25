@@ -871,6 +871,8 @@ bool PinyinTabbedCandidateList::filter(const CandidateWord &candidate) const {
 }
 
 void PinyinTabbedCandidateList::setMoQiFilterMode() {
+    strokeBuffer_.clear();
+    strokeFilterMode_ = false;
     moqiBuffer_.clear();
     moqiFilterMode_ = true;
 }
@@ -882,6 +884,8 @@ void PinyinTabbedCandidateList::resetMoQiFilterMode() {
 }
 
 void PinyinTabbedCandidateList::setStrokeFilterMode() {
+    moqiBuffer_.clear();
+    moqiFilterMode_ = false;
     strokeBuffer_.clear();
     strokeFilterMode_ = true;
 }

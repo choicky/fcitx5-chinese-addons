@@ -1638,6 +1638,9 @@ void PinyinEngine::updateFilter(InputContext *inputContext) {
         aux.append(_("[Stroke Filtering]"));
         aux.append(pinyinhelper()->call<IPinyinHelper::prettyStrokeString>(
             pinyinTabbed->strokeBuffer()));
+    } else if (pinyinTabbed && pinyinTabbed->inMoQiFilterMode()) {
+        aux.append(_("[MoQi Filtering]"));
+        aux.append(pinyinTabbed->moqiBuffer());
     }
     inputPanel.setAuxUp(aux);
     inputPanel.setAuxDown(Text());
@@ -1783,6 +1786,39 @@ void PinyinEngine::deleteCustomPhrase(InputContext *inputContext,
 
     updateUI(inputContext);
     saveCustomPhrase();
+}
+
+bool PinyinEngine::handleMoQiFilter(
+    KeyEvent &event, const std::shared_future<uint32_t> &keyChr) {
+    auto *inputContext = event.inputContext();
+    auto *pinyinTabbed = currentPinyinTabbed(inputContext);
+    if (!pinyinTabbed || !pinyinTabbed->inMoQiFilterMode()) {
+        return false;
+    }
+
+    event.filterAndAccept();
+    if (handleCandidateList(event, keyChr)) {
+        return true;
+    }
+    if (event.key().states().testAny(KeyState::SimpleMask)) {
+        return true;
+    }
+    if (event.key().check(FcitxKey_Escape)) {
+        pinyinTabbed->resetMoQiFilterMode();
+        return true;
+    }
+    if (event.key().check(FcitxKey_BackSpace)) {
+        if (!pinyinTabbed->popMoQi()) {
+            pinyinTabbed->resetMoQiFilterMode();
+        }
+        return true;
+    }
+
+    auto c = keyChr.get();
+    if (c >= 'a' && c <= 'z') {
+        pinyinTabbed->pushMoQi(static_cast<char>(c));
+    }
+    return true;
 }
 
 bool PinyinEngine::handleStrokeFilter(
@@ -2135,6 +2171,10 @@ void PinyinEngine::keyEvent(const InputMethodEntry &entry, KeyEvent &event) {
     auto candidateList = inputContext->inputPanel().candidateList();
     bool lastIsPunc = state->lastIsPunc_;
     state->lastIsPunc_ = false;
+
+    if (handleMoQiFilter(event, keyChr)) {
+        return;
+    }
 
     if (handleStrokeFilter(event, keyChr)) {
         return;

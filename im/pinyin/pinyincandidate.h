@@ -306,6 +306,7 @@ public:
     const std::string &strokeBuffer() const {
         return strokeBuffer_.userInput();
     }
+    const std::string &moqiBuffer() const { return moqiBuffer_.userInput(); }
     void setStrokeFilterMode();
     void resetStrokeFilterMode();
     void pushStroke(char stroke);

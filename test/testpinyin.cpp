@@ -411,6 +411,71 @@ void testPinyinTabFilter(Instance *instance) {
     });
 }
 
+void testMoQiTabFilter(Instance *instance) {
+    instance->eventDispatcher().schedule([instance]() {
+        auto *testfrontend = instance->addonManager().addon("testfrontend");
+        auto uuid =
+            testfrontend->call<ITestFrontend::createInputContext>("testapp");
+        auto *ic = instance->inputContextManager().findByUUID(uuid);
+        FCITX_ASSERT(ic);
+        instance->setCurrentInputMethod(ic, "pinyin", true);
+
+        for (const auto key : {"x", "i", "a", "n"}) {
+            testfrontend->call<ITestFrontend::keyEvent>(uuid, Key(key), false);
+        }
+        findCandidateOrDie(ic, "西安");
+
+        auto *tabbed = ic->inputPanel().candidateList()->toTabbed();
+        FCITX_ASSERT(tabbed);
+        auto findAction = [tabbed](std::string_view text) {
+            auto actions = tabbed->tabActions();
+            auto iter = std::ranges::find_if(actions, [text](const auto &a) {
+                return a.text() == text;
+            });
+            FCITX_ASSERT(iter != actions.end());
+            return iter->id();
+        };
+
+        tabbed->triggerTabAction(findAction("墨奇"));
+        testfrontend->call<ITestFrontend::keyEvent>(uuid, Key("a"), false);
+        FCITX_ASSERT(findCandidate(ic, "西安") >= 0);
+        testfrontend->call<ITestFrontend::keyEvent>(uuid, Key("k"), false);
+        FCITX_ASSERT(findCandidate(ic, "西安") >= 0);
+
+        // Backspace removes MoQi codes before leaving MoQi mode.
+        testfrontend->call<ITestFrontend::keyEvent>(uuid, Key("BackSpace"),
+                                                    false);
+        FCITX_ASSERT(findCandidate(ic, "西安") >= 0);
+        testfrontend->call<ITestFrontend::keyEvent>(uuid, Key("BackSpace"),
+                                                    false);
+        FCITX_ASSERT(findCandidate(ic, "西安") >= 0);
+        testfrontend->call<ITestFrontend::keyEvent>(uuid, Key("BackSpace"),
+                                                    false);
+        FCITX_ASSERT(findCandidate(ic, "西安") >= 0);
+        FCITX_ASSERT(findAction("墨奇") < 0);
+
+        // Partial selection advances the frontier. MoQi then filters the
+        // first character of the remaining candidate (安 -> bn).
+        findAndSelectCandidate(ic, "西");
+        FCITX_ASSERT(ic->inputPanel().candidateList());
+        tabbed = ic->inputPanel().candidateList()->toTabbed();
+        FCITX_ASSERT(tabbed);
+        auto actions = tabbed->tabActions();
+        auto moqi = std::ranges::find_if(actions, [](const auto &a) {
+            return a.text() == "墨奇";
+        });
+        FCITX_ASSERT(moqi != actions.end());
+        tabbed->triggerTabAction(moqi->id());
+        testfrontend->call<ITestFrontend::keyEvent>(uuid, Key("b"), false);
+        testfrontend->call<ITestFrontend::keyEvent>(uuid, Key("n"), false);
+        FCITX_ASSERT(findCandidate(ic, "安") >= 0);
+
+        // Escape exits MoQi mode without destroying the composition.
+        testfrontend->call<ITestFrontend::keyEvent>(uuid, Key("Escape"), false);
+        FCITX_ASSERT(findCandidate(ic, "安") >= 0);
+    });
+}
+
 void testPinyinTabFilterWithSeparator(Instance *instance) {
     instance->eventDispatcher().schedule([instance]() {
         auto *pinyin = instance->addonManager().addon("pinyin");
@@ -696,6 +761,7 @@ int main() {
     testForget(&instance);
     testActionInStrokeFilter(&instance);
     testPinyinTabFilter(&instance);
+    testMoQiTabFilter(&instance);
     testPinyinTabFilterWithSeparator(&instance);
     testPin(&instance);
     testQuickPhraseTrigger(&instance);

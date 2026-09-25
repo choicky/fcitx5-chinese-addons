@@ -464,6 +464,8 @@ private:
     bool handleCandidateList(KeyEvent &event,
                              const std::shared_future<uint32_t> &keyChr);
     bool handleNextPage(KeyEvent &event) const;
+    bool handleMoQiFilter(KeyEvent &event,
+                          const std::shared_future<uint32_t> &keyChr);
     bool handleStrokeFilter(KeyEvent &event,
                             const std::shared_future<uint32_t> &keyChr);
     bool handleForgetCandidate(KeyEvent &event);
