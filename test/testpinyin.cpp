@@ -338,10 +338,9 @@ void testDisabledAuxiliaryFilter(Instance *instance) {
         auto *tabbed = ic->inputPanel().candidateList()->toTabbed();
         FCITX_ASSERT(tabbed);
         auto actions = tabbed->tabActions();
-        FCITX_ASSERT(std::ranges::none_of(
-            actions, [](const auto &action) {
-                return action.text() == "笔画" || action.text() == "墨奇";
-            }));
+        FCITX_ASSERT(std::ranges::none_of(actions, [](const auto &action) {
+            return action.text() == "笔画" || action.text() == "墨奇";
+        }));
     });
 }
 
