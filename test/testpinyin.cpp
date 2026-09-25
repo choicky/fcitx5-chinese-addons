@@ -453,6 +453,13 @@ void testMoQiTabFilter(Instance *instance) {
         FCITX_ASSERT(findCandidate(ic, "西安") >= 0);
         FCITX_ASSERT(findAction("墨奇") < 0);
 
+        // Clear the current composition, then use explicit separators so
+        // "西" is exposed as a partial candidate before the remaining "安".
+        testfrontend->call<ITestFrontend::keyEvent>(uuid, Key("Escape"), false);
+        for (const auto key : {"x", "i", "'", "'", "a", "n"}) {
+            testfrontend->call<ITestFrontend::keyEvent>(uuid, Key(key), false);
+        }
+
         // Partial selection advances the frontier. MoQi then filters the
         // first character of the remaining candidate (安 -> bn).
         findAndSelectCandidate(ic, "西");
