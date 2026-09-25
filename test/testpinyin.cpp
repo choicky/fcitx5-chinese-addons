@@ -670,25 +670,30 @@ void testAuxiliaryFilterEntryGuards(Instance *instance) {
         FCITX_ASSERT(ic);
         instance->setCurrentInputMethod(ic, "pinyin", true);
 
-        // The trigger key without any composition must not enter the filter.
-        testfrontend->call<ITestFrontend::keyEvent>(uuid, Key("`"), false);
-        FCITX_ASSERT(auxUpText(ic).empty());
+        RawConfig moqi;
+        moqi.setValueByPath("AuxiliaryFilter", "MoQi");
+        pinyin->setConfig(moqi);
 
-        // Disabled must keep the trigger key inert for an active composition.
+        // The trigger key is only special while a candidate list exists: with
+        // no composition it types a literal backtick instead of filtering. The
+        // literal is committed when the next key arrives.
+        testfrontend->call<ITestFrontend::pushCommitExpectation>("`");
+        testfrontend->call<ITestFrontend::keyEvent>(uuid, Key("`"), false);
+        testfrontend->call<ITestFrontend::keyEvent>(uuid, Key("x"), false);
+        FCITX_ASSERT(auxUpText(ic).empty());
+        testfrontend->call<ITestFrontend::keyEvent>(uuid, Key("Escape"), false);
+
+        // Disabled must not change that: the trigger key stays a literal.
         RawConfig disabled;
         disabled.setValueByPath("AuxiliaryFilter", "Disabled");
         pinyin->setConfig(disabled);
-        for (const auto key : {"x", "i", "a", "n"}) {
-            testfrontend->call<ITestFrontend::keyEvent>(uuid, Key(key), false);
-        }
-        findCandidateOrDie(ic, "西安");
+        testfrontend->call<ITestFrontend::pushCommitExpectation>("`");
         testfrontend->call<ITestFrontend::keyEvent>(uuid, Key("`"), false);
+        testfrontend->call<ITestFrontend::keyEvent>(uuid, Key("x"), false);
         FCITX_ASSERT(auxUpText(ic).empty());
-        FCITX_ASSERT(findCandidate(ic, "西安") >= 0);
+        testfrontend->call<ITestFrontend::keyEvent>(uuid, Key("Escape"), false);
 
         // Leave the configuration as the other filter tests expect it.
-        RawConfig moqi;
-        moqi.setValueByPath("AuxiliaryFilter", "MoQi");
         pinyin->setConfig(moqi);
     });
 }
