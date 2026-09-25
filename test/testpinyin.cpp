@@ -429,9 +429,8 @@ void testMoQiTabFilter(Instance *instance) {
         FCITX_ASSERT(tabbed);
         auto findAction = [tabbed](std::string_view text) {
             auto actions = tabbed->tabActions();
-            auto iter = std::ranges::find_if(actions, [text](const auto &a) {
-                return a.text() == text;
-            });
+            auto iter = std::ranges::find_if(
+                actions, [text](const auto &a) { return a.text() == text; });
             FCITX_ASSERT(iter != actions.end());
             return iter->id();
         };
@@ -461,9 +460,8 @@ void testMoQiTabFilter(Instance *instance) {
         tabbed = ic->inputPanel().candidateList()->toTabbed();
         FCITX_ASSERT(tabbed);
         auto actions = tabbed->tabActions();
-        auto moqi = std::ranges::find_if(actions, [](const auto &a) {
-            return a.text() == "墨奇";
-        });
+        auto moqi = std::ranges::find_if(
+            actions, [](const auto &a) { return a.text() == "墨奇"; });
         FCITX_ASSERT(moqi != actions.end());
         tabbed->triggerTabAction(moqi->id());
         testfrontend->call<ITestFrontend::keyEvent>(uuid, Key("b"), false);
