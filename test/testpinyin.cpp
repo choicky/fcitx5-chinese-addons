@@ -653,6 +653,197 @@ void testMoQiShuangpinFilter(Instance *instance) {
     });
 }
 
+void testAuxiliaryFilterEntryGuards(Instance *instance) {
+    instance->eventDispatcher().schedule([instance]() {
+        auto *pinyin = instance->addonManager().addon("pinyin");
+        FCITX_ASSERT(pinyin);
+        auto *testfrontend = instance->addonManager().addon("testfrontend");
+        auto uuid =
+            testfrontend->call<ITestFrontend::createInputContext>("testapp");
+        auto *ic = instance->inputContextManager().findByUUID(uuid);
+        FCITX_ASSERT(ic);
+        instance->setCurrentInputMethod(ic, "pinyin", true);
+
+        // The trigger key without any composition must not enter the filter.
+        testfrontend->call<ITestFrontend::keyEvent>(uuid, Key("`"), false);
+        auto *emptyList = ic->inputPanel().candidateList().get();
+        if (emptyList && emptyList->toTabbed()) {
+            FCITX_ASSERT(!emptyList->toTabbed()->inAuxiliaryFilterMode());
+        }
+
+        // Disabled must keep the trigger key inert for an active composition.
+        RawConfig disabled;
+        disabled.setValueByPath("AuxiliaryFilter", "Disabled");
+        pinyin->setConfig(disabled);
+        for (const auto key : {"x", "i", "a", "n"}) {
+            testfrontend->call<ITestFrontend::keyEvent>(uuid, Key(key), false);
+        }
+        findCandidateOrDie(ic, "西安");
+        testfrontend->call<ITestFrontend::keyEvent>(uuid, Key("`"), false);
+        auto *tabbed = ic->inputPanel().candidateList()->toTabbed();
+        FCITX_ASSERT(tabbed);
+        FCITX_ASSERT(!tabbed->inAuxiliaryFilterMode());
+        FCITX_ASSERT(findCandidate(ic, "西安") >= 0);
+
+        // Leave the configuration as the other filter tests expect it.
+        RawConfig moqi;
+        moqi.setValueByPath("AuxiliaryFilter", "MoQi");
+        pinyin->setConfig(moqi);
+    });
+}
+
+void testMoQiFilterBufferLimit(Instance *instance) {
+    instance->eventDispatcher().schedule([instance]() {
+        auto *pinyin = instance->addonManager().addon("pinyin");
+        FCITX_ASSERT(pinyin);
+        RawConfig config;
+        config.setValueByPath("AuxiliaryFilter", "MoQi");
+        pinyin->setConfig(config);
+
+        auto *testfrontend = instance->addonManager().addon("testfrontend");
+        auto uuid =
+            testfrontend->call<ITestFrontend::createInputContext>("testapp");
+        auto *ic = instance->inputContextManager().findByUUID(uuid);
+        FCITX_ASSERT(ic);
+        instance->setCurrentInputMethod(ic, "pinyin", true);
+
+        for (const auto key : {"x", "i", "a", "n"}) {
+            testfrontend->call<ITestFrontend::keyEvent>(uuid, Key(key), false);
+        }
+        findCandidateOrDie(ic, "西安");
+        auto *tabbed = ic->inputPanel().candidateList()->toTabbed();
+        FCITX_ASSERT(tabbed);
+
+        testfrontend->call<ITestFrontend::keyEvent>(uuid, Key("`"), false);
+        testfrontend->call<ITestFrontend::keyEvent>(uuid, Key("a"), false);
+        testfrontend->call<ITestFrontend::keyEvent>(uuid, Key("k"), false);
+        FCITX_ASSERT(tabbed->auxiliaryFilterBuffer() == "ak");
+        FCITX_ASSERT(findCandidate(ic, "西安") >= 0);
+
+        // MoQi codes are two letters long, so a third letter must be ignored
+        // instead of leaking into the pinyin composition.
+        testfrontend->call<ITestFrontend::keyEvent>(uuid, Key("b"), false);
+        FCITX_ASSERT(tabbed->inAuxiliaryFilterMode());
+        FCITX_ASSERT(tabbed->auxiliaryFilterBuffer() == "ak");
+        FCITX_ASSERT(findCandidate(ic, "西安") >= 0);
+    });
+}
+
+void testMoQiFilterNoMatch(Instance *instance) {
+    instance->eventDispatcher().schedule([instance]() {
+        auto *pinyin = instance->addonManager().addon("pinyin");
+        FCITX_ASSERT(pinyin);
+        RawConfig config;
+        config.setValueByPath("AuxiliaryFilter", "MoQi");
+        pinyin->setConfig(config);
+
+        auto *testfrontend = instance->addonManager().addon("testfrontend");
+        auto uuid =
+            testfrontend->call<ITestFrontend::createInputContext>("testapp");
+        auto *ic = instance->inputContextManager().findByUUID(uuid);
+        FCITX_ASSERT(ic);
+        instance->setCurrentInputMethod(ic, "pinyin", true);
+
+        for (const auto key : {"x", "i", "a", "n"}) {
+            testfrontend->call<ITestFrontend::keyEvent>(uuid, Key(key), false);
+        }
+        findCandidateOrDie(ic, "西安");
+        auto *tabbed = ic->inputPanel().candidateList()->toTabbed();
+        FCITX_ASSERT(tabbed);
+
+        // No frontier character carries a MoQi code starting with "zz", so
+        // matching candidates must be filtered out rather than kept.
+        testfrontend->call<ITestFrontend::keyEvent>(uuid, Key("`"), false);
+        testfrontend->call<ITestFrontend::keyEvent>(uuid, Key("z"), false);
+        testfrontend->call<ITestFrontend::keyEvent>(uuid, Key("z"), false);
+        FCITX_ASSERT(tabbed->auxiliaryFilterBuffer() == "zz");
+        FCITX_ASSERT(ic->inputPanel().candidateList());
+        FCITX_ASSERT(findCandidate(ic, "西安") < 0);
+
+        // Leaving the filter restores the unfiltered candidate list.
+        testfrontend->call<ITestFrontend::keyEvent>(uuid, Key("Escape"), false);
+        FCITX_ASSERT(!tabbed->inAuxiliaryFilterMode());
+        FCITX_ASSERT(findCandidate(ic, "西安") >= 0);
+    });
+}
+
+void testMoQiFilterModifierKeys(Instance *instance) {
+    instance->eventDispatcher().schedule([instance]() {
+        auto *pinyin = instance->addonManager().addon("pinyin");
+        FCITX_ASSERT(pinyin);
+        RawConfig config;
+        config.setValueByPath("AuxiliaryFilter", "MoQi");
+        pinyin->setConfig(config);
+
+        auto *testfrontend = instance->addonManager().addon("testfrontend");
+        auto uuid =
+            testfrontend->call<ITestFrontend::createInputContext>("testapp");
+        auto *ic = instance->inputContextManager().findByUUID(uuid);
+        FCITX_ASSERT(ic);
+        instance->setCurrentInputMethod(ic, "pinyin", true);
+
+        for (const auto key : {"x", "i", "a", "n"}) {
+            testfrontend->call<ITestFrontend::keyEvent>(uuid, Key(key), false);
+        }
+        findCandidateOrDie(ic, "西安");
+        auto *tabbed = ic->inputPanel().candidateList()->toTabbed();
+        FCITX_ASSERT(tabbed);
+
+        testfrontend->call<ITestFrontend::keyEvent>(uuid, Key("`"), false);
+        testfrontend->call<ITestFrontend::keyEvent>(uuid, Key("a"), false);
+        FCITX_ASSERT(tabbed->auxiliaryFilterBuffer() == "a");
+
+        // Key combinations are swallowed while filtering: they must not reach
+        // the composition nor change the MoQi buffer.
+        testfrontend->call<ITestFrontend::keyEvent>(uuid, Key("Control+a"),
+                                                    false);
+        FCITX_ASSERT(tabbed->inAuxiliaryFilterMode());
+        FCITX_ASSERT(tabbed->auxiliaryFilterBuffer() == "a");
+        FCITX_ASSERT(findCandidate(ic, "西安") >= 0);
+    });
+}
+
+void testMoQiFilterPageNavigation(Instance *instance) {
+    instance->eventDispatcher().schedule([instance]() {
+        auto *pinyin = instance->addonManager().addon("pinyin");
+        FCITX_ASSERT(pinyin);
+        RawConfig config;
+        config.setValueByPath("AuxiliaryFilter", "MoQi");
+        pinyin->setConfig(config);
+
+        auto *testfrontend = instance->addonManager().addon("testfrontend");
+        auto uuid =
+            testfrontend->call<ITestFrontend::createInputContext>("testapp");
+        auto *ic = instance->inputContextManager().findByUUID(uuid);
+        FCITX_ASSERT(ic);
+        instance->setCurrentInputMethod(ic, "pinyin", true);
+
+        for (const auto key : {"x", "i", "a", "n"}) {
+            testfrontend->call<ITestFrontend::keyEvent>(uuid, Key(key), false);
+        }
+        findCandidateOrDie(ic, "西安");
+        auto *tabbed = ic->inputPanel().candidateList()->toTabbed();
+        FCITX_ASSERT(tabbed);
+
+        // Previous page on the first page with an empty buffer leaves the
+        // filter while keeping the composition.
+        testfrontend->call<ITestFrontend::keyEvent>(uuid, Key("`"), false);
+        FCITX_ASSERT(tabbed->inAuxiliaryFilterMode());
+        testfrontend->call<ITestFrontend::keyEvent>(uuid, Key(FcitxKey_minus),
+                                                    false);
+        FCITX_ASSERT(!tabbed->inAuxiliaryFilterMode());
+        FCITX_ASSERT(findCandidate(ic, "西安") >= 0);
+
+        // Next page keeps the filter active.
+        testfrontend->call<ITestFrontend::keyEvent>(uuid, Key("`"), false);
+        FCITX_ASSERT(tabbed->inAuxiliaryFilterMode());
+        testfrontend->call<ITestFrontend::keyEvent>(uuid, Key(FcitxKey_equal),
+                                                    false);
+        FCITX_ASSERT(tabbed->inAuxiliaryFilterMode());
+        FCITX_ASSERT(findCandidate(ic, "西安") >= 0);
+    });
+}
+
 void testPinyinTabFilterWithSeparator(Instance *instance) {
     instance->eventDispatcher().schedule([instance]() {
         auto *pinyin = instance->addonManager().addon("pinyin");
@@ -942,6 +1133,11 @@ int main() {
     testPinyinTabFilter(&instance);
     testMoQiTabFilter(&instance);
     testMoQiShuangpinFilter(&instance);
+    testAuxiliaryFilterEntryGuards(&instance);
+    testMoQiFilterBufferLimit(&instance);
+    testMoQiFilterNoMatch(&instance);
+    testMoQiFilterModifierKeys(&instance);
+    testMoQiFilterPageNavigation(&instance);
     testPinyinTabFilterWithSeparator(&instance);
     testPin(&instance);
     testQuickPhraseTrigger(&instance);

@@ -845,6 +845,12 @@ bool PinyinTabbedCandidateList::filterByMoQi(
         return true;
     }
 
+    // Only the first character after the selection frontier is constrained: a
+    // candidate is kept when that character's MoQi code starts with the
+    // buffer. Except for stroke candidates, which belong to the other filter,
+    // no candidate type is exempt, so prediction, cloud and non-Chinese
+    // candidates follow the same rule and are dropped when their first
+    // character carries no matching code.
     if (dynamic_cast<const StrokeCandidateWord *>(&candidate)) {
         return false;
     }
