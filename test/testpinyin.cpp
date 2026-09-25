@@ -518,15 +518,12 @@ void testMoQiShuangpinFilter(Instance *instance) {
             FCITX_ASSERT(findCandidate(ic, "西安") >= 0);
         }
 
-        // Select the first syllable, then continue composing the next one.
-        testfrontend->call<ITestFrontend::keyEvent>(uuid, Key("Escape"), false);
-        for (const auto key : {"x", "i"}) {
-            testfrontend->call<ITestFrontend::keyEvent>(uuid, Key(key), false);
-        }
+        // Move the cursor to the boundary between the two Shuangpin
+        // syllables. This exposes "西" through candidatesToCursor() while
+        // keeping the complete "xian" composition intact.
+        testfrontend->call<ITestFrontend::keyEvent>(uuid, Key("Left"), false);
+        testfrontend->call<ITestFrontend::keyEvent>(uuid, Key("Left"), false);
         findAndSelectCandidate(ic, "西");
-        for (const auto key : {"a", "n"}) {
-            testfrontend->call<ITestFrontend::keyEvent>(uuid, Key(key), false);
-        }
         FCITX_ASSERT(findCandidate(ic, "安") >= 0);
 
         enterMoQi();
