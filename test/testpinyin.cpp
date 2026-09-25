@@ -648,6 +648,14 @@ void testMoQiShuangpinFilter(Instance *instance) {
         findAndSelectCandidate(ic, "西");
         FCITX_ASSERT(findCandidate(ic, "安") >= 0);
 
+        // Continue composing after the selected prefix. No text is committed,
+        // and the next syllable becomes available at the advanced frontier.
+        for (const auto key : {"n", "i"}) {
+            testfrontend->call<ITestFrontend::keyEvent>(uuid, Key(key), false);
+        }
+        FCITX_ASSERT(findCandidate(ic, "安") >= 0);
+        FCITX_ASSERT(findCandidate(ic, "你") >= 0);
+
         enterMoQi();
         testfrontend->call<ITestFrontend::keyEvent>(uuid, Key("b"), false);
         testfrontend->call<ITestFrontend::keyEvent>(uuid, Key("n"), false);
