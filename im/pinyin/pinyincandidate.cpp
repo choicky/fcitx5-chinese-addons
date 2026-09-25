@@ -490,6 +490,9 @@ std::span<const CandidateAction> PinyinTabbedCandidateList::tabActions() {
     if (inStrokeFilterMode()) {
         return strokeActions_;
     }
+    if (inMoQiFilterMode()) {
+        return moqiActions_;
+    }
     if (!actions_) {
         buildTabActions();
     }
@@ -601,6 +604,11 @@ void PinyinTabbedCandidateList::buildTabActions() {
     stroke.setText("笔画");
     actions.push_back(std::move(stroke));
 
+    CandidateAction moqi;
+    moqi.setId(MOQI_ACTION);
+    moqi.setText("墨奇");
+    actions.push_back(std::move(moqi));
+
     actions_ = std::move(actions);
 
     strokeActions_.clear();
@@ -625,6 +633,19 @@ void PinyinTabbedCandidateList::buildTabActions() {
     strokeActions_.emplace_back();
     strokeActions_.back().setId(STROKE_SUB_ACTION_RETURN);
     strokeActions_.back().setText("返回");
+
+    moqiActions_.clear();
+    for (char code = 'a'; code <= 'z'; ++code) {
+        moqiActions_.emplace_back();
+        moqiActions_.back().setId(MOQI_SUB_ACTION_A - (code - 'a'));
+        moqiActions_.back().setText(std::string(1, code));
+    }
+    moqiActions_.emplace_back();
+    moqiActions_.back().setId(SEPARATOR_ACTION);
+    moqiActions_.back().setSeparator(true);
+    moqiActions_.emplace_back();
+    moqiActions_.back().setId(MOQI_SUB_ACTION_RETURN);
+    moqiActions_.back().setText("返回");
 }
 
 void PinyinTabbedCandidateList::triggerTabAction(int id) {
@@ -636,6 +657,8 @@ void PinyinTabbedCandidateList::triggerTabAction(int id) {
 
     if (inStrokeFilterMode()) {
         triggerStrokeAction(id);
+    } else if (inMoQiFilterMode()) {
+        triggerMoQiAction(id);
     } else {
         triggerMainAction(id);
     }
@@ -658,6 +681,32 @@ void PinyinTabbedCandidateList::triggerStrokeAction(int id) {
     default:
         return;
     }
+}
+
+void PinyinTabbedCandidateList::triggerMoQiAction(int id) {
+    assert(inMoQiFilterMode());
+
+    if (id <= MOQI_SUB_ACTION_A && id > MOQI_SUB_ACTION_RETURN) {
+        pushMoQi(MOQI_SUB_ACTION_A - id + 'a');
+    } else if (id == MOQI_SUB_ACTION_RETURN) {
+        resetMoQiFilterMode();
+    }
+}
+
+void PinyinTabbedCandidateList::pushMoQi(char code) {
+    if (moqiBuffer_.size() >= 2) {
+        return;
+    }
+    moqiBuffer_.type(code);
+    engine_->updateFilter(inputContext_);
+}
+
+bool PinyinTabbedCandidateList::popMoQi() {
+    if (moqiBuffer_.backspace()) {
+        engine_->updateFilter(inputContext_);
+        return true;
+    }
+    return false;
 }
 
 void PinyinTabbedCandidateList::pushStroke(char stroke) {
@@ -693,6 +742,8 @@ void PinyinTabbedCandidateList::triggerMainAction(int id) {
     // negative id is special action.
     if (id == STROKE_ACTION) {
         setStrokeFilterMode();
+    } else if (id == MOQI_ACTION) {
+        setMoQiFilterMode();
     } else if (checkableActionIndex = idToActionIndex(id);
                !checkableActionIndex) {
         return;
@@ -789,8 +840,45 @@ bool PinyinTabbedCandidateList::filterByStroke(
     return false;
 }
 
+bool PinyinTabbedCandidateList::filterByMoQi(
+    const CandidateWord &candidate) const {
+    if (!engine_->pinyinhelper() || !inMoQiFilterMode() ||
+        moqiBuffer_.empty()) {
+        return true;
+    }
+
+    if (dynamic_cast<const StrokeCandidateWord *>(&candidate)) {
+        return false;
+    }
+
+    auto str = candidate.text().toStringForCommit();
+    auto length = utf8::lengthValidated(str);
+    if (length == utf8::INVALID_LENGTH || length < 1) {
+        return false;
+    }
+
+    auto charRange = utf8::MakeUTF8CharRange(str);
+    auto iter = std::begin(charRange);
+    std::string chr(iter.charRange().first, iter.charRange().second);
+    auto code =
+        engine_->pinyinhelper()->call<IPinyinHelper::reverseLookupMoQi>(chr);
+    return code.starts_with(moqiBuffer_.userInput());
+}
+
 bool PinyinTabbedCandidateList::filter(const CandidateWord &candidate) const {
-    return filterByCheckedAction(candidate) && filterByStroke(candidate);
+    return filterByCheckedAction(candidate) && filterByStroke(candidate) &&
+           filterByMoQi(candidate);
+}
+
+void PinyinTabbedCandidateList::setMoQiFilterMode() {
+    moqiBuffer_.clear();
+    moqiFilterMode_ = true;
+}
+
+void PinyinTabbedCandidateList::resetMoQiFilterMode() {
+    moqiBuffer_.clear();
+    moqiFilterMode_ = false;
+    engine_->updateFilter(inputContext_);
 }
 
 void PinyinTabbedCandidateList::setStrokeFilterMode() {
