@@ -1,0 +1,178 @@
+name: Shuangpin cursor boundary probe
+
+# Investigation only (throwaway branch): run the same probe against the upstream
+# baseline and the fork tip, so an upstream behaviour can be told apart from a
+# regression introduced by the MoQi work. The probe never asserts on the
+# behaviour it observes, it only logs composition and candidate state.
+on:
+  push:
+    branches:
+      - probe/shuangpin-cursor-boundary
+
+jobs:
+  probe:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - ref: 61474bd3aa9fca26d1c31df93343035697e9f265
+            label: upstream-61474bd
+          - ref: 0d0102b82b35debf4cf22ce192060c07f10e7b35
+            label: fork-0d0102b8
+    name: probe (${{ matrix.label }})
+    runs-on: ubuntu-latest
+    container: archlinux:base-devel
+    steps:
+      - name: Install dependencies
+        run: |
+          pacman -Syu --noconfirm base-devel clang cmake ninja extra-cmake-modules fmt libuv boost boost-libs git python opencc nlohmann-json
+      - uses: actions/checkout@v4
+        with:
+          repository: fcitx/fcitx5
+          path: fcitx5
+      - name: Build and install fcitx5
+        uses: fcitx/github-actions@cmake
+        with:
+          path: fcitx5
+          cmake-option: >-
+            -DENABLE_KEYBOARD=Off -DENABLE_X11=Off -DENABLE_WAYLAND=Off -DENABLE_ENCHANT=Off
+            -DENABLE_DBUS=Off -DENABLE_SERVER=Off -DENABLE_EMOJI=Off -DUSE_SYSTEMD=Off
+      - uses: actions/checkout@v4
+        with:
+          repository: fcitx/libime
+          path: libime
+          submodules: true
+      - name: Build and install libime
+        uses: fcitx/github-actions@cmake
+        with:
+          path: libime
+      - name: Check out the addon at the probed ref
+        uses: actions/checkout@v4
+        with:
+          path: addon
+          ref: ${{ matrix.ref }}
+      - name: Inject the probe into testpinyin
+        run: |
+          python3 - addon/test/testpinyin.cpp <<'PY'
+          import pathlib
+          import sys
+
+          path = pathlib.Path(sys.argv[1])
+          src = path.read_text(encoding="utf-8")
+          assert "testShuangpinCursorProbe" not in src, "probe already injected"
+
+          PROBE = r'''
+          // ---- investigation probe, injected by the probe workflow ----
+          static std::string probeCandidates(InputContext *ic) {
+              std::string all;
+              auto candList = ic->inputPanel().candidateList();
+              if (!candList || !candList->toBulk()) {
+                  return "<none>";
+              }
+              for (int i = 0; i < candList->toBulk()->totalSize(); i++) {
+                  if (i == 12) {
+                      all += ",...";
+                      break;
+                  }
+                  if (i) {
+                      all += ",";
+                  }
+                  all += candList->toBulk()->candidateFromAll(i).text().toString();
+              }
+              return all;
+          }
+
+          static void probeLog(const char *step, InputContext *ic) {
+              FCITX_INFO() << "[probe] " << step
+                           << " | preedit=[" << ic->inputPanel().preedit().toString()
+                           << "] cursor=" << ic->inputPanel().preedit().cursor()
+                           << " client=[" << ic->inputPanel().clientPreedit().toString()
+                           << "] candidates=[" << probeCandidates(ic) << "]";
+          }
+
+          static bool probeSelect(InputContext *ic, const std::string &word) {
+              auto candList = ic->inputPanel().candidateList();
+              if (!candList || !candList->toBulk()) {
+                  return false;
+              }
+              for (int i = 0; i < candList->toBulk()->totalSize(); i++) {
+                  if (candList->toBulk()->candidateFromAll(i).text().toString() ==
+                      word) {
+                      candList->candidate(i).select(ic);
+                      return true;
+                  }
+              }
+              return false;
+          }
+
+          void testShuangpinCursorProbe(Instance *instance) {
+              instance->eventDispatcher().schedule([instance]() {
+                  auto *testfrontend = instance->addonManager().addon("testfrontend");
+                  FCITX_ASSERT(testfrontend);
+
+                  auto variant = [&](const char *label, const char *im,
+                                     std::initializer_list<const char *> keys,
+                                     bool moveCursor,
+                                     std::initializer_list<const char *> after) {
+                      auto uuid = testfrontend->call<
+                          ITestFrontend::createInputContext>("probeapp");
+                      auto *ic = instance->inputContextManager().findByUUID(uuid);
+                      instance->setCurrentInputMethod(ic, im, true);
+                      FCITX_INFO() << "[probe] ===== " << label << " =====";
+                      for (const auto *key : keys) {
+                          testfrontend->call<ITestFrontend::keyEvent>(uuid,
+                                                                     Key(key), false);
+                      }
+                      probeLog("after input", ic);
+                      if (moveCursor) {
+                          testfrontend->call<ITestFrontend::keyEvent>(
+                              uuid, Key("Left"), false);
+                          testfrontend->call<ITestFrontend::keyEvent>(
+                              uuid, Key("Left"), false);
+                          probeLog("after Left Left", ic);
+                      }
+                      FCITX_INFO() << "[probe] selected 西 = "
+                                   << probeSelect(ic, "西");
+                      probeLog("after select", ic);
+                      for (const auto *key : after) {
+                          testfrontend->call<ITestFrontend::keyEvent>(
+                              uuid, Key(key), false);
+                          probeLog(key, ic);
+                      }
+                  };
+
+                  variant("A shuangpin cursor-boundary", "shuangpin",
+                          {"x", "i", "a", "n"}, true, {"n", "i"});
+                  variant("B shuangpin plain", "shuangpin", {"x", "i", "a", "n"},
+                          false, {"n", "i"});
+                  variant("C pinyin separators", "pinyin",
+                          {"x", "i", "'", "'", "a", "n"}, false,
+                          {"m", "e", "n"});
+              });
+          }
+
+          '''
+
+          marker = "int main() {"
+          assert src.count(marker) == 1, "main marker"
+          src = src.replace(marker, PROBE + marker, 1)
+
+          call = "    testBasic(&instance);\n"
+          assert src.count(call) == 1, "testBasic call marker"
+          src = src.replace(call, call + "    testShuangpinCursorProbe(&instance);\n", 1)
+
+          path.write_text(src, encoding="utf-8")
+          print("probe injected")
+          PY
+      - name: Build the addon
+        uses: fcitx/github-actions@cmake
+        with:
+          path: addon
+          cmake-option: >-
+            -DENABLE_GUI=Off -DENABLE_BROWSER=Off
+      - name: Run testpinyin and print the probe output
+        run: |
+          set -o pipefail
+          ctest --test-dir addon/build -R testpinyin -V 2>&1 | tee /tmp/probe.log
+          echo "===== probe lines ====="
+          grep -F "[probe]" /tmp/probe.log || true
