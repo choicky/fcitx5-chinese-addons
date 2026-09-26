@@ -22,6 +22,7 @@
 #include <fcitx/addonmanager.h>
 #include <fcitx/candidateaction.h>
 #include <fcitx/inputcontext.h>
+#include <fcitx/inputmethodengine.h>
 #include <fcitx/inputmethodgroup.h>
 #include <fcitx/inputmethodmanager.h>
 #include <fcitx/inputpanel.h>
@@ -63,6 +64,12 @@ int findCandidateOrDie(InputContext *ic, std::string_view word) {
 void findAndSelectCandidate(InputContext *ic, std::string_view word) {
     auto candList = ic->inputPanel().candidateList();
     candList->candidate(findCandidateOrDie(ic, word)).select(ic);
+}
+
+// The auxiliary band is the user visible part of the auxiliary filter, so the
+// tests below assert on it instead of on engine internals.
+std::string auxUpText(InputContext *ic) {
+    return ic->inputPanel().auxUp().toString();
 }
 
 void sendControlSpace(AddonInstance *testfrontend, InputContext *ic) {
@@ -275,8 +282,66 @@ void testForget(Instance *instance) {
     });
 }
 
+void testAuxiliaryFilterConfigContract(Instance *instance) {
+    instance->eventDispatcher().schedule([instance]() {
+        auto *pinyin = instance->addonManager().addon("pinyin");
+        FCITX_ASSERT(pinyin);
+        auto *entry = instance->inputMethodManager().entry("pinyin");
+        FCITX_ASSERT(entry);
+        auto *engine = reinterpret_cast<InputMethodEngine *>(pinyin);
+        auto *configuration = engine->getConfigForInputMethod(*entry);
+        FCITX_ASSERT(configuration);
+
+        RawConfig description;
+        configuration->dumpDescription(description);
+        const std::string root = configuration->typeName();
+        const auto path = [&root](std::string_view child) {
+            return root + "/AuxiliaryFilter/" + std::string(child);
+        };
+        // Android parses Fcitx's native Enum descriptor as ConfigEnum and
+        // renders it with the generic ListPreference implementation.
+        FCITX_ASSERT(*description.valueByPath(path("Type")) == "Enum");
+        FCITX_ASSERT(*description.valueByPath(path("DefaultValue")) ==
+                     "Stroke");
+        FCITX_ASSERT(*description.valueByPath(path("Enum/0")) == "Disabled");
+        FCITX_ASSERT(*description.valueByPath(path("Enum/1")) == "Stroke");
+        FCITX_ASSERT(*description.valueByPath(path("Enum/2")) == "MoQi");
+        FCITX_ASSERT(description.valueByPath(path("EnumI18n/0")));
+        FCITX_ASSERT(description.valueByPath(path("EnumI18n/1")));
+        FCITX_ASSERT(description.valueByPath(path("EnumI18n/2")));
+
+        // Reload persistence can not be asserted here: the test environment
+        // deliberately has no writable user config path (see
+        // setupTestingEnvironment()), so setConfig()'s safeSaveAsIni() stores
+        // nothing and a following reloadConfig() would read no file and reset
+        // every option to its default. That round trip needs a real config
+        // directory, i.e. an on-device check.
+        for (const auto value : {"Disabled", "Stroke", "MoQi"}) {
+            RawConfig config;
+            configuration->save(config);
+            config.setValueByPath("AuxiliaryFilter", value);
+            engine->setConfigForInputMethod(*entry, config);
+
+            RawConfig current;
+            engine->getConfigForInputMethod(*entry)->save(current);
+            FCITX_ASSERT(*current.valueByPath("AuxiliaryFilter") == value);
+        }
+
+        RawConfig config;
+        configuration->save(config);
+        config.setValueByPath("AuxiliaryFilter", "Stroke");
+        engine->setConfigForInputMethod(*entry, config);
+    });
+}
+
 void testActionInStrokeFilter(Instance *instance) {
     instance->eventDispatcher().schedule([instance]() {
+        auto *pinyin = instance->addonManager().addon("pinyin");
+        FCITX_ASSERT(pinyin);
+        RawConfig config;
+        config.setValueByPath("AuxiliaryFilter", "Stroke");
+        pinyin->setConfig(config);
+
         auto *testfrontend = instance->addonManager().addon("testfrontend");
         auto uuid =
             testfrontend->call<ITestFrontend::createInputContext>("testapp");
@@ -309,10 +374,43 @@ void testActionInStrokeFilter(Instance *instance) {
     });
 }
 
+void testDisabledAuxiliaryFilter(Instance *instance) {
+    instance->eventDispatcher().schedule([instance]() {
+        auto *pinyin = instance->addonManager().addon("pinyin");
+        FCITX_ASSERT(pinyin);
+        RawConfig config;
+        config.setValueByPath("AuxiliaryFilter", "Disabled");
+        pinyin->setConfig(config);
+
+        auto *testfrontend = instance->addonManager().addon("testfrontend");
+        auto uuid =
+            testfrontend->call<ITestFrontend::createInputContext>("testapp");
+        auto *ic = instance->inputContextManager().findByUUID(uuid);
+        FCITX_ASSERT(ic);
+        instance->setCurrentInputMethod(ic, "pinyin", true);
+
+        for (const auto key : {"x", "i", "a", "n"}) {
+            testfrontend->call<ITestFrontend::keyEvent>(uuid, Key(key), false);
+        }
+        findCandidateOrDie(ic, "西安");
+
+        auto *tabbed = ic->inputPanel().candidateList()->toTabbed();
+        FCITX_ASSERT(tabbed);
+        auto actions = tabbed->tabActions();
+        FCITX_ASSERT(std::ranges::none_of(actions, [](const auto &action) {
+            return action.text() == "笔画" || action.text() == "墨奇";
+        }));
+    });
+}
+
 void testPinyinTabFilter(Instance *instance) {
     instance->eventDispatcher().schedule([instance]() {
         auto *pinyin = instance->addonManager().addon("pinyin");
         FCITX_ASSERT(pinyin);
+        RawConfig config;
+        config.setValueByPath("AuxiliaryFilter", "Stroke");
+        pinyin->setConfig(config);
+
         auto *testfrontend = instance->addonManager().addon("testfrontend");
         auto uuid =
             testfrontend->call<ITestFrontend::createInputContext>("testapp");
@@ -408,6 +506,377 @@ void testPinyinTabFilter(Instance *instance) {
         tabbed->triggerTabAction(singleAction.id());
         FCITX_ASSERT(findCandidate(ic, "西安") >= 0);
         FCITX_ASSERT(checkedActionsAre({}));
+    });
+}
+
+void testMoQiTabFilter(Instance *instance) {
+    instance->eventDispatcher().schedule([instance]() {
+        auto *pinyin = instance->addonManager().addon("pinyin");
+        FCITX_ASSERT(pinyin);
+        RawConfig config;
+        config.setValueByPath("AuxiliaryFilter", "MoQi");
+        pinyin->setConfig(config);
+
+        auto *testfrontend = instance->addonManager().addon("testfrontend");
+        auto uuid =
+            testfrontend->call<ITestFrontend::createInputContext>("testapp");
+        auto *ic = instance->inputContextManager().findByUUID(uuid);
+        FCITX_ASSERT(ic);
+        instance->setCurrentInputMethod(ic, "pinyin", true);
+
+        for (const auto key : {"x", "i", "a", "n"}) {
+            testfrontend->call<ITestFrontend::keyEvent>(uuid, Key(key), false);
+        }
+        findCandidateOrDie(ic, "西安");
+
+        auto *tabbed = ic->inputPanel().candidateList()->toTabbed();
+        FCITX_ASSERT(tabbed);
+        auto findAction = [tabbed](std::string_view text) {
+            auto actions = tabbed->tabActions();
+            auto iter = std::ranges::find_if(
+                actions, [text](const auto &a) { return a.text() == text; });
+            FCITX_ASSERT(iter != actions.end());
+            return iter->id();
+        };
+
+        // The configured grave key is the generic Auxiliary Filter trigger.
+        testfrontend->call<ITestFrontend::keyEvent>(uuid, Key("grave"), false);
+        testfrontend->call<ITestFrontend::keyEvent>(uuid, Key("a"), false);
+        FCITX_ASSERT(findCandidate(ic, "西安") >= 0);
+        testfrontend->call<ITestFrontend::keyEvent>(uuid, Key("k"), false);
+        FCITX_ASSERT(findCandidate(ic, "西安") >= 0);
+
+        // Backspace removes MoQi codes before leaving MoQi mode.
+        testfrontend->call<ITestFrontend::keyEvent>(uuid, Key("BackSpace"),
+                                                    false);
+        FCITX_ASSERT(findCandidate(ic, "西安") >= 0);
+        testfrontend->call<ITestFrontend::keyEvent>(uuid, Key("BackSpace"),
+                                                    false);
+        FCITX_ASSERT(findCandidate(ic, "西安") >= 0);
+        testfrontend->call<ITestFrontend::keyEvent>(uuid, Key("BackSpace"),
+                                                    false);
+        FCITX_ASSERT(findCandidate(ic, "西安") >= 0);
+        FCITX_ASSERT(findAction("墨奇") < 0);
+
+        // Clear the current composition, then use explicit separators so
+        // "西" is exposed as a partial candidate before the remaining "安".
+        testfrontend->call<ITestFrontend::keyEvent>(uuid, Key("Escape"), false);
+        for (const auto key : {"x", "i", "'", "'", "a", "n"}) {
+            testfrontend->call<ITestFrontend::keyEvent>(uuid, Key(key), false);
+        }
+
+        // Filter at the initial frontier (西 -> ak), then partially select 西.
+        testfrontend->call<ITestFrontend::keyEvent>(uuid, Key("grave"), false);
+        testfrontend->call<ITestFrontend::keyEvent>(uuid, Key("a"), false);
+        testfrontend->call<ITestFrontend::keyEvent>(uuid, Key("k"), false);
+        findAndSelectCandidate(ic, "西");
+        FCITX_ASSERT(findCandidate(ic, "安") >= 0);
+
+        // Continue composing after the selected prefix. No text is committed,
+        // and the next candidates start at the advanced selection frontier.
+        for (const auto key : {"m", "e", "n"}) {
+            testfrontend->call<ITestFrontend::keyEvent>(uuid, Key(key), false);
+        }
+        FCITX_ASSERT(findCandidate(ic, "安") >= 0);
+
+        // Enter the configured filter again and filter the new frontier
+        // (安 -> bn), then make another partial selection.
+        testfrontend->call<ITestFrontend::keyEvent>(uuid, Key("grave"), false);
+        testfrontend->call<ITestFrontend::keyEvent>(uuid, Key("b"), false);
+        testfrontend->call<ITestFrontend::keyEvent>(uuid, Key("n"), false);
+        FCITX_ASSERT(findCandidate(ic, "安") >= 0);
+        findAndSelectCandidate(ic, "安");
+        FCITX_ASSERT(findCandidate(ic, "门") >= 0);
+
+        // A third entry proves selection rebuilt the normal candidate list and
+        // left the remaining composition available to the same product path.
+        FCITX_ASSERT(ic->inputPanel().candidateList());
+        testfrontend->call<ITestFrontend::keyEvent>(uuid, Key("grave"), false);
+        testfrontend->call<ITestFrontend::keyEvent>(uuid, Key("Escape"), false);
+        FCITX_ASSERT(findCandidate(ic, "门") >= 0);
+    });
+}
+
+void testMoQiShuangpinFilter(Instance *instance) {
+    instance->eventDispatcher().schedule([instance]() {
+        auto *pinyin = instance->addonManager().addon("pinyin");
+        FCITX_ASSERT(pinyin);
+        RawConfig config;
+        config.setValueByPath("AuxiliaryFilter", "MoQi");
+        pinyin->setConfig(config);
+
+        auto *testfrontend = instance->addonManager().addon("testfrontend");
+        auto uuid =
+            testfrontend->call<ITestFrontend::createInputContext>("testapp");
+        auto *ic = instance->inputContextManager().findByUUID(uuid);
+        FCITX_ASSERT(ic);
+        instance->setCurrentInputMethod(ic, "shuangpin", true);
+
+        auto enterMoQi = [ic]() {
+            auto *tabbed = ic->inputPanel().candidateList()->toTabbed();
+            FCITX_ASSERT(tabbed);
+            auto actions = tabbed->tabActions();
+            auto moqi = std::ranges::find_if(
+                actions, [](const auto &a) { return a.text() == "墨奇"; });
+            FCITX_ASSERT(moqi != actions.end());
+            tabbed->triggerTabAction(moqi->id());
+        };
+
+        // Ziranma uses "xi" for xi and "an" for an.
+        for (const auto key : {"x", "i", "a", "n"}) {
+            testfrontend->call<ITestFrontend::keyEvent>(uuid, Key(key), false);
+        }
+        findCandidateOrDie(ic, "西安");
+
+        enterMoQi();
+        testfrontend->call<ITestFrontend::keyEvent>(uuid, Key("a"), false);
+        testfrontend->call<ITestFrontend::keyEvent>(uuid, Key("k"), false);
+        FCITX_ASSERT(findCandidate(ic, "西安") >= 0);
+
+        // Backspace removes the MoQi buffer first, then exits MoQi mode.
+        for (int i = 0; i < 3; i++) {
+            testfrontend->call<ITestFrontend::keyEvent>(uuid, Key("BackSpace"),
+                                                        false);
+            FCITX_ASSERT(findCandidate(ic, "西安") >= 0);
+        }
+
+        // Move the cursor to the boundary between the two Shuangpin
+        // syllables. This exposes "西" through candidatesToCursor() while
+        // keeping the complete "xian" composition intact.
+        testfrontend->call<ITestFrontend::keyEvent>(uuid, Key("Left"), false);
+        testfrontend->call<ITestFrontend::keyEvent>(uuid, Key("Left"), false);
+        findAndSelectCandidate(ic, "西");
+        FCITX_ASSERT(findCandidate(ic, "安") >= 0);
+
+        enterMoQi();
+        testfrontend->call<ITestFrontend::keyEvent>(uuid, Key("b"), false);
+        testfrontend->call<ITestFrontend::keyEvent>(uuid, Key("n"), false);
+        FCITX_ASSERT(findCandidate(ic, "安") >= 0);
+
+        // Escape leaves the selected prefix and remaining composition intact.
+        testfrontend->call<ITestFrontend::keyEvent>(uuid, Key("Escape"), false);
+        FCITX_ASSERT(findCandidate(ic, "安") >= 0);
+    });
+}
+
+// Continuing to compose after a partial selection keeps the rest of the
+// composition and still offers its candidates. This holds while the composition
+// cursor stays at the end, so the new syllable is appended to the remainder.
+// No auxiliary filter takes part: the step that failed earlier ran after the
+// filter had already been left, and the behaviour is filter independent. The
+// cursor boundary case is different on purpose and is covered above: once the
+// cursor has been moved into the middle, typing inserts at the cursor and
+// re-segments the remaining input (see research/shuangpin-cursor-selection.md).
+void testShuangpinContinueInputAfterSelection(Instance *instance) {
+    instance->eventDispatcher().schedule([instance]() {
+        auto *testfrontend = instance->addonManager().addon("testfrontend");
+        auto uuid =
+            testfrontend->call<ITestFrontend::createInputContext>("testapp");
+        auto *ic = instance->inputContextManager().findByUUID(uuid);
+        FCITX_ASSERT(ic);
+        instance->setCurrentInputMethod(ic, "shuangpin", true);
+
+        // Ziranma uses "xi" for xi and "an" for an.
+        for (const auto key : {"x", "i", "a", "n"}) {
+            testfrontend->call<ITestFrontend::keyEvent>(uuid, Key(key), false);
+        }
+        findCandidateOrDie(ic, "西安");
+
+        // Select 西 from the whole input, which advances the selection frontier
+        // to the second syllable without moving the cursor.
+        findAndSelectCandidate(ic, "西");
+        FCITX_ASSERT(findCandidate(ic, "安") >= 0);
+
+        // The next syllable is appended to the remaining composition, nothing
+        // is committed, and the remaining candidates are still offered.
+        for (const auto key : {"n", "i"}) {
+            testfrontend->call<ITestFrontend::keyEvent>(uuid, Key(key), false);
+        }
+        FCITX_ASSERT(!ic->inputPanel().preedit().toString().empty());
+        FCITX_ASSERT(findCandidate(ic, "安") >= 0);
+    });
+}
+
+void testAuxiliaryFilterEntryGuards(Instance *instance) {
+    instance->eventDispatcher().schedule([instance]() {
+        auto *pinyin = instance->addonManager().addon("pinyin");
+        FCITX_ASSERT(pinyin);
+        auto *testfrontend = instance->addonManager().addon("testfrontend");
+        auto uuid =
+            testfrontend->call<ITestFrontend::createInputContext>("testapp");
+        auto *ic = instance->inputContextManager().findByUUID(uuid);
+        FCITX_ASSERT(ic);
+        instance->setCurrentInputMethod(ic, "pinyin", true);
+
+        RawConfig moqi;
+        moqi.setValueByPath("AuxiliaryFilter", "MoQi");
+        pinyin->setConfig(moqi);
+
+        // The trigger key is only special while a candidate list exists: with
+        // no composition it types a literal backtick instead of filtering. The
+        // literal is committed when the next key arrives.
+        testfrontend->call<ITestFrontend::pushCommitExpectation>("`");
+        testfrontend->call<ITestFrontend::keyEvent>(uuid, Key("`"), false);
+        testfrontend->call<ITestFrontend::keyEvent>(uuid, Key("x"), false);
+        FCITX_ASSERT(auxUpText(ic).empty());
+        testfrontend->call<ITestFrontend::keyEvent>(uuid, Key("Escape"), false);
+
+        // Disabled must not change that: the trigger key stays a literal.
+        RawConfig disabled;
+        disabled.setValueByPath("AuxiliaryFilter", "Disabled");
+        pinyin->setConfig(disabled);
+        testfrontend->call<ITestFrontend::pushCommitExpectation>("`");
+        testfrontend->call<ITestFrontend::keyEvent>(uuid, Key("`"), false);
+        testfrontend->call<ITestFrontend::keyEvent>(uuid, Key("x"), false);
+        FCITX_ASSERT(auxUpText(ic).empty());
+        testfrontend->call<ITestFrontend::keyEvent>(uuid, Key("Escape"), false);
+
+        // Leave the configuration as the other filter tests expect it.
+        pinyin->setConfig(moqi);
+    });
+}
+
+void testMoQiFilterBufferLimit(Instance *instance) {
+    instance->eventDispatcher().schedule([instance]() {
+        auto *pinyin = instance->addonManager().addon("pinyin");
+        FCITX_ASSERT(pinyin);
+        RawConfig config;
+        config.setValueByPath("AuxiliaryFilter", "MoQi");
+        pinyin->setConfig(config);
+
+        auto *testfrontend = instance->addonManager().addon("testfrontend");
+        auto uuid =
+            testfrontend->call<ITestFrontend::createInputContext>("testapp");
+        auto *ic = instance->inputContextManager().findByUUID(uuid);
+        FCITX_ASSERT(ic);
+        instance->setCurrentInputMethod(ic, "pinyin", true);
+
+        for (const auto key : {"x", "i", "a", "n"}) {
+            testfrontend->call<ITestFrontend::keyEvent>(uuid, Key(key), false);
+        }
+        findCandidateOrDie(ic, "西安");
+
+        testfrontend->call<ITestFrontend::keyEvent>(uuid, Key("`"), false);
+        testfrontend->call<ITestFrontend::keyEvent>(uuid, Key("a"), false);
+        testfrontend->call<ITestFrontend::keyEvent>(uuid, Key("k"), false);
+        FCITX_ASSERT(auxUpText(ic).ends_with("ak"));
+        FCITX_ASSERT(findCandidate(ic, "西安") >= 0);
+
+        // MoQi codes are two letters long, so a third letter must be ignored
+        // instead of leaking into the pinyin composition.
+        testfrontend->call<ITestFrontend::keyEvent>(uuid, Key("b"), false);
+        FCITX_ASSERT(!auxUpText(ic).empty());
+        FCITX_ASSERT(auxUpText(ic).ends_with("ak"));
+        FCITX_ASSERT(findCandidate(ic, "西安") >= 0);
+    });
+}
+
+void testMoQiFilterNoMatch(Instance *instance) {
+    instance->eventDispatcher().schedule([instance]() {
+        auto *pinyin = instance->addonManager().addon("pinyin");
+        FCITX_ASSERT(pinyin);
+        RawConfig config;
+        config.setValueByPath("AuxiliaryFilter", "MoQi");
+        pinyin->setConfig(config);
+
+        auto *testfrontend = instance->addonManager().addon("testfrontend");
+        auto uuid =
+            testfrontend->call<ITestFrontend::createInputContext>("testapp");
+        auto *ic = instance->inputContextManager().findByUUID(uuid);
+        FCITX_ASSERT(ic);
+        instance->setCurrentInputMethod(ic, "pinyin", true);
+
+        for (const auto key : {"x", "i", "a", "n"}) {
+            testfrontend->call<ITestFrontend::keyEvent>(uuid, Key(key), false);
+        }
+        findCandidateOrDie(ic, "西安");
+
+        // No frontier character carries a MoQi code starting with "zz", so
+        // matching candidates must be filtered out rather than kept.
+        testfrontend->call<ITestFrontend::keyEvent>(uuid, Key("`"), false);
+        testfrontend->call<ITestFrontend::keyEvent>(uuid, Key("z"), false);
+        testfrontend->call<ITestFrontend::keyEvent>(uuid, Key("z"), false);
+        FCITX_ASSERT(auxUpText(ic).ends_with("zz"));
+        FCITX_ASSERT(ic->inputPanel().candidateList());
+        FCITX_ASSERT(findCandidate(ic, "西安") < 0);
+
+        // Leaving the filter restores the unfiltered candidate list.
+        testfrontend->call<ITestFrontend::keyEvent>(uuid, Key("Escape"), false);
+        FCITX_ASSERT(auxUpText(ic).empty());
+        FCITX_ASSERT(findCandidate(ic, "西安") >= 0);
+    });
+}
+
+void testMoQiFilterModifierKeys(Instance *instance) {
+    instance->eventDispatcher().schedule([instance]() {
+        auto *pinyin = instance->addonManager().addon("pinyin");
+        FCITX_ASSERT(pinyin);
+        RawConfig config;
+        config.setValueByPath("AuxiliaryFilter", "MoQi");
+        pinyin->setConfig(config);
+
+        auto *testfrontend = instance->addonManager().addon("testfrontend");
+        auto uuid =
+            testfrontend->call<ITestFrontend::createInputContext>("testapp");
+        auto *ic = instance->inputContextManager().findByUUID(uuid);
+        FCITX_ASSERT(ic);
+        instance->setCurrentInputMethod(ic, "pinyin", true);
+
+        for (const auto key : {"x", "i", "a", "n"}) {
+            testfrontend->call<ITestFrontend::keyEvent>(uuid, Key(key), false);
+        }
+        findCandidateOrDie(ic, "西安");
+
+        testfrontend->call<ITestFrontend::keyEvent>(uuid, Key("`"), false);
+        testfrontend->call<ITestFrontend::keyEvent>(uuid, Key("a"), false);
+        FCITX_ASSERT(auxUpText(ic).ends_with("a"));
+
+        // Key combinations are swallowed while filtering: they must not reach
+        // the composition nor change the MoQi buffer.
+        testfrontend->call<ITestFrontend::keyEvent>(uuid, Key("Control+a"),
+                                                    false);
+        FCITX_ASSERT(!auxUpText(ic).empty());
+        FCITX_ASSERT(auxUpText(ic).ends_with("a"));
+        FCITX_ASSERT(findCandidate(ic, "西安") >= 0);
+    });
+}
+
+void testMoQiFilterPageNavigation(Instance *instance) {
+    instance->eventDispatcher().schedule([instance]() {
+        auto *pinyin = instance->addonManager().addon("pinyin");
+        FCITX_ASSERT(pinyin);
+        RawConfig config;
+        config.setValueByPath("AuxiliaryFilter", "MoQi");
+        pinyin->setConfig(config);
+
+        auto *testfrontend = instance->addonManager().addon("testfrontend");
+        auto uuid =
+            testfrontend->call<ITestFrontend::createInputContext>("testapp");
+        auto *ic = instance->inputContextManager().findByUUID(uuid);
+        FCITX_ASSERT(ic);
+        instance->setCurrentInputMethod(ic, "pinyin", true);
+
+        for (const auto key : {"x", "i", "a", "n"}) {
+            testfrontend->call<ITestFrontend::keyEvent>(uuid, Key(key), false);
+        }
+        findCandidateOrDie(ic, "西安");
+
+        // Previous page on the first page with an empty buffer leaves the
+        // filter while keeping the composition.
+        testfrontend->call<ITestFrontend::keyEvent>(uuid, Key("`"), false);
+        FCITX_ASSERT(!auxUpText(ic).empty());
+        testfrontend->call<ITestFrontend::keyEvent>(uuid, Key(FcitxKey_minus),
+                                                    false);
+        FCITX_ASSERT(auxUpText(ic).empty());
+        FCITX_ASSERT(findCandidate(ic, "西安") >= 0);
+
+        // Next page keeps the filter active.
+        testfrontend->call<ITestFrontend::keyEvent>(uuid, Key("`"), false);
+        FCITX_ASSERT(!auxUpText(ic).empty());
+        testfrontend->call<ITestFrontend::keyEvent>(uuid, Key(FcitxKey_equal),
+                                                    false);
+        FCITX_ASSERT(!auxUpText(ic).empty());
+        FCITX_ASSERT(findCandidate(ic, "西安") >= 0);
     });
 }
 
@@ -694,8 +1163,18 @@ int main() {
     testSelectByChar(&instance);
     testUppercase(&instance);
     testForget(&instance);
+    testAuxiliaryFilterConfigContract(&instance);
     testActionInStrokeFilter(&instance);
+    testDisabledAuxiliaryFilter(&instance);
     testPinyinTabFilter(&instance);
+    testMoQiTabFilter(&instance);
+    testMoQiShuangpinFilter(&instance);
+    testShuangpinContinueInputAfterSelection(&instance);
+    testAuxiliaryFilterEntryGuards(&instance);
+    testMoQiFilterBufferLimit(&instance);
+    testMoQiFilterNoMatch(&instance);
+    testMoQiFilterModifierKeys(&instance);
+    testMoQiFilterPageNavigation(&instance);
     testPinyinTabFilterWithSeparator(&instance);
     testPin(&instance);
     testQuickPhraseTrigger(&instance);

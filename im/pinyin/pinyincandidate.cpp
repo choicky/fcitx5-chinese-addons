@@ -487,8 +487,11 @@ PinyinTabbedCandidateList::PinyinTabbedCandidateList(
       candidateList_(candidateList) {}
 
 std::span<const CandidateAction> PinyinTabbedCandidateList::tabActions() {
-    if (inStrokeFilterMode()) {
+    if (auxiliaryFilterMode_ == AuxiliaryFilterMode::Stroke) {
         return strokeActions_;
+    }
+    if (auxiliaryFilterMode_ == AuxiliaryFilterMode::MoQi) {
+        return moqiActions_;
     }
     if (!actions_) {
         buildTabActions();
@@ -596,10 +599,24 @@ void PinyinTabbedCandidateList::buildTabActions() {
 
     actions.push_back(std::move(separator));
 
-    CandidateAction stroke;
-    stroke.setId(STROKE_ACTION);
-    stroke.setText("笔画");
-    actions.push_back(std::move(stroke));
+    switch (*engine_->config().auxiliaryFilter) {
+    case AuxiliaryFilter::Stroke: {
+        CandidateAction stroke;
+        stroke.setId(STROKE_ACTION);
+        stroke.setText("笔画");
+        actions.push_back(std::move(stroke));
+        break;
+    }
+    case AuxiliaryFilter::MoQi: {
+        CandidateAction moqi;
+        moqi.setId(MOQI_ACTION);
+        moqi.setText("墨奇");
+        actions.push_back(std::move(moqi));
+        break;
+    }
+    case AuxiliaryFilter::Disabled:
+        break;
+    }
 
     actions_ = std::move(actions);
 
@@ -625,6 +642,19 @@ void PinyinTabbedCandidateList::buildTabActions() {
     strokeActions_.emplace_back();
     strokeActions_.back().setId(STROKE_SUB_ACTION_RETURN);
     strokeActions_.back().setText("返回");
+
+    moqiActions_.clear();
+    for (char code = 'a'; code <= 'z'; ++code) {
+        moqiActions_.emplace_back();
+        moqiActions_.back().setId(MOQI_SUB_ACTION_A - (code - 'a'));
+        moqiActions_.back().setText(std::string(1, code));
+    }
+    moqiActions_.emplace_back();
+    moqiActions_.back().setId(SEPARATOR_ACTION);
+    moqiActions_.back().setSeparator(true);
+    moqiActions_.emplace_back();
+    moqiActions_.back().setId(MOQI_SUB_ACTION_RETURN);
+    moqiActions_.back().setText("返回");
 }
 
 void PinyinTabbedCandidateList::triggerTabAction(int id) {
@@ -634,39 +664,54 @@ void PinyinTabbedCandidateList::triggerTabAction(int id) {
         return;
     }
 
-    if (inStrokeFilterMode()) {
-        triggerStrokeAction(id);
+    if (inAuxiliaryFilterMode()) {
+        triggerAuxiliaryFilterAction(id);
     } else {
         triggerMainAction(id);
     }
 }
 
-void PinyinTabbedCandidateList::triggerStrokeAction(int id) {
-    assert(inStrokeFilterMode());
+void PinyinTabbedCandidateList::triggerAuxiliaryFilterAction(int id) {
+    assert(inAuxiliaryFilterMode());
 
-    switch (id) {
-    case STROKE_SUB_ACTION_H:
-    case STROKE_SUB_ACTION_S:
-    case STROKE_SUB_ACTION_P:
-    case STROKE_SUB_ACTION_N:
-    case STROKE_SUB_ACTION_Z:
-        pushStroke(STROKE_SUB_ACTION_H - id + '1');
-        break;
-    case STROKE_SUB_ACTION_RETURN:
-        resetStrokeFilterMode();
-        break;
-    default:
+    if (auxiliaryFilterMode_ == AuxiliaryFilterMode::Stroke) {
+        switch (id) {
+        case STROKE_SUB_ACTION_H:
+        case STROKE_SUB_ACTION_S:
+        case STROKE_SUB_ACTION_P:
+        case STROKE_SUB_ACTION_N:
+        case STROKE_SUB_ACTION_Z:
+            pushAuxiliaryFilter(STROKE_SUB_ACTION_H - id + '1');
+            break;
+        case STROKE_SUB_ACTION_RETURN:
+            resetAuxiliaryFilterMode();
+            break;
+        default:
+            return;
+        }
         return;
+    }
+
+    if (auxiliaryFilterMode_ == AuxiliaryFilterMode::MoQi) {
+        if (id <= MOQI_SUB_ACTION_A && id > MOQI_SUB_ACTION_RETURN) {
+            pushAuxiliaryFilter(MOQI_SUB_ACTION_A - id + 'a');
+        } else if (id == MOQI_SUB_ACTION_RETURN) {
+            resetAuxiliaryFilterMode();
+        }
     }
 }
 
-void PinyinTabbedCandidateList::pushStroke(char stroke) {
-    strokeBuffer_.type(stroke);
+void PinyinTabbedCandidateList::pushAuxiliaryFilter(char code) {
+    if (auxiliaryFilterMode_ == AuxiliaryFilterMode::MoQi &&
+        auxiliaryFilterBuffer_.size() >= 2) {
+        return;
+    }
+    auxiliaryFilterBuffer_.type(code);
     engine_->updateFilter(inputContext_);
 }
 
-bool PinyinTabbedCandidateList::popStroke() {
-    if (strokeBuffer_.backspace()) {
+bool PinyinTabbedCandidateList::popAuxiliaryFilter() {
+    if (auxiliaryFilterBuffer_.backspace()) {
         engine_->updateFilter(inputContext_);
         return true;
     }
@@ -692,7 +737,9 @@ void PinyinTabbedCandidateList::triggerMainAction(int id) {
     std::optional<int> checkableActionIndex;
     // negative id is special action.
     if (id == STROKE_ACTION) {
-        setStrokeFilterMode();
+        setAuxiliaryFilterMode(AuxiliaryFilterMode::Stroke);
+    } else if (id == MOQI_ACTION) {
+        setAuxiliaryFilterMode(AuxiliaryFilterMode::MoQi);
     } else if (checkableActionIndex = idToActionIndex(id);
                !checkableActionIndex) {
         return;
@@ -763,7 +810,8 @@ bool PinyinTabbedCandidateList::filterByStroke(
         return true;
     }
 
-    if (!inStrokeFilterMode() || strokeBuffer_.empty()) {
+    if (auxiliaryFilterMode_ != AuxiliaryFilterMode::Stroke ||
+        auxiliaryFilterBuffer_.empty()) {
         return true;
     }
 
@@ -781,7 +829,7 @@ bool PinyinTabbedCandidateList::filterByStroke(
             std::string chr(iter.charRange().first, iter.charRange().second);
             auto stroke = engine_->pinyinhelper()
                               ->call<IPinyinHelper::reverseLookupStroke>(chr);
-            if (stroke.starts_with(strokeBuffer_.userInput())) {
+            if (stroke.starts_with(auxiliaryFilterBuffer_.userInput())) {
                 return true;
             }
         }
@@ -789,18 +837,53 @@ bool PinyinTabbedCandidateList::filterByStroke(
     return false;
 }
 
+bool PinyinTabbedCandidateList::filterByMoQi(
+    const CandidateWord &candidate) const {
+    if (!engine_->pinyinhelper() ||
+        auxiliaryFilterMode_ != AuxiliaryFilterMode::MoQi ||
+        auxiliaryFilterBuffer_.empty()) {
+        return true;
+    }
+
+    // Only the first character after the selection frontier is constrained: a
+    // candidate is kept when that character's MoQi code starts with the
+    // buffer. Except for stroke candidates, which belong to the other filter,
+    // no candidate type is exempt, so prediction, cloud and non-Chinese
+    // candidates follow the same rule and are dropped when their first
+    // character carries no matching code.
+    if (dynamic_cast<const StrokeCandidateWord *>(&candidate)) {
+        return false;
+    }
+
+    auto str = candidate.text().toStringForCommit();
+    auto length = utf8::lengthValidated(str);
+    if (length == utf8::INVALID_LENGTH || length < 1) {
+        return false;
+    }
+
+    auto charRange = utf8::MakeUTF8CharRange(str);
+    auto iter = std::begin(charRange);
+    std::string chr(iter.charRange().first, iter.charRange().second);
+    auto code =
+        engine_->pinyinhelper()->call<IPinyinHelper::reverseLookupMoQi>(chr);
+    return code.starts_with(auxiliaryFilterBuffer_.userInput());
+}
+
 bool PinyinTabbedCandidateList::filter(const CandidateWord &candidate) const {
-    return filterByCheckedAction(candidate) && filterByStroke(candidate);
+    return filterByCheckedAction(candidate) && filterByStroke(candidate) &&
+           filterByMoQi(candidate);
 }
 
-void PinyinTabbedCandidateList::setStrokeFilterMode() {
-    strokeBuffer_.clear();
-    strokeFilterMode_ = true;
+void PinyinTabbedCandidateList::setAuxiliaryFilterMode(
+    AuxiliaryFilterMode mode) {
+    auxiliaryFilterBuffer_.clear();
+    auxiliaryFilterMode_ = mode;
+    engine_->updateFilter(inputContext_);
 }
 
-void PinyinTabbedCandidateList::resetStrokeFilterMode() {
-    strokeBuffer_.clear();
-    strokeFilterMode_ = false;
+void PinyinTabbedCandidateList::resetAuxiliaryFilterMode() {
+    auxiliaryFilterBuffer_.clear();
+    auxiliaryFilterMode_ = AuxiliaryFilterMode::None;
     engine_->updateFilter(inputContext_);
 }
 

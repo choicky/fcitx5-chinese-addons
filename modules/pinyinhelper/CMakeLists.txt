@@ -2,6 +2,7 @@ set(PINYINHELPER_SOURCES
     pinyinhelper.cpp
     pinyinlookup.cpp
     stroke.cpp
+    moqi.cpp
 )
 add_fcitx5_addon(pinyinhelper ${PINYINHELPER_SOURCES})
 target_link_libraries(pinyinhelper 
@@ -29,6 +30,30 @@ fcitx5_download(py-stroke-download "${PY_STROKE_URL}" "${PY_STROKE_TAR}"
 fcitx5_extract(py-stroke-extract "${PY_STROKE_TAR}" DEPENDS py-stroke-download
   OUTPUT ${PY_STROKE_TGT})
 install(FILES "${PY_STROKE_TGT}" DESTINATION "${FCITX_INSTALL_PKGDATADIR}/pinyinhelper")
+
+include(${CMAKE_CURRENT_SOURCE_DIR}/moqima-gb18030.cmake)
+set(MOQI_TABLE_TGT "${CMAKE_CURRENT_BINARY_DIR}/moqima_gb18030.txt")
+# The table is fetched at configure time rather than with fcitx5_download():
+# build systems that package this addon install its "config" component before
+# the addon itself is built (fcitx5-android installs that component into its
+# APK assets), so the file has to be in place by then. An existing file with
+# the pinned hash is reused, so only the first configure needs network for it.
+if(EXISTS "${MOQI_TABLE_TGT}")
+  file(SHA256 "${MOQI_TABLE_TGT}" moqi_table_hash)
+else()
+  set(moqi_table_hash "")
+endif()
+if(NOT moqi_table_hash STREQUAL MOQI_TABLE_SHA256)
+  file(DOWNLOAD "${MOQI_TABLE_URL}" "${MOQI_TABLE_TGT}"
+    EXPECTED_HASH SHA256=${MOQI_TABLE_SHA256} STATUS moqi_table_status)
+  list(GET moqi_table_status 0 moqi_table_code)
+  list(GET moqi_table_status 1 moqi_table_message)
+  if(NOT moqi_table_code EQUAL 0)
+    message(FATAL_ERROR "Failed to download the MoQi table (${moqi_table_code}): ${moqi_table_message}")
+  endif()
+endif()
+install(FILES "${MOQI_TABLE_TGT}" DESTINATION "${FCITX_INSTALL_PKGDATADIR}/pinyinhelper"
+  COMPONENT config)
 
 set(PY_TABLE_VER 20121124)
 set(PY_TABLE_TGT "${CMAKE_CURRENT_BINARY_DIR}/py_table.mb")
