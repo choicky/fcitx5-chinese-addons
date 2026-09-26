@@ -659,6 +659,44 @@ void testMoQiShuangpinFilter(Instance *instance) {
     });
 }
 
+// Continuing to compose after a partial selection keeps the rest of the
+// composition and still offers its candidates. This holds while the composition
+// cursor stays at the end, so the new syllable is appended to the remainder.
+// No auxiliary filter takes part: the step that failed earlier ran after the
+// filter had already been left, and the behaviour is filter independent. The
+// cursor boundary case is different on purpose and is covered above: once the
+// cursor has been moved into the middle, typing inserts at the cursor and
+// re-segments the remaining input (see research/shuangpin-cursor-selection.md).
+void testShuangpinContinueInputAfterSelection(Instance *instance) {
+    instance->eventDispatcher().schedule([instance]() {
+        auto *testfrontend = instance->addonManager().addon("testfrontend");
+        auto uuid =
+            testfrontend->call<ITestFrontend::createInputContext>("testapp");
+        auto *ic = instance->inputContextManager().findByUUID(uuid);
+        FCITX_ASSERT(ic);
+        instance->setCurrentInputMethod(ic, "shuangpin", true);
+
+        // Ziranma uses "xi" for xi and "an" for an.
+        for (const auto key : {"x", "i", "a", "n"}) {
+            testfrontend->call<ITestFrontend::keyEvent>(uuid, Key(key), false);
+        }
+        findCandidateOrDie(ic, "西安");
+
+        // Select 西 from the whole input, which advances the selection frontier
+        // to the second syllable without moving the cursor.
+        findAndSelectCandidate(ic, "西");
+        FCITX_ASSERT(findCandidate(ic, "安") >= 0);
+
+        // The next syllable is appended to the remaining composition, nothing
+        // is committed, and the remaining candidates are still offered.
+        for (const auto key : {"n", "i"}) {
+            testfrontend->call<ITestFrontend::keyEvent>(uuid, Key(key), false);
+        }
+        FCITX_ASSERT(!ic->inputPanel().preedit().toString().empty());
+        FCITX_ASSERT(findCandidate(ic, "安") >= 0);
+    });
+}
+
 void testAuxiliaryFilterEntryGuards(Instance *instance) {
     instance->eventDispatcher().schedule([instance]() {
         auto *pinyin = instance->addonManager().addon("pinyin");
@@ -1131,6 +1169,7 @@ int main() {
     testPinyinTabFilter(&instance);
     testMoQiTabFilter(&instance);
     testMoQiShuangpinFilter(&instance);
+    testShuangpinContinueInputAfterSelection(&instance);
     testAuxiliaryFilterEntryGuards(&instance);
     testMoQiFilterBufferLimit(&instance);
     testMoQiFilterNoMatch(&instance);
