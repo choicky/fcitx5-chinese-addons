@@ -33,6 +33,8 @@ namespace fcitx {
 
 class PinyinEngine;
 
+enum class AuxiliaryFilterMode { None, Stroke, MoQi };
+
 class PinyinPredictCandidateWord : public CandidateWord {
 public:
     PinyinPredictCandidateWord(PinyinEngine *engine, std::string word);
@@ -298,16 +300,23 @@ public:
     std::span<const CandidateAction> tabActions() override;
 
     void triggerTabAction(int id) override;
-    bool inStrokeFilterMode() const { return strokeFilterMode_; }
-    bool hasFilter() const { return checked() || !strokeBuffer_.empty(); }
-    const std::string &strokeBuffer() const {
-        return strokeBuffer_.userInput();
+    AuxiliaryFilterMode auxiliaryFilterMode() const {
+        return auxiliaryFilterMode_;
     }
-    void setStrokeFilterMode();
-    void resetStrokeFilterMode();
-    void pushStroke(char stroke);
+    bool inAuxiliaryFilterMode() const {
+        return auxiliaryFilterMode_ != AuxiliaryFilterMode::None;
+    }
+    bool hasFilter() const {
+        return checked() || !auxiliaryFilterBuffer_.empty();
+    }
+    const std::string &auxiliaryFilterBuffer() const {
+        return auxiliaryFilterBuffer_.userInput();
+    }
+    void setAuxiliaryFilterMode(AuxiliaryFilterMode mode);
+    void resetAuxiliaryFilterMode();
+    void pushAuxiliaryFilter(char code);
     // Return whether pop is successful.
-    bool popStroke();
+    bool popAuxiliaryFilter();
 
     bool checked() const {
         return checkedPinyinActionId_.has_value() || checkedSingleAction_;
@@ -316,10 +325,11 @@ public:
     bool filter(const CandidateWord &candidate) const;
 
 private:
-    void triggerStrokeAction(int id);
+    void triggerAuxiliaryFilterAction(int id);
     void triggerMainAction(int id);
     bool filterByCheckedAction(const CandidateWord &candidate) const;
     bool filterByStroke(const CandidateWord &candidate) const;
+    bool filterByMoQi(const CandidateWord &candidate) const;
 
     std::optional<int> idToActionIndex(int id) const;
 
@@ -335,6 +345,9 @@ private:
         STROKE_SUB_ACTION_Z = -7,
         STROKE_SUB_ACTION_RETURN = -8,
         SEPARATOR_ACTION = -9,
+        MOQI_ACTION = -10,
+        MOQI_SUB_ACTION_A = -11,
+        MOQI_SUB_ACTION_RETURN = -37,
     };
 
     PinyinEngine *engine_;
@@ -344,10 +357,11 @@ private:
     // Lazily initialized actions, since it requires scan all actions.
     std::optional<std::vector<CandidateAction>> actions_;
     std::vector<CandidateAction> strokeActions_;
+    std::vector<CandidateAction> moqiActions_;
     std::optional<int> checkedPinyinActionId_ = std::nullopt;
     bool checkedSingleAction_ = false;
-    bool strokeFilterMode_ = false;
-    InputBuffer strokeBuffer_;
+    AuxiliaryFilterMode auxiliaryFilterMode_ = AuxiliaryFilterMode::None;
+    InputBuffer auxiliaryFilterBuffer_;
     std::vector<std::unordered_set<int>> actionIdToCandidates_;
 };
 
