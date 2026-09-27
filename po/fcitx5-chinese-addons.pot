@@ -510,6 +510,18 @@ msgid "QWERTY"
 msgstr ""
 
 #: im/pinyin/pinyin.h:130
+msgid "Disabled"
+msgstr ""
+
+#: im/pinyin/pinyin.h:130
+msgid "Stroke"
+msgstr ""
+
+#: im/pinyin/pinyin.h:130
+msgid "MoQi"
+msgstr ""
+
+#: im/pinyin/pinyin.h:130
 msgid "ue -> ve"
 msgstr ""
 
@@ -702,6 +714,10 @@ msgstr ""
 
 #: im/pinyin/pinyin.h:313
 msgid "Use BackSpace to cancel the selection"
+msgstr ""
+
+#: im/pinyin/pinyin.h:321
+msgid "Auxiliary Filter"
 msgstr ""
 
 #: im/pinyin/pinyin.h:318

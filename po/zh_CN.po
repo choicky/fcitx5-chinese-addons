@@ -540,6 +540,18 @@ msgid "QWERTY"
 msgstr "QWERTY"
 
 #: im/pinyin/pinyin.h:130
+msgid "Disabled"
+msgstr "禁用"
+
+#: im/pinyin/pinyin.h:130
+msgid "Stroke"
+msgstr "笔画"
+
+#: im/pinyin/pinyin.h:130
+msgid "MoQi"
+msgstr "墨奇"
+
+#: im/pinyin/pinyin.h:130
 msgid "ue -> ve"
 msgstr "ue -> ve"
 
@@ -733,6 +745,10 @@ msgstr "选词末字"
 #: im/pinyin/pinyin.h:313
 msgid "Use BackSpace to cancel the selection"
 msgstr "使用退格键取消选词"
+
+#: im/pinyin/pinyin.h:321
+msgid "Auxiliary Filter"
+msgstr "辅助码过滤"
 
 #: im/pinyin/pinyin.h:318
 msgid "Filter by stroke"
