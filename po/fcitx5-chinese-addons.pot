@@ -720,6 +720,10 @@ msgstr ""
 msgid "Auxiliary Filter"
 msgstr ""
 
+#: im/pinyin/pinyin.h:326
+msgid "Auxiliary Filter Trigger"
+msgstr ""
+
 #: im/pinyin/pinyin.h:318
 msgid "Filter by stroke"
 msgstr ""
@@ -832,6 +836,10 @@ msgstr ""
 
 #: im/pinyin/pinyin.cpp:1489
 msgid "[Stroke Filtering]"
+msgstr ""
+
+#: im/pinyin/pinyin.cpp:1645
+msgid "[MoQi Filtering]"
 msgstr ""
 
 #: im/pinyin/pinyin.cpp:1552

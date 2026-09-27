@@ -750,6 +750,10 @@ msgstr "使用退格键取消选词"
 msgid "Auxiliary Filter"
 msgstr "辅助码过滤"
 
+#: im/pinyin/pinyin.h:326
+msgid "Auxiliary Filter Trigger"
+msgstr "辅助码过滤触发键"
+
 #: im/pinyin/pinyin.h:318
 msgid "Filter by stroke"
 msgstr "按笔画过滤"
@@ -865,6 +869,10 @@ msgstr "云拼音已禁用。"
 #: im/pinyin/pinyin.cpp:1489
 msgid "[Stroke Filtering]"
 msgstr "[笔画过滤]"
+
+#: im/pinyin/pinyin.cpp:1645
+msgid "[MoQi Filtering]"
+msgstr "[墨奇过滤]"
 
 #: im/pinyin/pinyin.cpp:1552
 msgid "[Select the word to remove from history]"
