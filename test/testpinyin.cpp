@@ -1077,6 +1077,41 @@ void testPunctuationWithCursorAtBeginning(Instance *instance) {
     });
 }
 
+void testPunctuationCandidatePair(Instance *instance) {
+    instance->eventDispatcher().schedule([instance]() {
+        auto *punctuation = instance->addonManager().addon("punctuation", true);
+        auto *testfrontend = instance->addonManager().addon("testfrontend");
+        FCITX_ASSERT(punctuation);
+        FCITX_ASSERT(testfrontend);
+        fcitx::RawConfig config;
+        config["Entries"]["0"]["Key"] = "[";
+        config["Entries"]["0"]["Mapping"] = "【";
+        config["Entries"]["0"]["AltMapping"] = "】";
+        config["Entries"]["1"]["Key"] = "[";
+        config["Entries"]["1"]["Mapping"] = "「";
+        config["Entries"]["1"]["AltMapping"] = "」";
+        punctuation->setSubConfig("punctuationmap/zh_CN", config);
+
+        for (const auto *inputMethod : {"pinyin", "shuangpin"}) {
+            auto uuid = testfrontend->call<ITestFrontend::createInputContext>(
+                "testapp");
+            auto *ic = instance->inputContextManager().findByUUID(uuid);
+            FCITX_ASSERT(ic);
+            ic->setCapabilityFlags(CapabilityFlag::CommitStringWithCursor);
+            instance->setCurrentInputMethod(ic, inputMethod, true);
+            testfrontend->call<ITestFrontend::pushCommitExpectation>("「」");
+            FCITX_ASSERT(!testfrontend->call<ITestFrontend::sendKeyEvent>(
+                uuid, Key("["), false));
+            auto candidateList = ic->inputPanel().candidateList();
+            FCITX_ASSERT(candidateList);
+            FCITX_ASSERT(candidateList->toBulk()->totalSize() == 2);
+            FCITX_ASSERT(candidateList->candidate(1).text().toString() == "「");
+            candidateList->candidate(1).select(ic);
+        }
+        punctuation->reloadConfig();
+    });
+}
+
 void testPunctuation(Instance *instance) {
     instance->eventDispatcher().schedule([instance]() {
         auto *testfrontend = instance->addonManager().addon("testfrontend");
@@ -1180,6 +1215,7 @@ int main() {
     testQuickPhraseTrigger(&instance);
     testVQuickPhraseTrigger(&instance);
     testPunctuationWithCursorAtBeginning(&instance);
+    testPunctuationCandidatePair(&instance);
     testPunctuation(&instance);
     instance.exec();
     endTestEvent.reset();

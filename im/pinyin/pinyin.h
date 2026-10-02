@@ -8,6 +8,7 @@
 #define _PINYIN_PINYIN_H_
 
 #include "customphrase.h"
+#include "../../modules/punctuation/punctuation_public.h"
 #include "symboldictionary.h"
 #include "workerthread.h"
 #include <cstddef>
@@ -491,7 +492,8 @@ private:
     void updatePreedit(InputContext *inputContext) const;
     void updatePuncCandidate(InputContext *inputContext,
                              const std::string &original,
-                             const std::vector<std::string> &candidates) const;
+                             const std::vector<PunctuationCandidatePair>
+                                 &candidates) const;
     void updatePuncPreedit(InputContext *inputContext) const;
 
     std::pair<Text, Text> preedit(InputContext *inputContext) const;

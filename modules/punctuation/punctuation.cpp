@@ -202,6 +202,15 @@ PunctuationProfile::getPunctuations(uint32_t unicode) const {
     return result;
 }
 
+std::vector<PunctuationCandidatePair>
+PunctuationProfile::getPunctuationCandidatePairs(uint32_t unicode) const {
+    auto iter = puncMap_.find(unicode);
+    if (iter == puncMap_.end()) {
+        return {};
+    }
+    return iter->second;
+}
+
 Punctuation::Punctuation(Instance *instance)
     : instance_(instance),
       factory_([](InputContext &) { return new PunctuationState; }) {
@@ -526,6 +535,21 @@ Punctuation::getPunctuationCandidates(const std::string &language,
         return {};
     }
     return getPunctuations(language, unicode);
+}
+
+std::vector<PunctuationCandidatePair>
+Punctuation::getPunctuationCandidatePairs(const std::string &language,
+                                          uint32_t unicode) {
+    if (!*config_.enabled) {
+        return {};
+    }
+
+    auto iter = profiles_.find(language);
+    if (iter == profiles_.end()) {
+        return {};
+    }
+
+    return iter->second.getPunctuationCandidatePairs(unicode);
 }
 
 const std::pair<std::string, std::string> &

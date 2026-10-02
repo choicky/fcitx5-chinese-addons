@@ -8,11 +8,13 @@
 #define _TABLE_CANDIDATE_H_
 
 #include "engine.h"
+#include "../punctuationcandidate.h"
 #include <cstddef>
 #include <fcitx/candidateaction.h>
 #include <fcitx/candidatelist.h>
 #include <fcitx/text.h>
 #include <libime/table/tablebaseddictionary.h>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -45,7 +47,9 @@ public:
 class TablePunctuationCandidateWord : public CandidateWord {
 public:
     TablePunctuationCandidateWord(TableState *state, std::string word,
-                                  bool isHalf);
+                                  bool isHalf,
+                                  std::optional<PunctuationCandidatePair> pair =
+                                      std::nullopt);
 
     void select(InputContext *inputContext) const override;
 
@@ -54,6 +58,7 @@ public:
 private:
     TableState *state_;
     std::string word_;
+    std::optional<PunctuationCandidatePair> pair_;
 };
 
 class TablePredictCandidateWord : public CandidateWord {

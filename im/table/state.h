@@ -10,6 +10,7 @@
 #include "context.h"
 #include "engine.h"
 #include "ime.h"
+#include "../punctuationcandidate.h"
 #include <cstddef>
 #include <fcitx-utils/inputbuffer.h>
 #include <fcitx/candidatelist.h>
@@ -57,7 +58,8 @@ public:
     void updateUI(bool keepOldCursor, bool maybePredict);
     void updatePuncCandidate(InputContext *inputContext,
                              const std::string &original,
-                             const std::vector<std::string> &candidates);
+                             const std::vector<PunctuationCandidatePair>
+                                 &candidates);
     void updatePuncPreedit(InputContext *inputContext);
     void pushLastCommit(const std::string &code,
                         const std::string &lastSegment);

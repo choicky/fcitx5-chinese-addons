@@ -1042,7 +1042,7 @@ void TableState::keyEvent(const InputMethodEntry &entry, KeyEvent &event) {
         if (!*context->config().ignorePunc && !event.key().isKeyPad()) {
             auto candidates =
                 engine_->punctuation()
-                    ->call<IPunctuation::getPunctuationCandidates>(
+                    ->call<IPunctuation::getPunctuationCandidatePairs>(
                         entry.languageCode(), chr);
             auto pushResult =
                 engine_->punctuation()->call<IPunctuation::pushPunctuationV2>(
@@ -1395,7 +1395,7 @@ void TableState::updateUI(bool keepOldCursor, bool maybePredict) {
 
 void TableState::updatePuncCandidate(
     InputContext *inputContext, const std::string &original,
-    const std::vector<std::string> &candidates) {
+    const std::vector<PunctuationCandidatePair> &candidates) {
     inputContext->inputPanel().reset();
     auto puncCandidateList = std::make_unique<CommonCandidateList>();
     puncCandidateList->setSelectionKey(*context_->config().selection);
@@ -1404,7 +1404,10 @@ void TableState::updatePuncCandidate(
         CursorPositionAfterPaging::ResetToFirst);
     for (const auto &result : candidates) {
         puncCandidateList->append<TablePunctuationCandidateWord>(
-            this, result, original == result);
+            this, result.first, original == result.first,
+            result.second.empty()
+                ? std::nullopt
+                : std::optional<PunctuationCandidatePair>(result));
     }
     puncCandidateList->setCursorIncludeUnselected(false);
     puncCandidateList->setCursorKeepInSamePage(false);

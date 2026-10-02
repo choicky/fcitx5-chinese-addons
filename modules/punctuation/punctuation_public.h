@@ -8,8 +8,13 @@
 #define _PUNCTUATION_PUNCTUATION_PUBLIC_H_
 
 #include <fcitx/addoninstance.h>
+#include <string>
+#include <utility>
+#include <vector>
 namespace fcitx {
 class InputContext;
+
+using PunctuationCandidatePair = std::pair<std::string, std::string>;
 }
 
 FCITX_ADDON_DECLARE_FUNCTION(
@@ -31,5 +36,10 @@ FCITX_ADDON_DECLARE_FUNCTION(
 FCITX_ADDON_DECLARE_FUNCTION(
     Punctuation, getPunctuationCandidates,
     std::vector<std::string>(const std::string &language, uint32_t unicode));
+
+FCITX_ADDON_DECLARE_FUNCTION(
+    Punctuation, getPunctuationCandidatePairs,
+    std::vector<PunctuationCandidatePair>(const std::string &language,
+                                          uint32_t unicode));
 
 #endif // _PUNCTUATION_PUNCTUATION_PUBLIC_H_

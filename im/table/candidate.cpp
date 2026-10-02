@@ -77,8 +77,11 @@ void TablePinyinCandidateWord::select(InputContext *inputContext) const {
 }
 TablePunctuationCandidateWord::TablePunctuationCandidateWord(TableState *state,
                                                              std::string word,
-                                                             bool isHalf)
-    : state_(state), word_(std::move(word)) {
+                                                             bool isHalf,
+                                                             std::optional<
+                                                                 PunctuationCandidatePair>
+                                                                 pair)
+    : state_(state), word_(word), pair_(std::move(pair)) {
     setText(Text(word_));
     if (isHalf) {
         setComment(Text(_("(Half)")));
@@ -86,7 +89,11 @@ TablePunctuationCandidateWord::TablePunctuationCandidateWord(TableState *state,
 }
 void TablePunctuationCandidateWord::select(InputContext *inputContext) const {
     state_->commitBuffer(true);
-    inputContext->commitString(word_);
+    if (pair_) {
+        commitPunctuationCandidate(inputContext, *pair_);
+    } else {
+        inputContext->commitString(word_);
+    }
     state_->reset();
 }
 

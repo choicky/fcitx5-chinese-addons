@@ -504,7 +504,7 @@ void PinyinEngine::updatePuncPreedit(InputContext *inputContext) const {
 
 void PinyinEngine::updatePuncCandidate(
     InputContext *inputContext, const std::string &original,
-    const std::vector<std::string> &candidates) const {
+    const std::vector<PunctuationCandidatePair> &candidates) const {
     inputContext->inputPanel().reset();
     auto *state = inputContext->propertyFor(&factory_);
     auto puncCandidateList = std::make_unique<CommonCandidateList>();
@@ -513,7 +513,10 @@ void PinyinEngine::updatePuncCandidate(
         CursorPositionAfterPaging::ResetToFirst);
     for (const auto &result : candidates) {
         puncCandidateList->append<PinyinPunctuationCandidateWord>(
-            this, result, original == result);
+            this, result.first, original == result.first,
+            result.second.empty()
+                ? std::nullopt
+                : std::optional<PunctuationCandidatePair>(result));
     }
     puncCandidateList->setCursorIncludeUnselected(false);
     puncCandidateList->setCursorKeepInSamePage(false);
@@ -1956,9 +1959,8 @@ bool PinyinEngine::handlePunc(KeyEvent &event,
     std::string puncAfter;
     // skip key pad
     if (c && !event.key().isKeyPad()) {
-        auto candidates =
-            punctuation()->call<IPunctuation::getPunctuationCandidates>("zh_CN",
-                                                                        c);
+        auto candidates = punctuation()->call<
+            IPunctuation::getPunctuationCandidatePairs>("zh_CN", c);
         auto pushResult = punctuation()->call<IPunctuation::pushPunctuationV2>(
             "zh_CN", inputContext, c);
         if (candidates.size() == 1) {
