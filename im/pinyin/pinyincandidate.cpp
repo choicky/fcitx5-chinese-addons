@@ -221,8 +221,7 @@ void CustomPhraseCandidateWord::select(InputContext *inputContext) const {
 
 PinyinPunctuationCandidateWord::PinyinPunctuationCandidateWord(
     const PinyinEngine *engine, AddonInstance *punctuation, std::string word,
-    bool isHalf,
-    std::optional<PunctuationCandidatePair> pair)
+    bool isHalf, std::optional<PunctuationCandidatePair> pair)
     : engine_(engine), punctuation_(punctuation), word_(word),
       pair_(std::move(pair)) {
     setText(Text(word_));

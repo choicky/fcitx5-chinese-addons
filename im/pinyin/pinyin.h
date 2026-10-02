@@ -492,10 +492,10 @@ private:
     void updateForgetCandidate(InputContext *inputContext);
 
     void updatePreedit(InputContext *inputContext) const;
-    void updatePuncCandidate(
-        InputContext *inputContext, const std::string &original,
-        const std::vector<PunctuationCandidatePair> &candidates,
-        AddonInstance *punctuation) const;
+    void
+    updatePuncCandidate(InputContext *inputContext, const std::string &original,
+                        const std::vector<PunctuationCandidatePair> &candidates,
+                        AddonInstance *punctuation) const;
     void updatePuncPreedit(InputContext *inputContext) const;
 
     std::pair<Text, Text> preedit(InputContext *inputContext) const;
