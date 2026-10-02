@@ -456,6 +456,11 @@ public:
     void deleteCustomPhrase(InputContext *inputContext,
                             const std::string &customPhrase);
 
+    bool pairedPunctuationsTogether() {
+        return punctuation()
+            ->call<IPunctuation::typePairedPunctuationsTogether>();
+    }
+
     FCITX_ADDON_DEPENDENCY_LOADER(cloudpinyin, instance_->addonManager());
     FCITX_ADDON_DEPENDENCY_LOADER(pinyinhelper, instance_->addonManager());
 

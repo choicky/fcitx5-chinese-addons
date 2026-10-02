@@ -220,7 +220,7 @@ void CustomPhraseCandidateWord::select(InputContext *inputContext) const {
 }
 
 PinyinPunctuationCandidateWord::PinyinPunctuationCandidateWord(
-    const PinyinEngine *engine, std::string word, bool isHalf,
+    PinyinEngine *engine, std::string word, bool isHalf,
     std::optional<PunctuationCandidatePair> pair)
     : engine_(engine), word_(word), pair_(std::move(pair)) {
     setText(Text(word_));
@@ -231,9 +231,7 @@ PinyinPunctuationCandidateWord::PinyinPunctuationCandidateWord(
 
 void PinyinPunctuationCandidateWord::select(InputContext *inputContext) const {
     if (pair_) {
-        const auto pairedTogether =
-            engine_->punctuation()
-                ->call<IPunctuation::typePairedPunctuationsTogether>();
+        const auto pairedTogether = engine_->pairedPunctuationsTogether();
         commitPunctuationCandidate(inputContext, *pair_, pairedTogether);
     } else {
         inputContext->commitString(word_);

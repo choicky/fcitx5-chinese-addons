@@ -126,7 +126,7 @@ private:
 class PinyinPunctuationCandidateWord : public CandidateWord {
 public:
     PinyinPunctuationCandidateWord(
-        const PinyinEngine *engine, std::string word, bool isHalf,
+        PinyinEngine *engine, std::string word, bool isHalf,
         std::optional<PunctuationCandidatePair> pair = std::nullopt);
 
     void select(InputContext *inputContext) const override;
@@ -134,7 +134,7 @@ public:
     const std::string &word() const { return word_; }
 
 private:
-    const PinyinEngine *engine_;
+    PinyinEngine *engine_;
     std::string word_;
     std::optional<PunctuationCandidatePair> pair_;
 };
