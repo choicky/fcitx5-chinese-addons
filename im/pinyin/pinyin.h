@@ -456,10 +456,7 @@ public:
     void deleteCustomPhrase(InputContext *inputContext,
                             const std::string &customPhrase);
 
-    bool pairedPunctuationsTogether() {
-        return punctuation()
-            ->call<IPunctuation::typePairedPunctuationsTogether>();
-    }
+    bool pairedPunctuationsTogether(AddonInstance *punctuation) const;
 
     FCITX_ADDON_DEPENDENCY_LOADER(cloudpinyin, instance_->addonManager());
     FCITX_ADDON_DEPENDENCY_LOADER(pinyinhelper, instance_->addonManager());
@@ -497,7 +494,8 @@ private:
     void updatePreedit(InputContext *inputContext) const;
     void updatePuncCandidate(
         InputContext *inputContext, const std::string &original,
-        const std::vector<PunctuationCandidatePair> &candidates) const;
+        const std::vector<PunctuationCandidatePair> &candidates,
+        AddonInstance *punctuation) const;
     void updatePuncPreedit(InputContext *inputContext) const;
 
     std::pair<Text, Text> preedit(InputContext *inputContext) const;

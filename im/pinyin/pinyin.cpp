@@ -502,9 +502,15 @@ void PinyinEngine::updatePuncPreedit(InputContext *inputContext) const {
     }
 }
 
+bool PinyinEngine::pairedPunctuationsTogether(
+    AddonInstance *punctuation) const {
+    return punctuation->call<IPunctuation::typePairedPunctuationsTogether>();
+}
+
 void PinyinEngine::updatePuncCandidate(
     InputContext *inputContext, const std::string &original,
-    const std::vector<PunctuationCandidatePair> &candidates) const {
+    const std::vector<PunctuationCandidatePair> &candidates,
+    AddonInstance *punctuation) const {
     inputContext->inputPanel().reset();
     auto *state = inputContext->propertyFor(&factory_);
     auto puncCandidateList = std::make_unique<CommonCandidateList>();
@@ -513,7 +519,7 @@ void PinyinEngine::updatePuncCandidate(
         CursorPositionAfterPaging::ResetToFirst);
     for (const auto &result : candidates) {
         puncCandidateList->append<PinyinPunctuationCandidateWord>(
-            this, result.first, original == result.first,
+            this, punctuation, result.first, original == result.first,
             result.second.empty()
                 ? std::nullopt
                 : std::optional<PunctuationCandidatePair>(result));
@@ -1967,7 +1973,8 @@ bool PinyinEngine::handlePunc(KeyEvent &event,
         if (candidates.size() == 1) {
             std::tie(punc, puncAfter) = pushResult;
         } else if (candidates.size() > 1) {
-            updatePuncCandidate(inputContext, utf8::UCS4ToUTF8(c), candidates);
+            updatePuncCandidate(inputContext, utf8::UCS4ToUTF8(c), candidates,
+                                punctuation());
             event.filterAndAccept();
             return true;
         }
