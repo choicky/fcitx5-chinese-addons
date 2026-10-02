@@ -1959,8 +1959,9 @@ bool PinyinEngine::handlePunc(KeyEvent &event,
     std::string puncAfter;
     // skip key pad
     if (c && !event.key().isKeyPad()) {
-        auto candidates = punctuation()->call<
-            IPunctuation::getPunctuationCandidatePairs>("zh_CN", c);
+        auto candidates =
+            punctuation()->call<IPunctuation::getPunctuationCandidatePairs>(
+                "zh_CN", c);
         auto pushResult = punctuation()->call<IPunctuation::pushPunctuationV2>(
             "zh_CN", inputContext, c);
         if (candidates.size() == 1) {

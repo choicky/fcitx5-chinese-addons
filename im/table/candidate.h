@@ -7,8 +7,8 @@
 #ifndef _TABLE_CANDIDATE_H_
 #define _TABLE_CANDIDATE_H_
 
-#include "engine.h"
 #include "../punctuationcandidate.h"
+#include "engine.h"
 #include <cstddef>
 #include <fcitx/candidateaction.h>
 #include <fcitx/candidatelist.h>
@@ -46,10 +46,9 @@ public:
 
 class TablePunctuationCandidateWord : public CandidateWord {
 public:
-    TablePunctuationCandidateWord(TableState *state, std::string word,
-                                  bool isHalf,
-                                  std::optional<PunctuationCandidatePair> pair =
-                                      std::nullopt);
+    TablePunctuationCandidateWord(
+        TableState *state, std::string word, bool isHalf,
+        std::optional<PunctuationCandidatePair> pair = std::nullopt);
 
     void select(InputContext *inputContext) const override;
 

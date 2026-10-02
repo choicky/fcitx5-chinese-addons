@@ -75,12 +75,9 @@ void TablePinyinCandidateWord::select(InputContext *inputContext) const {
     state->pushLastCommit("", word_);
     state->resetAndPredict();
 }
-TablePunctuationCandidateWord::TablePunctuationCandidateWord(TableState *state,
-                                                             std::string word,
-                                                             bool isHalf,
-                                                             std::optional<
-                                                                 PunctuationCandidatePair>
-                                                                 pair)
+TablePunctuationCandidateWord::TablePunctuationCandidateWord(
+    TableState *state, std::string word, bool isHalf,
+    std::optional<PunctuationCandidatePair> pair)
     : state_(state), word_(word), pair_(std::move(pair)) {
     setText(Text(word_));
     if (isHalf) {
@@ -90,8 +87,9 @@ TablePunctuationCandidateWord::TablePunctuationCandidateWord(TableState *state,
 void TablePunctuationCandidateWord::select(InputContext *inputContext) const {
     state_->commitBuffer(true);
     if (pair_) {
-        const auto pairedTogether = state_->engine_->punctuation()->call<
-            IPunctuation::typePairedPunctuationsTogether>();
+        const auto pairedTogether =
+            state_->engine_->punctuation()
+                ->call<IPunctuation::typePairedPunctuationsTogether>();
         commitPunctuationCandidate(inputContext, *pair_, pairedTogether);
     } else {
         inputContext->commitString(word_);

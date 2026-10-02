@@ -15,7 +15,7 @@ namespace fcitx {
 class InputContext;
 
 using PunctuationCandidatePair = std::pair<std::string, std::string>;
-}
+} // namespace fcitx
 
 FCITX_ADDON_DECLARE_FUNCTION(
     Punctuation, getPunctuation,

@@ -5,18 +5,18 @@
 #define _CHINESE_ADDONS_PUNCTUATIONCANDIDATE_H_
 
 #include "../modules/punctuation/punctuation_public.h"
+#include <cstddef>
 #include <fcitx-utils/capabilityflags.h>
 #include <fcitx-utils/key.h>
 #include <fcitx-utils/keysym.h>
 #include <fcitx-utils/utf8.h>
 #include <fcitx/inputcontext.h>
-#include <cstddef>
 
 namespace fcitx {
 
-inline void commitPunctuationCandidate(
-    InputContext *inputContext, const PunctuationCandidatePair &pair,
-    bool pairedTogether) {
+inline void commitPunctuationCandidate(InputContext *inputContext,
+                                       const PunctuationCandidatePair &pair,
+                                       bool pairedTogether) {
     const auto &mapping = pair.first;
     const auto &altMapping = pair.second;
     if (!pairedTogether || altMapping.empty()) {

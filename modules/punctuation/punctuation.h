@@ -137,8 +137,8 @@ public:
                                   fcitx::InputContext *ic);
     std::vector<std::string>
     getPunctuationCandidates(const std::string &language, uint32_t unicode);
-    std::vector<PunctuationCandidatePair> getPunctuationCandidatePairs(
-        const std::string &language, uint32_t unicode);
+    std::vector<PunctuationCandidatePair>
+    getPunctuationCandidatePairs(const std::string &language, uint32_t unicode);
     bool typePairedPunctuationsTogether() const {
         return *config_.typePairedPunctuationTogether;
     }

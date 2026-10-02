@@ -1101,9 +1101,9 @@ void testPunctuationCandidatePair(Instance *instance) {
         for (const auto *inputMethod : {"pinyin", "shuangpin"}) {
             for (const auto [createdSetting, selectedSetting, expected] :
                  {std::tuple{false, false, "「"},
-                             std::tuple{true, true, "「」"},
-                             std::tuple{false, true, "「」"},
-                             std::tuple{true, false, "「"}}) {
+                  std::tuple{true, true, "「」"},
+                  std::tuple{false, true, "「」"},
+                  std::tuple{true, false, "「"}}) {
                 setPairedTogether(createdSetting);
                 auto uuid =
                     testfrontend->call<ITestFrontend::createInputContext>(
