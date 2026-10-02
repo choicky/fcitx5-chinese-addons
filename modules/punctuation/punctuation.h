@@ -79,8 +79,6 @@ public:
     const std::pair<std::string, std::string> &
     getPunctuation(uint32_t unicode) const;
     std::vector<std::string> getPunctuations(uint32_t unicode) const;
-    std::vector<fcitx::PunctuationCandidatePair>
-    getPunctuationCandidatePairs(uint32_t unicode) const;
     PunctuationMapConfig &config() { return punctuationMapConfig_; }
     const PunctuationMapConfig &config() const { return punctuationMapConfig_; }
 
@@ -137,11 +135,6 @@ public:
                                   fcitx::InputContext *ic);
     std::vector<std::string>
     getPunctuationCandidates(const std::string &language, uint32_t unicode);
-    std::vector<fcitx::PunctuationCandidatePair>
-    getPunctuationCandidatePairs(const std::string &language, uint32_t unicode);
-    bool typePairedPunctuationsTogether() const {
-        return *config_.typePairedPunctuationTogether;
-    }
 
     void reloadConfig() override;
     void save() override {
@@ -162,9 +155,7 @@ public:
     FCITX_ADDON_EXPORT_FUNCTION(Punctuation, pushPunctuation);
     FCITX_ADDON_EXPORT_FUNCTION(Punctuation, pushPunctuationV2);
     FCITX_ADDON_EXPORT_FUNCTION(Punctuation, cancelLast);
-    FCITX_ADDON_EXPORT_FUNCTION(Punctuation, getPunctuationCandidates);
-    FCITX_ADDON_EXPORT_FUNCTION(Punctuation, getPunctuationCandidatePairs)
-    FCITX_ADDON_EXPORT_FUNCTION(Punctuation, typePairedPunctuationsTogether)
+    FCITX_ADDON_EXPORT_FUNCTION(Punctuation, getPunctuationCandidates)
 
     bool enabled() const { return *config_.enabled; }
     void setEnabled(bool enabled, fcitx::InputContext *ic) {

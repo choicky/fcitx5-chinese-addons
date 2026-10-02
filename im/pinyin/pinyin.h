@@ -7,7 +7,6 @@
 #ifndef _PINYIN_PINYIN_H_
 #define _PINYIN_PINYIN_H_
 
-#include "../../modules/punctuation/punctuation_public.h"
 #include "customphrase.h"
 #include "symboldictionary.h"
 #include "workerthread.h"
@@ -456,8 +455,6 @@ public:
     void deleteCustomPhrase(InputContext *inputContext,
                             const std::string &customPhrase);
 
-    bool pairedPunctuationsTogether(AddonInstance *punctuation) const;
-
     FCITX_ADDON_DEPENDENCY_LOADER(cloudpinyin, instance_->addonManager());
     FCITX_ADDON_DEPENDENCY_LOADER(pinyinhelper, instance_->addonManager());
 
@@ -492,10 +489,9 @@ private:
     void updateForgetCandidate(InputContext *inputContext);
 
     void updatePreedit(InputContext *inputContext) const;
-    void
-    updatePuncCandidate(InputContext *inputContext, const std::string &original,
-                        const std::vector<PunctuationCandidatePair> &candidates,
-                        AddonInstance *punctuation) const;
+    void updatePuncCandidate(InputContext *inputContext,
+                             const std::string &original,
+                             const std::vector<std::string> &candidates) const;
     void updatePuncPreedit(InputContext *inputContext) const;
 
     std::pair<Text, Text> preedit(InputContext *inputContext) const;

@@ -502,15 +502,9 @@ void PinyinEngine::updatePuncPreedit(InputContext *inputContext) const {
     }
 }
 
-bool PinyinEngine::pairedPunctuationsTogether(
-    AddonInstance *punctuation) const {
-    return punctuation->call<IPunctuation::typePairedPunctuationsTogether>();
-}
-
 void PinyinEngine::updatePuncCandidate(
     InputContext *inputContext, const std::string &original,
-    const std::vector<PunctuationCandidatePair> &candidates,
-    AddonInstance *punctuation) const {
+    const std::vector<std::string> &candidates) const {
     inputContext->inputPanel().reset();
     auto *state = inputContext->propertyFor(&factory_);
     auto puncCandidateList = std::make_unique<CommonCandidateList>();
@@ -519,10 +513,7 @@ void PinyinEngine::updatePuncCandidate(
         CursorPositionAfterPaging::ResetToFirst);
     for (const auto &result : candidates) {
         puncCandidateList->append<PinyinPunctuationCandidateWord>(
-            this, punctuation, result.first, original == result.first,
-            result.second.empty()
-                ? std::nullopt
-                : std::optional<PunctuationCandidatePair>(result));
+            this, result, original == result);
     }
     puncCandidateList->setCursorIncludeUnselected(false);
     puncCandidateList->setCursorKeepInSamePage(false);
@@ -1966,15 +1957,14 @@ bool PinyinEngine::handlePunc(KeyEvent &event,
     // skip key pad
     if (c && !event.key().isKeyPad()) {
         auto candidates =
-            punctuation()->call<IPunctuation::getPunctuationCandidatePairs>(
-                "zh_CN", c);
+            punctuation()->call<IPunctuation::getPunctuationCandidates>("zh_CN",
+                                                                        c);
         auto pushResult = punctuation()->call<IPunctuation::pushPunctuationV2>(
             "zh_CN", inputContext, c);
         if (candidates.size() == 1) {
             std::tie(punc, puncAfter) = pushResult;
         } else if (candidates.size() > 1) {
-            updatePuncCandidate(inputContext, utf8::UCS4ToUTF8(c), candidates,
-                                punctuation());
+            updatePuncCandidate(inputContext, utf8::UCS4ToUTF8(c), candidates);
             event.filterAndAccept();
             return true;
         }

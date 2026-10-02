@@ -7,7 +7,6 @@
 
 #include "pinyincandidate.h"
 #include "../../modules/cloudpinyin/cloudpinyin_public.h"
-#include "../punctuationcandidate.h"
 #include "pinyin.h"
 #include "pinyinhelper_public.h"
 #include <algorithm>
@@ -220,10 +219,8 @@ void CustomPhraseCandidateWord::select(InputContext *inputContext) const {
 }
 
 PinyinPunctuationCandidateWord::PinyinPunctuationCandidateWord(
-    const PinyinEngine *engine, AddonInstance *punctuation, std::string word,
-    bool isHalf, std::optional<PunctuationCandidatePair> pair)
-    : engine_(engine), punctuation_(punctuation), word_(word),
-      pair_(std::move(pair)) {
+    const PinyinEngine *engine, std::string word, bool isHalf)
+    : engine_(engine), word_(std::move(word)) {
     setText(Text(word_));
     if (isHalf) {
         setComment(Text(_("(Half)")));
@@ -231,13 +228,7 @@ PinyinPunctuationCandidateWord::PinyinPunctuationCandidateWord(
 }
 
 void PinyinPunctuationCandidateWord::select(InputContext *inputContext) const {
-    if (pair_) {
-        const auto pairedTogether =
-            engine_->pairedPunctuationsTogether(punctuation_);
-        commitPunctuationCandidate(inputContext, *pair_, pairedTogether);
-    } else {
-        inputContext->commitString(word_);
-    }
+    inputContext->commitString(word_);
     engine_->doReset(inputContext);
 }
 

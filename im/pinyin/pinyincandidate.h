@@ -8,7 +8,6 @@
 #define _PINYIN_PINYINCANDIDATE_H_
 
 #include "../../modules/cloudpinyin/cloudpinyin_public.h"
-#include "../../modules/punctuation/punctuation_public.h"
 #include <array>
 #include <cstddef>
 #include <cstdint>
@@ -125,10 +124,8 @@ private:
 
 class PinyinPunctuationCandidateWord : public CandidateWord {
 public:
-    PinyinPunctuationCandidateWord(
-        const PinyinEngine *engine, AddonInstance *punctuation,
-        std::string word, bool isHalf,
-        std::optional<PunctuationCandidatePair> pair = std::nullopt);
+    PinyinPunctuationCandidateWord(const PinyinEngine *engine, std::string word,
+                                   bool isHalf);
 
     void select(InputContext *inputContext) const override;
 
@@ -136,9 +133,7 @@ public:
 
 private:
     const PinyinEngine *engine_;
-    AddonInstance *punctuation_;
     std::string word_;
-    std::optional<PunctuationCandidatePair> pair_;
 };
 
 class ForgetCandidateWord : public CandidateWord {
