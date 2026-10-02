@@ -139,6 +139,9 @@ public:
     getPunctuationCandidates(const std::string &language, uint32_t unicode);
     std::vector<PunctuationCandidatePair> getPunctuationCandidatePairs(
         const std::string &language, uint32_t unicode);
+    bool typePairedPunctuationsTogether() const {
+        return *config_.typePairedPunctuationTogether;
+    }
 
     void reloadConfig() override;
     void save() override {
@@ -161,6 +164,7 @@ public:
     FCITX_ADDON_EXPORT_FUNCTION(Punctuation, cancelLast);
     FCITX_ADDON_EXPORT_FUNCTION(Punctuation, getPunctuationCandidates);
     FCITX_ADDON_EXPORT_FUNCTION(Punctuation, getPunctuationCandidatePairs)
+    FCITX_ADDON_EXPORT_FUNCTION(Punctuation, typePairedPunctuationsTogether)
 
     bool enabled() const { return *config_.enabled; }
     void setEnabled(bool enabled, fcitx::InputContext *ic) {

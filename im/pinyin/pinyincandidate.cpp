@@ -231,7 +231,9 @@ PinyinPunctuationCandidateWord::PinyinPunctuationCandidateWord(
 
 void PinyinPunctuationCandidateWord::select(InputContext *inputContext) const {
     if (pair_) {
-        commitPunctuationCandidate(inputContext, *pair_);
+        const auto pairedTogether = engine_->punctuation()->call<
+            IPunctuation::typePairedPunctuationsTogether>();
+        commitPunctuationCandidate(inputContext, *pair_, pairedTogether);
     } else {
         inputContext->commitString(word_);
     }

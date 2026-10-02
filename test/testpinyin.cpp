@@ -1092,21 +1092,38 @@ void testPunctuationCandidatePair(Instance *instance) {
         config["Entries"]["1"]["AltMapping"] = "」";
         punctuation->setSubConfig("punctuationmap/zh_CN", config);
 
+        auto setPairedTogether = [punctuation](bool value) {
+            fcitx::RawConfig config;
+            config.setValueByPath("TypePairedPunctuationsTogether",
+                                  value ? "True" : "False");
+            punctuation->setConfig(config);
+        };
         for (const auto *inputMethod : {"pinyin", "shuangpin"}) {
-            auto uuid = testfrontend->call<ITestFrontend::createInputContext>(
-                "testapp");
-            auto *ic = instance->inputContextManager().findByUUID(uuid);
-            FCITX_ASSERT(ic);
-            ic->setCapabilityFlags(CapabilityFlag::CommitStringWithCursor);
-            instance->setCurrentInputMethod(ic, inputMethod, true);
-            testfrontend->call<ITestFrontend::pushCommitExpectation>("「」");
-            FCITX_ASSERT(!testfrontend->call<ITestFrontend::sendKeyEvent>(
-                uuid, Key("["), false));
-            auto candidateList = ic->inputPanel().candidateList();
-            FCITX_ASSERT(candidateList);
-            FCITX_ASSERT(candidateList->toBulk()->totalSize() == 2);
-            FCITX_ASSERT(candidateList->candidate(1).text().toString() == "「");
-            candidateList->candidate(1).select(ic);
+            for (const auto [createdSetting, selectedSetting, expected] :
+                 {std::tuple{false, false, "「"},
+                             std::tuple{true, true, "「」"},
+                             std::tuple{false, true, "「」"},
+                             std::tuple{true, false, "「"}}) {
+                setPairedTogether(createdSetting);
+                auto uuid =
+                    testfrontend->call<ITestFrontend::createInputContext>(
+                        "testapp");
+                auto *ic = instance->inputContextManager().findByUUID(uuid);
+                FCITX_ASSERT(ic);
+                ic->setCapabilityFlags(CapabilityFlag::CommitStringWithCursor);
+                instance->setCurrentInputMethod(ic, inputMethod, true);
+                FCITX_ASSERT(!testfrontend->call<ITestFrontend::sendKeyEvent>(
+                    uuid, Key("["), false));
+                auto candidateList = ic->inputPanel().candidateList();
+                FCITX_ASSERT(candidateList);
+                FCITX_ASSERT(candidateList->toBulk()->totalSize() == 2);
+                FCITX_ASSERT(candidateList->candidate(1).text().toString() ==
+                             "「");
+                setPairedTogether(selectedSetting);
+                testfrontend->call<ITestFrontend::pushCommitExpectation>(
+                    expected);
+                candidateList->candidate(1).select(ic);
+            }
         }
         punctuation->reloadConfig();
     });

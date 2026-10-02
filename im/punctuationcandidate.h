@@ -15,9 +15,14 @@
 namespace fcitx {
 
 inline void commitPunctuationCandidate(
-    InputContext *inputContext, const PunctuationCandidatePair &pair) {
+    InputContext *inputContext, const PunctuationCandidatePair &pair,
+    bool pairedTogether) {
     const auto &mapping = pair.first;
     const auto &altMapping = pair.second;
+    if (!pairedTogether || altMapping.empty()) {
+        inputContext->commitString(mapping);
+        return;
+    }
     const auto paired = mapping + altMapping;
     if (inputContext->capabilityFlags().test(
             CapabilityFlag::CommitStringWithCursor)) {

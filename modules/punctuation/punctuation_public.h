@@ -42,4 +42,7 @@ FCITX_ADDON_DECLARE_FUNCTION(
     std::vector<PunctuationCandidatePair>(const std::string &language,
                                           uint32_t unicode));
 
+FCITX_ADDON_DECLARE_FUNCTION(Punctuation, typePairedPunctuationsTogether,
+                             bool());
+
 #endif // _PUNCTUATION_PUNCTUATION_PUBLIC_H_

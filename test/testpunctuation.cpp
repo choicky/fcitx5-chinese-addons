@@ -36,6 +36,8 @@ int main() {
         punctuation->call<fcitx::IPunctuation::getPunctuationCandidatePairs>(
             "zh_CN", '"') ==
         std::vector<fcitx::PunctuationCandidatePair>{{"“", "”"}});
+    FCITX_ASSERT(!punctuation->call<fcitx::IPunctuation::
+                                      typePairedPunctuationsTogether>());
     fcitx::RawConfig config;
     config["Entries"]["0"]["Key"] = "*";
     config["Entries"]["0"]["Mapping"] = "X";
@@ -68,6 +70,11 @@ int main() {
         punctuation->call<fcitx::IPunctuation::getPunctuationCandidates>(
             "zh_CN", '[') == std::vector<std::string>{"【", "】", "「",
                                                         "」"});
+    fcitx::RawConfig pairedConfig;
+    pairedConfig.setValueByPath("TypePairedPunctuationsTogether", "True");
+    punctuation->setConfig(pairedConfig);
+    FCITX_ASSERT(punctuation->call<fcitx::IPunctuation::
+                                      typePairedPunctuationsTogether>());
     FCITX_ASSERT(
         punctuation->call<fcitx::IPunctuation::getPunctuation>("zh_CN", ',')
             .first == "");

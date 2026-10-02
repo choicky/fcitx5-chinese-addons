@@ -90,7 +90,9 @@ TablePunctuationCandidateWord::TablePunctuationCandidateWord(TableState *state,
 void TablePunctuationCandidateWord::select(InputContext *inputContext) const {
     state_->commitBuffer(true);
     if (pair_) {
-        commitPunctuationCandidate(inputContext, *pair_);
+        const auto pairedTogether = state_->engine_->punctuation()->call<
+            IPunctuation::typePairedPunctuationsTogether>();
+        commitPunctuationCandidate(inputContext, *pair_, pairedTogether);
     } else {
         inputContext->commitString(word_);
     }
