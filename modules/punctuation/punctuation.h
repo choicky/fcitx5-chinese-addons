@@ -79,7 +79,7 @@ public:
     const std::pair<std::string, std::string> &
     getPunctuation(uint32_t unicode) const;
     std::vector<std::string> getPunctuations(uint32_t unicode) const;
-    std::vector<PunctuationCandidatePair>
+    std::vector<fcitx::PunctuationCandidatePair>
     getPunctuationCandidatePairs(uint32_t unicode) const;
     PunctuationMapConfig &config() { return punctuationMapConfig_; }
     const PunctuationMapConfig &config() const { return punctuationMapConfig_; }
@@ -137,7 +137,7 @@ public:
                                   fcitx::InputContext *ic);
     std::vector<std::string>
     getPunctuationCandidates(const std::string &language, uint32_t unicode);
-    std::vector<PunctuationCandidatePair>
+    std::vector<fcitx::PunctuationCandidatePair>
     getPunctuationCandidatePairs(const std::string &language, uint32_t unicode);
     bool typePairedPunctuationsTogether() const {
         return *config_.typePairedPunctuationTogether;
