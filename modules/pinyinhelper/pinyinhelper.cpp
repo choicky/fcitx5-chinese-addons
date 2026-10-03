@@ -107,6 +107,15 @@ PinyinHelper::fullLookup(uint32_t chr) {
 
 void PinyinHelper::loadStroke() { stroke_.loadAsync(); }
 
+void PinyinHelper::loadMoQi() { moqi_.loadAsync(); }
+
+std::string PinyinHelper::reverseLookupMoQi(const std::string &input) {
+    if (!moqi_.load()) {
+        return {};
+    }
+    return moqi_.reverseLookup(input);
+}
+
 std::vector<std::pair<std::string, std::string>>
 PinyinHelper::lookupStroke(const std::string &input, int limit) {
     static const std::set<char> num{'1', '2', '3', '4', '5'};
