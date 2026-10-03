@@ -510,6 +510,18 @@ msgid "QWERTY"
 msgstr ""
 
 #: im/pinyin/pinyin.h:130
+msgid "Disabled"
+msgstr ""
+
+#: im/pinyin/pinyin.h:130
+msgid "Stroke"
+msgstr ""
+
+#: im/pinyin/pinyin.h:130
+msgid "MoQi"
+msgstr ""
+
+#: im/pinyin/pinyin.h:130
 msgid "ue -> ve"
 msgstr ""
 
@@ -704,6 +716,14 @@ msgstr ""
 msgid "Use BackSpace to cancel the selection"
 msgstr ""
 
+#: im/pinyin/pinyin.h:321
+msgid "Auxiliary Filter"
+msgstr ""
+
+#: im/pinyin/pinyin.h:326
+msgid "Auxiliary Filter Trigger"
+msgstr ""
+
 #: im/pinyin/pinyin.h:318
 msgid "Filter by stroke"
 msgstr ""
@@ -816,6 +836,10 @@ msgstr ""
 
 #: im/pinyin/pinyin.cpp:1489
 msgid "[Stroke Filtering]"
+msgstr ""
+
+#: im/pinyin/pinyin.cpp:1645
+msgid "[MoQi Auxiliary Code Filtering]"
 msgstr ""
 
 #: im/pinyin/pinyin.cpp:1552
