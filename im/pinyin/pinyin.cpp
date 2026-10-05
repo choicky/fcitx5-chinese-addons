@@ -1893,6 +1893,18 @@ void PinyinEngine::populateMixedConfig() {
     // Shuangpin profile: propagate whatever LibIME is currently using, so
     // the graph builder sees the same table as the classical decoder.
     mixedChineseOracle_->setShuangpinProfile(ime_->shuangpinProfile().get());
+    // Batch 8: plumb the real LibIME layout-correction profile into the
+    // Chinese arc oracle so correction-derived arcs are recalled (via the
+    // 3-arg `parseUserPinyin(pinyin, profile, flags)` overload) and tagged
+    // with `CandidateProvenance::Correction`. When the profile is null
+    // (CorrectionLayout::None) the oracle produces exactly the previous
+    // single-graph output; no behavior delta. In Shuangpin mode the oracle
+    // ignores the profile: Shuangpin correction is already baked into the
+    // ShuangpinProfile key map at construction (see pinyin.cpp ~1338/1345)
+    // and the public LibIME API does not expose a separately observable
+    // per-arc correction provenance — recorded source ceiling, not
+    // fabricated signal.
+    mixedChineseOracle_->setCorrectionProfile(ime_->correctionProfile().get());
 }
 
 void PinyinEngine::saveMixedEnglishUserLexicon() {

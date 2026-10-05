@@ -16,8 +16,9 @@
 #include "mixedsegmentation.h"
 
 namespace libime {
+class PinyinCorrectionProfile;
 class ShuangpinProfile;
-}
+} // namespace libime
 
 namespace pinyin {
 
@@ -36,9 +37,25 @@ enum class ChineseInputMode {
 // from the graph edge; per-candidate LM quality lives with the classical
 // decoder and is expressed through the top-N Han decodes the resolver emits.
 //
+// Batch 8 correction preservation: when a `PinyinCorrectionProfile` is set
+// (Pinyin mode only; Shuangpin correction is baked into the ShuangpinProfile
+// key map at construction time and is not separately observable through the
+// public LibIME API — recorded as a source-traced ceiling, not fabricated),
+// `setRaw` builds two graphs. The `correctedGraph` includes both fuzzy and
+// layout-correction hypotheses via the 3-arg `parseUserPinyin(pinyin,
+// profile, flags)` overload. The `baseGraph` (profile = nullptr) includes
+// only classical exact + fuzzy hypotheses. An arc present in `correctedGraph`
+// but not in `baseGraph` at the same [begin, end) span is correction-derived
+// and is emitted with `provenance = CandidateProvenance::Correction` and a
+// lower arc-level confidence so the UnifiedRanker can express the weaker
+// structural evidence through its existing explainable features
+// (correctionArcs count, boundaryConfidence 0.55 per provenance).
+//
 // This class is not thread-safe; it is owned by the per-InputContext state.
 // Calling `setRaw` after every keystroke (or after Backspace/Escape/ continued
-// typing) is the intended usage and is O(raw.size()) amortised.
+// typing) is the intended usage and is O(raw.size()) amortised. Building two
+// graphs only when a correction profile is set keeps the base classical path
+// unchanged when the option is off.
 class LibIMEChineseArcOracle : public IChineseArcOracle {
 public:
     explicit LibIMEChineseArcOracle(ChineseInputMode mode);
@@ -49,8 +66,24 @@ public:
     // gracefully degrades instead of crashing.
     void setShuangpinProfile(const libime::ShuangpinProfile *profile);
 
-    // Configure the fuzzy flags for the graph parse (defaults to None).
+    // Configure the fuzzy flags for the graph parse (defaults to None). These
+    // are the same flags the classical LibIME decoder uses, so the structural
+    // validity of Chinese arcs in the mixed path matches the classical path.
     void setFuzzyFlags(libime::PinyinFuzzyFlags flags);
+
+    // Batch 8: enable layout-correction recall + provenance. A null profile
+    // disables the second (corrected) graph and every arc is reported as
+    // CandidateProvenance::Exact (unchanged classical behavior).
+    //
+    // The profile pointer is only observed during `setRaw`; the caller owns
+    // the profile's lifetime (PinyinEngine passes `ime_->correctionProfile()
+    // .get()` which outlives per-InputContext state). Passing nullptr is the
+    // correct way to disable correction.
+    //
+    // Ignored in Shuangpin mode (ShuangpinProfile already embeds the
+    // correction mapping; the public LibIME API does not expose per-arc
+    // correction provenance for Shuangpin — recorded ceiling, not fabricated).
+    void setCorrectionProfile(const libime::PinyinCorrectionProfile *profile);
 
     // Rebuild the internal graph for `raw`. Cheap; safe per keystroke.
     void setRaw(std::string_view raw);
@@ -63,6 +96,12 @@ public:
 
     // Exposed for Batch 10 diagnostics.
     bool graphValid() const;
+
+    // Exposed for Batch 8 diagnostics: true when a correction profile has
+    // been set in Pinyin mode (so `setRaw` is producing two graphs and
+    // `arcsAt` can tag correction arcs). False in Shuangpin mode (source
+    // ceiling — see class comment) and when the profile pointer is null.
+    bool correctionEnabled() const;
 
 private:
     struct Private;

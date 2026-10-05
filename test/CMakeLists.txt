@@ -121,3 +121,17 @@ target_include_directories(testmixedengine PRIVATE
     ${PROJECT_SOURCE_DIR}/im/pinyin ${PROJECT_SOURCE_DIR}/im/pinyin/mixed
     ${PROJECT_SOURCE_DIR}/im/pinyin/mixed/english)
 add_test(NAME testmixedengine COMMAND testmixedengine)
+
+# Batch 8 — Chinese correction baseline/after harness. Drives the real
+# LibIME-backed `LibIMEChineseArcOracle` with a `PinyinCorrectionProfile`
+# to measure correction recall + provenance + false-correction guards
+# before and after enabling the correction profile at the oracle seam.
+add_executable(testmixedchinesecorrection testmixedchinesecorrection.cpp
+    ../im/pinyin/mixed/chinesearcoracle.cpp
+    ../im/pinyin/mixed/mixedcompositionstate.cpp
+    ../im/pinyin/mixed/mixedsegmentation.cpp)
+target_link_libraries(testmixedchinesecorrection PRIVATE
+    Fcitx5::Utils LibIME::Pinyin LibIME::Core)
+target_include_directories(testmixedchinesecorrection PRIVATE
+    ${PROJECT_SOURCE_DIR}/im/pinyin ${PROJECT_SOURCE_DIR}/im/pinyin/mixed)
+add_test(NAME testmixedchinesecorrection COMMAND testmixedchinesecorrection)
