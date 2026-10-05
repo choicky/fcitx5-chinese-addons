@@ -264,6 +264,74 @@ int main() {
         check(hasExact, "composite: at least one English system arc at 0");
     }
 
+    // 8. Partial-selection invariant used by `selectUpToSegment` at batch
+    // 7B-3: for every segment boundary k (1 <= k < segments.size()), the
+    // first k planCommit transactions must tile [0, rawLen_k) contiguously,
+    // must yield a non-empty prefix output, and must leave the remaining
+    // raw suffix well-formed so LibIME can re-decode after `selectCustom`.
+    // This mirrors MixedCandidateWord::selectUpToSegment (which does not
+    // touch the classical filterKey/Backspace/Escape/paging paths).
+    {
+        std::string raw = "woxiangmaiiphone";
+        UnresolvedChineseOracle ch;
+        ch.spans = {
+            {0, 2, "我"},
+            {2, 7, "想"},
+            {7, 10, "买"},
+        };
+        ArcResolver han = [&](const SegmentationArc &arc) -> std::string {
+            for (const auto &s : ch.spans) {
+                if (s.begin == arc.rawBegin && s.end == arc.rawEnd) {
+                    return s.han;
+                }
+            }
+            return {};
+        };
+        MixedEngine engine;
+        auto pool = engine.compute(raw, ch, composite, han);
+        check(!pool.empty(),
+              "partial: mixed candidate with Han+English exists");
+        const auto &c = pool.front();
+        auto txn = MixedEngine::planCommit(c);
+        check(txn.size() == c.segments.size(),
+              "partial: transaction count matches segment count");
+        check(txn.size() >= 2,
+              "partial: at least two segments for boundary test");
+        bool partialOk = true;
+        for (size_t k = 1; k + 1 <= txn.size(); ++k) {
+            size_t rawLen = 0;
+            std::string prefix;
+            for (size_t i = 0; i < k; ++i) {
+                if (txn[i].rawBegin != rawLen) {
+                    partialOk = false;
+                    break;
+                }
+                rawLen = txn[i].rawEnd;
+                prefix += txn[i].output;
+            }
+            if (rawLen == 0 || rawLen >= raw.size() || prefix.empty()) {
+                partialOk = false;
+            }
+            // Truncated candidate covering the first k segments must be a
+            // valid applyToState tiling for the frozen prefix.
+            UnifiedCandidate head;
+            head.composedText = prefix;
+            for (size_t i = 0; i < k; ++i) {
+                head.segments.push_back(c.segments[i]);
+            }
+            MixedCompositionState st;
+            st.setRawInput(raw.substr(0, rawLen));
+            if (!MixedEngine::applyToState(st, head)) {
+                partialOk = false;
+            }
+            if (!st.isFullySelected()) {
+                partialOk = false;
+            }
+        }
+        check(partialOk,
+              "partial: segment-boundary prefix tiling valid at every k");
+    }
+
     if (failures > 0) {
         std::fprintf(stderr, "testmixedengine: %d failure(s)\n", failures);
         return 1;
