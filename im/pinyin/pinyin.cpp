@@ -12,6 +12,13 @@
 #include "../../modules/cloudpinyin/cloudpinyin_public.h"
 #include "config.h"
 #include "customphrase.h"
+#include "mixed/chinesearcoracle.h"
+#include "mixed/english/englisharcoracle.h"
+#include "mixed/english/englishcorrectionoracle.h"
+#include "mixed/english/englishlexicon.h"
+#include "mixed/english/englishuserlexicon.h"
+#include "mixed/hanwordresolver.h"
+#include "mixed/mixedengine.h"
 #include "notifications_public.h"
 #include "pinyincandidate.h"
 #include "pinyinhelper_public.h"
@@ -708,6 +715,51 @@ void PinyinEngine::updateUI(InputContext *inputContext) {
         }
         /// }}}
 
+        /// Create mixed Chinese-English candidate (Architecture A) {{{
+        // Only fires when:
+        //   * the option is enabled and mixed resources are available;
+        //   * the current input method is Pinyin (Shuangpin mixed is a
+        //     later batch);
+        //   * there is unselected raw at the cursor to segment.
+        // Pure-Han mixed candidates are skipped (the classical LibIME
+        // decoder already produces them, and inserting them would only
+        // duplicate the pinyinCandidates list at a worse rank).
+        if (*config_.mixedInputEnabled && mixedEngine_ && mixedChineseOracle_ &&
+            mixedEnglishOracle_ && !pyBeforeCursor.empty() &&
+            !context.useShuangpin()) {
+            mixedChineseOracle_->setRaw(pyBeforeCursor);
+            const auto hanResolver =
+                mixedHanResolver_->asArcResolver(pyBeforeCursor);
+            const auto mixedPool =
+                mixedEngine_->compute(pyBeforeCursor, *mixedChineseOracle_,
+                                      *mixedEnglishOracle_, hanResolver);
+            std::size_t position = 0;
+            for (const auto &cand : mixedPool) {
+                bool hasEnglish = false;
+                for (const auto src : cand.sources) {
+                    if (src != pinyin::SegmentSource::Chinese) {
+                        hasEnglish = true;
+                        break;
+                    }
+                }
+                if (!hasEnglish) {
+                    continue;
+                }
+                if (cand.composedText.empty()) {
+                    continue;
+                }
+                if (customCandidateMap.contains(cand.composedText)) {
+                    continue;
+                }
+                customCandidateMap.emplace(
+                    cand.composedText,
+                    std::make_unique<MixedCandidateWord>(
+                        this, cand.composedText, pyBeforeCursor.size(),
+                        CandidateOrder{position++, customCandidateMap.size()}));
+            }
+        }
+        /// }}}
+
         const auto candidateCompare = [](const auto &lhs, const auto &rhs) {
             return lhs->sortOrder() < rhs->sortOrder();
         };
@@ -943,6 +995,7 @@ PinyinEngine::PinyinEngine(Instance *instance)
     reloadConfig();
     loadExtraDict();
     loadCustomPhrase();
+    loadMixedResources();
     instance_->inputContextManager().registerProperty("pinyinState", &factory_);
     KeySym syms[] = {
         FcitxKey_1, FcitxKey_2, FcitxKey_3, FcitxKey_4, FcitxKey_5,
@@ -1308,6 +1361,8 @@ void PinyinEngine::populateConfig() {
                                : libime::PinyinDictFlag::Disabled);
 
     pyConfig_ = config_;
+
+    populateMixedConfig();
 }
 
 void PinyinEngine::reloadConfig() {
@@ -1747,6 +1802,113 @@ void PinyinEngine::saveCustomPhrase() {
                 } catch (const std::exception &e) {
                     PINYIN_ERROR()
                         << "Failed to save custom phrase: " << e.what();
+                    return false;
+                }
+            });
+    });
+}
+
+void PinyinEngine::loadMixedResources() {
+    // Construct in dependency order: lexicons → sub-oracles → composite
+    // English oracle → Chinese oracle → Han resolver → engine.
+    mixedEnglishLexicon_ = std::make_shared<pinyin::EnglishLexicon>();
+    mixedEnglishUserLexicon_ = std::make_shared<pinyin::EnglishUserLexicon>();
+
+    const auto &standardPath = StandardPaths::global();
+
+    // System English lexicon. Absent file -> empty lexicon, mixed path
+    // degrades to no English arcs but the classical pinyin path is
+    // unaffected. Batch 10 (formal corpus) will ship the pinned resource.
+    {
+        auto file = standardPath.open(StandardPathsType::PkgData,
+                                      "pinyin/mixed_english.tsv");
+        if (file.isValid()) {
+            IFDStreamBuf buffer(file.fd());
+            std::istream in(&buffer);
+            try {
+                mixedEnglishLexicon_->load(in);
+                PINYIN_DEBUG() << "Loaded mixed English lexicon, entries="
+                               << mixedEnglishLexicon_->size();
+            } catch (const std::exception &e) {
+                PINYIN_ERROR()
+                    << "Failed to load mixed English lexicon: " << e.what();
+                mixedEnglishLexicon_->clear();
+            }
+        }
+    }
+    // User-learned English entries (crash-safe TSV, same mechanism as
+    // customphrase). Absent file -> empty user lexicon.
+    {
+        auto file = standardPath.open(StandardPathsType::PkgData,
+                                      "pinyin/mixed_english_user.tsv",
+                                      StandardPathsMode::User);
+        if (file.isValid()) {
+            IFDStreamBuf buffer(file.fd());
+            std::istream in(&buffer);
+            if (!mixedEnglishUserLexicon_->load(in)) {
+                PINYIN_ERROR()
+                    << "Failed to parse mixed English user lexicon; starting "
+                       "empty.";
+                mixedEnglishUserLexicon_->reset();
+            }
+        }
+    }
+
+    mixedEnglishSystemOracle_ =
+        std::make_unique<pinyin::EnglishArcOracle>(mixedEnglishLexicon_.get());
+    mixedEnglishUserOracle_ = std::make_unique<pinyin::EnglishUserArcOracle>(
+        mixedEnglishUserLexicon_.get());
+    mixedEnglishCorrectionOracle_ =
+        std::make_unique<pinyin::EnglishCorrectionOracle>(
+            mixedEnglishLexicon_.get());
+
+    mixedEnglishOracle_ = std::make_unique<pinyin::CompositeEnglishArcOracle>();
+    mixedEnglishOracle_->addSource(mixedEnglishSystemOracle_.get());
+    mixedEnglishOracle_->addSource(mixedEnglishUserOracle_.get());
+    mixedEnglishOracle_->addSource(mixedEnglishCorrectionOracle_.get());
+
+    mixedChineseOracle_ = std::make_unique<pinyin::LibIMEChineseArcOracle>(
+        pinyin::ChineseInputMode::Pinyin);
+    mixedHanResolver_ = std::make_unique<pinyin::HanWordResolver>(ime_->dict());
+    mixedEngine_ = std::make_unique<pinyin::MixedEngine>();
+
+    // Sync current fuzzy/shuangpin settings into the Chinese oracle. This is
+    // safe to call again from populateConfig on every config change.
+    populateMixedConfig();
+}
+
+void PinyinEngine::populateMixedConfig() {
+    if (!mixedChineseOracle_) {
+        return;
+    }
+    // Mirror LibIME's flags so the Chinese-arc structural validity is
+    // identical to what the classical decoder is willing to accept. The
+    // oracle does not modify LibIME's decoder; it only reuses the public
+    // `parseUserPinyin / parseUserShuangpin` graph builder.
+    libime::PinyinFuzzyFlags flags = ime_->fuzzyFlags();
+    mixedChineseOracle_->setFuzzyFlags(flags);
+    // Shuangpin profile: propagate whatever LibIME is currently using, so
+    // the graph builder sees the same table as the classical decoder.
+    mixedChineseOracle_->setShuangpinProfile(ime_->shuangpinProfile().get());
+}
+
+void PinyinEngine::saveMixedEnglishUserLexicon() {
+    if (!mixedEnglishUserLexicon_) {
+        return;
+    }
+    instance_->eventDispatcher().scheduleWithContext(watch(), [this]() {
+        StandardPaths::global().safeSave(
+            StandardPathsType::PkgData, "pinyin/mixed_english_user.tsv",
+            [this](int fd) {
+                OFDStreamBuf buffer(fd);
+                std::ostream out(&buffer);
+                try {
+                    mixedEnglishUserLexicon_->save(out);
+                    return static_cast<bool>(out);
+                } catch (const std::exception &e) {
+                    PINYIN_ERROR() << "Failed to save mixed English user "
+                                      "lexicon: "
+                                   << e.what();
                     return false;
                 }
             });

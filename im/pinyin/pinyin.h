@@ -51,6 +51,18 @@
 #include <utility>
 #include <vector>
 
+namespace pinyin {
+class CompositeEnglishArcOracle;
+class EnglishArcOracle;
+class EnglishCorrectionOracle;
+class EnglishLexicon;
+class EnglishUserArcOracle;
+class EnglishUserLexicon;
+class HanWordResolver;
+class LibIMEChineseArcOracle;
+class MixedEngine;
+} // namespace pinyin
+
 namespace fcitx {
 
 template <typename Base = NoAnnotation>
@@ -171,6 +183,9 @@ FCITX_CONFIGURATION(
         this, "PageSize", _("Candidates Per Page"), 7, IntConstrain(3, 10)};
     Option<bool> spellEnabled{this, "SpellEnabled",
                               _("Show English Candidates"), true};
+    Option<bool> mixedInputEnabled{
+        this, "MixedInputEnabled",
+        _("Enable mixed Chinese-English input (Architecture A)"), false};
     Option<bool> symbolsEnabled{this, "SymbolsEnabled",
                                 _("Show symbol candidates"), true};
     Option<bool> chaiziEnabled{this, "ChaiziEnabled",
@@ -501,6 +516,14 @@ private:
                   std::list<std::unique_ptr<TaskToken>> &taskTokens);
     void saveCustomPhrase();
 
+    // Architecture A: English system/user lexicon + Chinese arc oracle +
+    // Han resolver + orchestrator. Loaded once at addon init; a missing
+    // system lexicon resource disables the mixed path silently (the engine
+    // still returns pure-Han candidates via the classical LibIME path).
+    void loadMixedResources();
+    void saveMixedEnglishUserLexicon();
+    void populateMixedConfig();
+
     Instance *instance_;
     PinyinEngineConfig config_;
     PinyinEngineConfig pyConfig_;
@@ -519,6 +542,22 @@ private:
     WorkerThread worker_;
     std::list<std::unique_ptr<TaskToken>> persistentTask_;
     std::list<std::unique_ptr<TaskToken>> tasks_;
+
+    // Architecture A fusion stack. Owned; constructed once at init. The
+    // composite English arc oracle references the system/user/correction
+    // sub-oracles which in turn reference the lexicons (all owned below,
+    // so declaration order matters: lexicons first, oracles next, engine
+    // last).
+    std::shared_ptr<pinyin::EnglishLexicon> mixedEnglishLexicon_;
+    std::shared_ptr<pinyin::EnglishUserLexicon> mixedEnglishUserLexicon_;
+    std::unique_ptr<pinyin::EnglishArcOracle> mixedEnglishSystemOracle_;
+    std::unique_ptr<pinyin::EnglishUserArcOracle> mixedEnglishUserOracle_;
+    std::unique_ptr<pinyin::EnglishCorrectionOracle>
+        mixedEnglishCorrectionOracle_;
+    std::unique_ptr<pinyin::CompositeEnglishArcOracle> mixedEnglishOracle_;
+    std::unique_ptr<pinyin::LibIMEChineseArcOracle> mixedChineseOracle_;
+    std::unique_ptr<pinyin::HanWordResolver> mixedHanResolver_;
+    std::unique_ptr<pinyin::MixedEngine> mixedEngine_;
 
     FCITX_ADDON_DEPENDENCY_LOADER(quickphrase, instance_->addonManager());
     FCITX_ADDON_DEPENDENCY_LOADER(fullwidth, instance_->addonManager());

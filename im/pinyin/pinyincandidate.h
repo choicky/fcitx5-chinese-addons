@@ -195,6 +195,30 @@ private:
     std::string word_;
 };
 
+// Architecture A mixed-input candidate. The composed text is produced by
+// pinyin::MixedEngine (segmentation → compose → UnifiedRanker → Rewriter)
+// over the raw suffix [selectedLength, cursor) and already contains the
+// surface separators configured by the Rewriter (§22). Selection consumes
+// the whole raw span in one LibIME call via `selectCustom`, so no
+// LibIME decoder/core change is required. Partial (mid-candidate)
+// selection is layered on top in batch 7B-3.
+class MixedCandidateWord : public PinyinAbstractCandidateWord,
+                           public InsertableAsCustomPhraseInterface {
+public:
+    MixedCandidateWord(PinyinEngine *engine, std::string composed,
+                       size_t inputLength, CandidateOrder order);
+
+    void select(InputContext *inputContext) const override;
+
+    std::string customPhraseString() const override { return composed_; }
+
+    bool isPinyinCandidate() const override { return false; }
+
+private:
+    PinyinEngine *engine_;
+    std::string composed_;
+};
+
 class PinyinCandidateWord : public PinyinAbstractCandidateWord,
                             public InsertableAsCustomPhraseInterface,
                             public PinyinCandidateIndexInterface {

@@ -299,6 +299,21 @@ void SpellCandidateWord::select(InputContext *inputContext) const {
     engine_->updateUI(inputContext);
 }
 
+MixedCandidateWord::MixedCandidateWord(PinyinEngine *engine,
+                                       std::string composed, size_t inputLength,
+                                       CandidateOrder order)
+    : PinyinAbstractCandidateWord(inputLength, order), engine_(engine),
+      composed_(std::move(composed)) {
+    setText(Text(composed_));
+}
+
+void MixedCandidateWord::select(InputContext *inputContext) const {
+    auto *state = inputContext->propertyFor(&engine_->factory());
+    auto &context = state->context_;
+    context.selectCustom(selectLength_, composed_);
+    engine_->updateUI(inputContext);
+}
+
 PinyinCandidateWord::PinyinCandidateWord(PinyinEngine *engine,
                                          InputContext *inputContext, Text text,
                                          size_t selectLength, size_t idx,
