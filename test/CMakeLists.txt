@@ -52,3 +52,9 @@ add_test(NAME testcustomphrase COMMAND testcustomphrase)
 add_executable(testsymboldictionary testsymboldictionary.cpp ../im/pinyin/symboldictionary.cpp)
 target_link_libraries(testsymboldictionary Fcitx5::Utils LibIME::Core)
 add_test(NAME testsymboldictionary COMMAND testsymboldictionary)
+
+add_executable(testmixedcompositionstate testmixedcompositionstate.cpp
+    ../im/pinyin/mixed/mixedcompositionstate.cpp)
+target_include_directories(testmixedcompositionstate PRIVATE
+    ${PROJECT_SOURCE_DIR}/im/pinyin ${PROJECT_SOURCE_DIR}/im/pinyin/mixed)
+add_test(NAME testmixedcompositionstate COMMAND testmixedcompositionstate)

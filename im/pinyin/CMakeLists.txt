@@ -5,9 +5,11 @@ set(PINYIN_SOURCES
     workerthread.cpp
     pinyincandidate.cpp
     pinyinenginefactory.cpp
+    mixed/mixedcompositionstate.cpp
 )
 
 add_fcitx5_addon(pinyin ${PINYIN_SOURCES})
+target_include_directories(pinyin PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(pinyin Fcitx5::Core Fcitx5::Config LibIME::Pinyin Fcitx5::Module::Punctuation Fcitx5::Module::QuickPhrase Fcitx5::Module::Notifications Fcitx5::Module::Spell Fcitx5::Module::PinyinHelper Pthread::Pthread)
 
 if (TARGET Fcitx5::Module::LuaAddonLoader)
