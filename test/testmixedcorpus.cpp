@@ -248,6 +248,27 @@ int main() {
     std::vector<double> latenciesUs;
     latenciesUs.reserve(corpus().size());
 
+    // Warm-up pass: run the whole corpus once against the same engine and
+    // discard results before timing. Without this the per-case `compute`
+    // measured below is a cold first call (allocator pool, English user
+    // lexicon, ranker scratch buffers not yet touched), which is a method
+    // error for a latency guard and inflates >10x on shared CI runners.
+    // Semantics are unchanged: same inputs, oracles and resolver as the
+    // timed pass, and the same engine instance used by the drift loop.
+    for (const auto &c : corpus()) {
+        CorpusChineseOracle chWarm;
+        chWarm.spans = c.han;
+        ArcResolver hanWarm = [&](const SegmentationArc &arc) -> std::string {
+            for (const auto &s : c.han) {
+                if (s.begin == arc.rawBegin && s.end == arc.rawEnd) {
+                    return s.han;
+                }
+            }
+            return {};
+        };
+        (void)engine.compute(c.raw, chWarm, oracles.composite, hanWarm);
+    }
+
     std::fprintf(stderr, "=== batch 10 corpus report ===\n");
     for (const auto &c : corpus()) {
         ++totalCases;
