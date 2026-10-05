@@ -10,6 +10,7 @@ set(PINYIN_SOURCES
     mixed/segmentcomposer.cpp
     mixed/unifiedranker.cpp
     mixed/rewriter.cpp
+    mixed/mixedengine.cpp
     mixed/english/englishlexicon.cpp
     mixed/english/englisharcoracle.cpp
     mixed/english/englishuserlexicon.cpp

@@ -6,7 +6,8 @@
 #include "segmentcomposer.h"
 
 #include <algorithm>
-#include <unordered_set>
+#include <map>
+#include <tuple>
 #include <utility>
 
 namespace pinyin {
@@ -14,6 +15,12 @@ namespace pinyin {
 SegmentComposer::SegmentComposer() = default;
 
 bool SegmentComposer::compose(const SegmentationPath &path,
+                              UnifiedCandidate &out) const {
+    return compose(path, ArcResolver{}, out);
+}
+
+bool SegmentComposer::compose(const SegmentationPath &path,
+                              const ArcResolver &resolver,
                               UnifiedCandidate &out) const {
     out = UnifiedCandidate{};
     out.segmentationCost = path.cost;
@@ -26,7 +33,11 @@ bool SegmentComposer::compose(const SegmentationPath &path,
     out.provenances.reserve(path.arcs.size());
     out.sources.reserve(path.arcs.size());
     for (const auto &arc : path.arcs) {
-        if (arc.resolvedOutput.empty()) {
+        std::string output = arc.resolvedOutput;
+        if (output.empty() && resolver) {
+            output = resolver(arc);
+        }
+        if (output.empty()) {
             out = UnifiedCandidate{};
             return false;
         }
@@ -40,7 +51,7 @@ bool SegmentComposer::compose(const SegmentationPath &path,
         seg.rawEnd = arc.rawEnd;
         seg.source = arc.source;
         seg.provenance = arc.provenance;
-        seg.output = arc.resolvedOutput;
+        seg.output = std::move(output);
         seg.sourceLocalRank = arc.sourceLocalRank;
         seg.confidence = arc.confidence;
         seg.selected = false;
@@ -48,8 +59,8 @@ bool SegmentComposer::compose(const SegmentationPath &path,
         span.rawBegin = arc.rawBegin;
         span.rawEnd = arc.rawEnd;
         span.outputBegin = outCursor;
-        acc.append(arc.resolvedOutput);
-        outCursor += arc.resolvedOutput.size();
+        acc.append(seg.output);
+        outCursor += seg.output.size();
         span.outputEnd = outCursor;
         out.segments.push_back(std::move(seg));
         out.alignment.push_back(span);
@@ -64,13 +75,40 @@ bool SegmentComposer::compose(const SegmentationPath &path,
 std::vector<UnifiedCandidate>
 SegmentComposer::composeAll(const std::vector<SegmentationPath> &paths,
                             std::size_t maxCandidates) const {
+    return composeAll(paths, ArcResolver{}, maxCandidates);
+}
+
+std::vector<UnifiedCandidate>
+SegmentComposer::composeAll(const std::vector<SegmentationPath> &paths,
+                            const ArcResolver &resolver,
+                            std::size_t maxCandidates) const {
     std::vector<UnifiedCandidate> out;
+    // Memoize resolver results across paths so a shared arc in multiple
+    // candidate paths decodes once. Key is (rawBegin, rawEnd, sourceLocalRank).
+    std::map<std::tuple<std::size_t, std::size_t, int>, std::string> memo;
     for (const auto &p : paths) {
         if (maxCandidates != 0 && out.size() >= maxCandidates) {
             break;
         }
+        ArcResolver memoized;
+        if (resolver) {
+            memoized = [&](const SegmentationArc &arc) -> std::string {
+                if (!arc.resolvedOutput.empty()) {
+                    return arc.resolvedOutput;
+                }
+                auto key = std::make_tuple(arc.rawBegin, arc.rawEnd,
+                                           arc.sourceLocalRank);
+                auto it = memo.find(key);
+                if (it != memo.end()) {
+                    return it->second;
+                }
+                std::string v = resolver(arc);
+                memo.emplace(key, v);
+                return v;
+            };
+        }
         UnifiedCandidate c;
-        if (compose(p, c)) {
+        if (compose(p, memoized, c)) {
             out.push_back(std::move(c));
         }
     }

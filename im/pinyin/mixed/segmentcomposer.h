@@ -7,6 +7,7 @@
 #define _FCITX_PINYIN_MIXED_SEGMENTCOMPOSER_H_
 
 #include <cstddef>
+#include <functional>
 #include <string>
 #include <vector>
 
@@ -14,6 +15,14 @@
 #include "mixedsegmentation.h"
 
 namespace pinyin {
+
+// Fills the concrete output for an arc whose `resolvedOutput` was intentionally
+// left empty by the producing oracle. The primary use is partial-span Chinese
+// arcs: the segmentation search must stay std-only and cheap, so the Chinese
+// oracle emits arcs as structural evidence and the real Han decode is done
+// here against the whole composition. Callers should memoize by (rawBegin,
+// rawEnd, sourceLocalRank) so repeated paths sharing an arc do not re-decode.
+using ArcResolver = std::function<std::string(const SegmentationArc &)>;
 
 // A single candidate produced from one segmentation path. Holds the concrete
 // per-arc composition output joined with any configured separator, the
@@ -58,11 +67,21 @@ public:
     // empty string.
     bool compose(const SegmentationPath &path, UnifiedCandidate &out) const;
 
+    // Compose one path resolving empty `resolvedOutput` arcs via `resolver`.
+    // A null resolver behaves like the overload above (empty output -> reject).
+    bool compose(const SegmentationPath &path, const ArcResolver &resolver,
+                 UnifiedCandidate &out) const;
+
     // Compose a set of paths, dropping any that contain unresolved arcs.
     // Bounded by `maxCandidates` (0 == no cap).
     std::vector<UnifiedCandidate>
     composeAll(const std::vector<SegmentationPath> &paths,
                std::size_t maxCandidates) const;
+
+    // Resolver-aware composeAll.
+    std::vector<UnifiedCandidate>
+    composeAll(const std::vector<SegmentationPath> &paths,
+               const ArcResolver &resolver, std::size_t maxCandidates) const;
 };
 
 // Deduplicating, bounded candidate pool. Insertion preserves the first

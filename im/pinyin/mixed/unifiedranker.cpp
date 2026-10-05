@@ -105,6 +105,31 @@ UnifiedRanker::UnifiedRanker() : UnifiedRanker(Weights{}) {}
 
 UnifiedRanker::UnifiedRanker(Weights weights) : weights_(weights) {}
 
+float UnifiedRanker::score(const RankFeatures &f) const {
+    if (f.arcCount == 0) {
+        return -1e9F;
+    }
+    const double n = static_cast<double>(f.arcCount);
+    const double exactShare = static_cast<double>(f.exactArcs) / n;
+    const double canonicalShare = static_cast<double>(f.canonicalArcs) / n;
+    const double completionShare = static_cast<double>(f.completionArcs) / n;
+    const double correctionShare = static_cast<double>(f.correctionArcs) / n;
+    const double userShare = static_cast<double>(f.userArcs) / n;
+    double s = static_cast<double>(weights_.wExact) * exactShare +
+               static_cast<double>(weights_.wCanonical) * canonicalShare +
+               static_cast<double>(weights_.wCompletion) * completionShare +
+               static_cast<double>(weights_.wCorrection) * correctionShare +
+               static_cast<double>(weights_.wUser) * userShare +
+               static_cast<double>(weights_.wConfidence) *
+                   static_cast<double>(f.meanArcConfidence) -
+               static_cast<double>(weights_.wMinConfidencePenalty) *
+                   (1.0 - static_cast<double>(f.minArcConfidence)) +
+               static_cast<double>(weights_.wBoundary) *
+                   static_cast<double>(f.meanBoundaryConfidence) -
+               static_cast<double>(weights_.wCost) * f.segmentationCost;
+    return static_cast<float>(s);
+}
+
 std::vector<std::size_t>
 UnifiedRanker::rankIndices(const std::vector<UnifiedCandidate> &pool) const {
     std::vector<std::size_t> idx(pool.size());
@@ -114,37 +139,7 @@ UnifiedRanker::rankIndices(const std::vector<UnifiedCandidate> &pool) const {
     FeatureBuilder fb;
     std::vector<float> scores(pool.size());
     for (std::size_t i = 0; i < pool.size(); ++i) {
-        scores[i] = static_cast<float>(
-            fb.build(pool[i]).arcCount); // placeholder overwritten below
-    }
-    // Recompute scores via the documented formula.
-    for (std::size_t i = 0; i < pool.size(); ++i) {
-        const RankFeatures f = fb.build(pool[i]);
-        if (f.arcCount == 0) {
-            scores[i] = -1e9F;
-            continue;
-        }
-        const double n = static_cast<double>(f.arcCount);
-        const double exactShare = static_cast<double>(f.exactArcs) / n;
-        const double canonicalShare = static_cast<double>(f.canonicalArcs) / n;
-        const double completionShare =
-            static_cast<double>(f.completionArcs) / n;
-        const double correctionShare =
-            static_cast<double>(f.correctionArcs) / n;
-        const double userShare = static_cast<double>(f.userArcs) / n;
-        double s = static_cast<double>(weights_.wExact) * exactShare +
-                   static_cast<double>(weights_.wCanonical) * canonicalShare +
-                   static_cast<double>(weights_.wCompletion) * completionShare +
-                   static_cast<double>(weights_.wCorrection) * correctionShare +
-                   static_cast<double>(weights_.wUser) * userShare +
-                   static_cast<double>(weights_.wConfidence) *
-                       static_cast<double>(f.meanArcConfidence) -
-                   static_cast<double>(weights_.wMinConfidencePenalty) *
-                       (1.0 - static_cast<double>(f.minArcConfidence)) +
-                   static_cast<double>(weights_.wBoundary) *
-                       static_cast<double>(f.meanBoundaryConfidence) -
-                   static_cast<double>(weights_.wCost) * f.segmentationCost;
-        scores[i] = static_cast<float>(s);
+        scores[i] = score(fb.build(pool[i]));
     }
     std::stable_sort(idx.begin(), idx.end(), [&](std::size_t a, std::size_t b) {
         return scores[a] > scores[b];
