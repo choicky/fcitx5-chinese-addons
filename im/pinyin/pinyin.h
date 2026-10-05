@@ -186,6 +186,15 @@ FCITX_CONFIGURATION(
     Option<bool> mixedInputEnabled{
         this, "MixedInputEnabled",
         _("Enable mixed Chinese-English input (Architecture A)"), false};
+    // Batch 9 (§23): Auto-spacing at Chinese↔English candidate boundaries.
+    // DEFAULT = OFF. Recorded rationale: verified current behavior inserts no
+    // automatic CJK↔Latin space, and §26 requires preserving existing committed
+    // text on upgrade. Turning it ON is opt-in and only affects composed text
+    // of mixed candidates (classical pure-Chinese / pure-English candidates
+    // remain untouched because they are a single-source pool).
+    Option<bool> mixedAutoSpacing{
+        this, "MixedAutoSpacing",
+        _("Insert a space at Chinese-English candidate boundaries"), false};
     Option<bool> symbolsEnabled{this, "SymbolsEnabled",
                                 _("Show symbol candidates"), true};
     Option<bool> chaiziEnabled{this, "ChaiziEnabled",

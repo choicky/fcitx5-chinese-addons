@@ -1905,6 +1905,19 @@ void PinyinEngine::populateMixedConfig() {
     // per-arc correction provenance — recorded source ceiling, not
     // fabricated signal.
     mixedChineseOracle_->setCorrectionProfile(ime_->correctionProfile().get());
+
+    // Batch 9 (§23): plumb `MixedAutoSpacing` (default OFF) into the Rewriter
+    // presentation policy. Rewriter is stateless, so updating its config at
+    // reload time does not invalidate any search/rank/pool state; the next
+    // `MixedEngine::compute` call uses the new policy. When the option is OFF
+    // the composed output of every mixed candidate is identical to pre-Batch-9
+    // behavior (no separator inserted at source boundaries), which is the
+    // §26 upgrade-compatibility invariant.
+    if (mixedEngine_) {
+        pinyin::RewriterConfig rc;
+        rc.autoSpaceAtBoundary = *config_.mixedAutoSpacing;
+        mixedEngine_->updateRewriterConfig(std::move(rc));
+    }
 }
 
 void PinyinEngine::saveMixedEnglishUserLexicon() {

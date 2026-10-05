@@ -332,6 +332,94 @@ int main() {
               "partial: segment-boundary prefix tiling valid at every k");
     }
 
+    // 9. Auto-spacing (§23) default OFF and MixedEngine::updateRewriterConfig.
+    {
+        std::string raw = "woxiangmaiiphonepeijian";
+        UnresolvedChineseOracle ch;
+        ch.spans = {
+            {0, 2, "我"},   {2, 7, "想"},   {7, 10, "买"},
+            {16, 19, "配"}, {19, 23, "件"},
+        };
+        ArcResolver han = [&](const SegmentationArc &arc) -> std::string {
+            for (const auto &s : ch.spans) {
+                if (s.begin == arc.rawBegin && s.end == arc.rawEnd) {
+                    return s.han;
+                }
+            }
+            return {};
+        };
+        // Default (OFF): composed text on a mixed candidate must NOT contain a
+        // boundary separator between Chinese and English source transitions.
+        MixedEngine engineOff;
+        check(!engineOff.config().rewriter.autoSpaceAtBoundary,
+              "rewriter: auto-spacing default OFF");
+        auto poolOff = engineOff.compute(raw, ch, composite, han);
+        bool foundMixedOff = false;
+        std::string composedOff;
+        for (const auto &c : poolOff) {
+            if (c.composedText.find("iPhone") != std::string::npos &&
+                c.composedText.find("我") != std::string::npos) {
+                foundMixedOff = true;
+                composedOff = c.composedText;
+                break;
+            }
+        }
+        check(foundMixedOff,
+              "rewriter: default-OFF pool still has a mixed candidate");
+        // No separator characters should be injected at source boundaries;
+        // the joined Han chars and "iPhone" appear contiguously in composed
+        // text (any inserted space would break the substring).
+        check(composedOff.find(" iPhone") == std::string::npos &&
+                  composedOff.find("iPhone ") == std::string::npos,
+              "rewriter: default-OFF inserts no space around English span");
+
+        // Opt-in (ON): after toggling the rewriter policy, the next compute
+        // inserts a space at Chinese↔English source transitions.
+        pinyin::RewriterConfig on;
+        on.autoSpaceAtBoundary = true;
+        engineOff.updateRewriterConfig(on);
+        check(engineOff.config().rewriter.autoSpaceAtBoundary,
+              "rewriter: updateRewriterConfig takes effect immediately");
+        auto poolOn = engineOff.compute(raw, ch, composite, han);
+        bool foundMixedOn = false;
+        std::string composedOn;
+        for (const auto &c : poolOn) {
+            if (c.composedText.find("iPhone") != std::string::npos &&
+                c.composedText.find("我") != std::string::npos) {
+                foundMixedOn = true;
+                composedOn = c.composedText;
+                break;
+            }
+        }
+        check(foundMixedOn, "rewriter: ON pool still has a mixed candidate");
+        // ON must inject a boundary separator somewhere adjacent to the
+        // English span (either before or after, or both).
+        check(composedOn.find(" iPhone") != std::string::npos ||
+                  composedOn.find("iPhone ") != std::string::npos,
+              "rewriter: ON injects a space at Chinese-English boundary");
+        // ON and OFF composed strings must differ only by the separator
+        // (ranker + pool order remain unchanged; the setter only swaps the
+        // Rewriter, per Batch 9 §23 "presentation, not ranking").
+        check(composedOn != composedOff,
+              "rewriter: ON vs OFF produces different composed text");
+
+        // Toggling back to OFF restores the exact original string.
+        pinyin::RewriterConfig off;
+        off.autoSpaceAtBoundary = false;
+        engineOff.updateRewriterConfig(off);
+        auto poolBack = engineOff.compute(raw, ch, composite, han);
+        std::string composedBack;
+        for (const auto &c : poolBack) {
+            if (c.composedText.find("iPhone") != std::string::npos &&
+                c.composedText.find("我") != std::string::npos) {
+                composedBack = c.composedText;
+                break;
+            }
+        }
+        check(composedBack == composedOff,
+              "rewriter: re-disabling auto-spacing restores original output");
+    }
+
     if (failures > 0) {
         std::fprintf(stderr, "testmixedengine: %d failure(s)\n", failures);
         return 1;

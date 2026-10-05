@@ -108,6 +108,17 @@ public:
 
     const Config &config() const { return config_; }
 
+    // Batch 9: update the Rewriter's presentation policy at runtime (e.g.
+    // after `MixedAutoSpacing` toggles) without rebuilding the engine or
+    // losing its segmentation-search / ranker state. Only the rewriter is
+    // re-inited; pool cap, search beam and ranker weights remain frozen for
+    // the life of the engine. The Rewriter is stateless so this swap is
+    // safe mid-session.
+    void updateRewriterConfig(RewriterConfig rewriter) {
+        config_.rewriter = std::move(rewriter);
+        rewriter_ = Rewriter(config_.rewriter);
+    }
+
 private:
     Config config_;
     MixedSegmentationSearch search_;
