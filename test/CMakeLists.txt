@@ -73,3 +73,11 @@ target_include_directories(testenglishlexicon PRIVATE
     ${PROJECT_SOURCE_DIR}/im/pinyin ${PROJECT_SOURCE_DIR}/im/pinyin/mixed
     ${PROJECT_SOURCE_DIR}/im/pinyin/mixed/english)
 add_test(NAME testenglishlexicon COMMAND testenglishlexicon)
+
+add_executable(testenglishuserlexicon testenglishuserlexicon.cpp
+    ../im/pinyin/mixed/english/englishuserlexicon.cpp
+    ../im/pinyin/mixed/mixedsegmentation.cpp)
+target_include_directories(testenglishuserlexicon PRIVATE
+    ${PROJECT_SOURCE_DIR}/im/pinyin ${PROJECT_SOURCE_DIR}/im/pinyin/mixed
+    ${PROJECT_SOURCE_DIR}/im/pinyin/mixed/english)
+add_test(NAME testenglishuserlexicon COMMAND testenglishuserlexicon)
