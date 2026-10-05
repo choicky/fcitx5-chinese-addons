@@ -135,3 +135,42 @@ target_link_libraries(testmixedchinesecorrection PRIVATE
 target_include_directories(testmixedchinesecorrection PRIVATE
     ${PROJECT_SOURCE_DIR}/im/pinyin ${PROJECT_SOURCE_DIR}/im/pinyin/mixed)
 add_test(NAME testmixedchinesecorrection COMMAND testmixedchinesecorrection)
+
+# Batch 10 — Formal mixed-input corpus + accuracy + performance gate. Drives
+# the Architecture A orchestration (segmentation search -> compose -> pool ->
+# ranker -> rewriter) against a curated corpus and asserts top-1 accuracy,
+# top-K recall, false-correction guards, latency ceiling and 200-iteration
+# stability of the top-1 composed text (no engine-side state drift).
+add_executable(testmixedcorpus testmixedcorpus.cpp
+    ../im/pinyin/mixed/mixedcompositionstate.cpp
+    ../im/pinyin/mixed/mixedsegmentation.cpp
+    ../im/pinyin/mixed/segmentcomposer.cpp
+    ../im/pinyin/mixed/unifiedranker.cpp
+    ../im/pinyin/mixed/rewriter.cpp
+    ../im/pinyin/mixed/mixedengine.cpp
+    ../im/pinyin/mixed/english/englishlexicon.cpp
+    ../im/pinyin/mixed/english/englisharcoracle.cpp
+    ../im/pinyin/mixed/english/englishuserlexicon.cpp
+    ../im/pinyin/mixed/english/englishcorrectionoracle.cpp)
+target_include_directories(testmixedcorpus PRIVATE
+    ${PROJECT_SOURCE_DIR}/im/pinyin ${PROJECT_SOURCE_DIR}/im/pinyin/mixed
+    ${PROJECT_SOURCE_DIR}/im/pinyin/mixed/english)
+add_test(NAME testmixedcorpus COMMAND testmixedcorpus)
+
+# Batch 10 — Shuangpin oracle smoke test (regression matrix). Drives the real
+# LibIME-backed `LibIMEChineseArcOracle` in Shuangpin mode with a builtin
+# Ziranma `ShuangpinProfile` to verify the graph builder + arc oracle path
+# still works, and asserts the recorded §17.2 Case D ceiling: setting a
+# `PinyinCorrectionProfile` on a Shuangpin-mode oracle does not enable
+# correction (Shuangpin correction is baked into the `ShuangpinProfile` key
+# map at construction, no per-arc provenance is observable through the public
+# LibIME API).
+add_executable(testmixedshuangpin testmixedshuangpin.cpp
+    ../im/pinyin/mixed/chinesearcoracle.cpp
+    ../im/pinyin/mixed/mixedcompositionstate.cpp
+    ../im/pinyin/mixed/mixedsegmentation.cpp)
+target_link_libraries(testmixedshuangpin PRIVATE
+    Fcitx5::Utils LibIME::Pinyin LibIME::Core)
+target_include_directories(testmixedshuangpin PRIVATE
+    ${PROJECT_SOURCE_DIR}/im/pinyin ${PROJECT_SOURCE_DIR}/im/pinyin/mixed)
+add_test(NAME testmixedshuangpin COMMAND testmixedshuangpin)
