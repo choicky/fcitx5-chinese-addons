@@ -751,11 +751,14 @@ void PinyinEngine::updateUI(InputContext *inputContext) {
                 if (customCandidateMap.contains(cand.composedText)) {
                     continue;
                 }
+                auto clone = std::make_unique<pinyin::UnifiedCandidate>(cand);
+                std::string text = clone->composedText;
                 customCandidateMap.emplace(
-                    cand.composedText,
+                    std::move(text),
                     std::make_unique<MixedCandidateWord>(
-                        this, cand.composedText, pyBeforeCursor.size(),
-                        CandidateOrder{position++, customCandidateMap.size()}));
+                        this, clone->composedText, pyBeforeCursor.size(),
+                        CandidateOrder{position++, customCandidateMap.size()},
+                        std::move(clone)));
             }
         }
         /// }}}

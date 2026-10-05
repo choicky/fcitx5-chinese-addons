@@ -29,6 +29,10 @@
 #include <utility>
 #include <vector>
 
+namespace pinyin {
+struct UnifiedCandidate;
+} // namespace pinyin
+
 namespace fcitx {
 
 class PinyinEngine;
@@ -200,13 +204,23 @@ private:
 // over the raw suffix [selectedLength, cursor) and already contains the
 // surface separators configured by the Rewriter (§22). Selection consumes
 // the whole raw span in one LibIME call via `selectCustom`, so no
-// LibIME decoder/core change is required. Partial (mid-candidate)
-// selection is layered on top in batch 7B-3.
+// LibIME decoder/core change is required.
+//
+// Partial (mid-candidate) selection is a segment-boundary operation:
+// `selectUpToSegment(k, ic)` freezes the first k segments and leaves the
+// remaining raw suffix re-decodable. The implementation plans the commit
+// through `pinyin::MixedEngine::planCommit` and applies a single
+// `selectCustom(rawLen, composedPrefix)` transaction — semantically
+// identical to a chain of per-transaction selectCustom calls because
+// LibIME's custom selection consumes an arbitrary raw prefix and injects
+// an arbitrary output string.
 class MixedCandidateWord : public PinyinAbstractCandidateWord,
                            public InsertableAsCustomPhraseInterface {
 public:
     MixedCandidateWord(PinyinEngine *engine, std::string composed,
-                       size_t inputLength, CandidateOrder order);
+                       size_t inputLength, CandidateOrder order,
+                       std::unique_ptr<pinyin::UnifiedCandidate> candidate);
+    ~MixedCandidateWord() override;
 
     void select(InputContext *inputContext) const override;
 
@@ -214,9 +228,20 @@ public:
 
     bool isPinyinCandidate() const override { return false; }
 
+    // Number of segments in the underlying mixed candidate. Exposed for
+    // UI paths that need to know valid partial-selection boundaries.
+    size_t segmentCount() const;
+    // Commit the first `k` segments (1 <= k < segmentCount()) and leave
+    // the remaining raw suffix active. Returns false when there is no
+    // mixed candidate backing, k is out of range, or the planned
+    // transaction list is malformed; on false, no LibIME state is
+    // touched.
+    bool selectUpToSegment(size_t k, InputContext *inputContext) const;
+
 private:
     PinyinEngine *engine_;
     std::string composed_;
+    std::unique_ptr<pinyin::UnifiedCandidate> candidate_;
 };
 
 class PinyinCandidateWord : public PinyinAbstractCandidateWord,

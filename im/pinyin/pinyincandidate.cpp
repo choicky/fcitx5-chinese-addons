@@ -7,6 +7,8 @@
 
 #include "pinyincandidate.h"
 #include "../../modules/cloudpinyin/cloudpinyin_public.h"
+#include "mixed/mixedengine.h"
+#include "mixed/segmentcomposer.h"
 #include "pinyin.h"
 #include "pinyinhelper_public.h"
 #include <algorithm>
@@ -299,19 +301,66 @@ void SpellCandidateWord::select(InputContext *inputContext) const {
     engine_->updateUI(inputContext);
 }
 
-MixedCandidateWord::MixedCandidateWord(PinyinEngine *engine,
-                                       std::string composed, size_t inputLength,
-                                       CandidateOrder order)
+MixedCandidateWord::MixedCandidateWord(
+    PinyinEngine *engine, std::string composed, size_t inputLength,
+    CandidateOrder order, std::unique_ptr<pinyin::UnifiedCandidate> candidate)
     : PinyinAbstractCandidateWord(inputLength, order), engine_(engine),
-      composed_(std::move(composed)) {
+      composed_(std::move(composed)), candidate_(std::move(candidate)) {
     setText(Text(composed_));
 }
+
+MixedCandidateWord::~MixedCandidateWord() = default;
 
 void MixedCandidateWord::select(InputContext *inputContext) const {
     auto *state = inputContext->propertyFor(&engine_->factory());
     auto &context = state->context_;
     context.selectCustom(selectLength_, composed_);
     engine_->updateUI(inputContext);
+}
+
+size_t MixedCandidateWord::segmentCount() const {
+    if (!candidate_) {
+        return 0;
+    }
+    return candidate_->segments.size();
+}
+
+bool MixedCandidateWord::selectUpToSegment(size_t k,
+                                           InputContext *inputContext) const {
+    if (!candidate_ || k == 0 || k >= candidate_->segments.size()) {
+        return false;
+    }
+    const auto txns = pinyin::MixedEngine::planCommit(*candidate_);
+    if (txns.empty()) {
+        return false;
+    }
+    // Compute the frozen raw prefix by summing transaction spans up to the
+    // k-th segment boundary. planCommit emits one transaction per arc, so
+    // `k` segments corresponds to the first k transactions.
+    std::size_t rawLen = 0;
+    std::string prefix;
+    for (size_t i = 0; i < k && i < txns.size(); ++i) {
+        const auto &t = txns[i];
+        if (t.rawEnd < rawLen) {
+            return false; // malformed tiling
+        }
+        rawLen = t.rawEnd;
+        prefix += t.output;
+    }
+    if (rawLen == 0 || prefix.empty()) {
+        return false;
+    }
+    auto *state = inputContext->propertyFor(&engine_->factory());
+    auto &context = state->context_;
+    if (rawLen > context.size() - context.selectedLength()) {
+        return false; // beyond current raw suffix
+    }
+    // selectCustom consumes `rawLen` raw bytes from the pending suffix and
+    // injects `prefix` as a custom selection; the remaining raw range stays
+    // active for continued decoding on the next keystroke.
+    context.selectCustom(rawLen, prefix);
+    engine_->updateUI(inputContext);
+    return true;
 }
 
 PinyinCandidateWord::PinyinCandidateWord(PinyinEngine *engine,
