@@ -58,3 +58,9 @@ add_executable(testmixedcompositionstate testmixedcompositionstate.cpp
 target_include_directories(testmixedcompositionstate PRIVATE
     ${PROJECT_SOURCE_DIR}/im/pinyin ${PROJECT_SOURCE_DIR}/im/pinyin/mixed)
 add_test(NAME testmixedcompositionstate COMMAND testmixedcompositionstate)
+
+add_executable(testmixedsegmentation testmixedsegmentation.cpp
+    ../im/pinyin/mixed/mixedsegmentation.cpp)
+target_include_directories(testmixedsegmentation PRIVATE
+    ${PROJECT_SOURCE_DIR}/im/pinyin ${PROJECT_SOURCE_DIR}/im/pinyin/mixed)
+add_test(NAME testmixedsegmentation COMMAND testmixedsegmentation)

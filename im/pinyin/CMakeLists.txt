@@ -6,6 +6,7 @@ set(PINYIN_SOURCES
     pinyincandidate.cpp
     pinyinenginefactory.cpp
     mixed/mixedcompositionstate.cpp
+    mixed/mixedsegmentation.cpp
 )
 
 add_fcitx5_addon(pinyin ${PINYIN_SOURCES})
