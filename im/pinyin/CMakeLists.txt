@@ -10,6 +10,7 @@ set(PINYIN_SOURCES
     mixed/english/englishlexicon.cpp
     mixed/english/englisharcoracle.cpp
     mixed/english/englishuserlexicon.cpp
+    mixed/english/englishcorrectionoracle.cpp
 )
 
 add_fcitx5_addon(pinyin ${PINYIN_SOURCES})
