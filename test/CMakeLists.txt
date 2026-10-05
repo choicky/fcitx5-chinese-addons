@@ -64,3 +64,12 @@ add_executable(testmixedsegmentation testmixedsegmentation.cpp
 target_include_directories(testmixedsegmentation PRIVATE
     ${PROJECT_SOURCE_DIR}/im/pinyin ${PROJECT_SOURCE_DIR}/im/pinyin/mixed)
 add_test(NAME testmixedsegmentation COMMAND testmixedsegmentation)
+
+add_executable(testenglishlexicon testenglishlexicon.cpp
+    ../im/pinyin/mixed/english/englishlexicon.cpp
+    ../im/pinyin/mixed/english/englisharcoracle.cpp
+    ../im/pinyin/mixed/mixedsegmentation.cpp)
+target_include_directories(testenglishlexicon PRIVATE
+    ${PROJECT_SOURCE_DIR}/im/pinyin ${PROJECT_SOURCE_DIR}/im/pinyin/mixed
+    ${PROJECT_SOURCE_DIR}/im/pinyin/mixed/english)
+add_test(NAME testenglishlexicon COMMAND testenglishlexicon)

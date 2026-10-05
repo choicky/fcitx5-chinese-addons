@@ -7,6 +7,8 @@ set(PINYIN_SOURCES
     pinyinenginefactory.cpp
     mixed/mixedcompositionstate.cpp
     mixed/mixedsegmentation.cpp
+    mixed/english/englishlexicon.cpp
+    mixed/english/englisharcoracle.cpp
 )
 
 add_fcitx5_addon(pinyin ${PINYIN_SOURCES})
