@@ -31,6 +31,14 @@ struct SegmentationArc {
     float boundaryConfidence = 1.0F;
     // Source-local rank (0-based) within the producing source for this span.
     int sourceLocalRank = 0;
+    // Concrete decoded surface for this arc, filled in by the producing
+    // oracle. English arcs carry the display word (canonical form);
+    // Chinese arcs carry one Han decoding from the parser-backed oracle.
+    // Empty for arcs where the decoding is only determined later against
+    // the whole composition (the top-K per-source decodes are emitted as
+    // parallel arcs with distinct sourceLocalRank values, so composition
+    // itself stays context-free).
+    std::string resolvedOutput;
 
     size_t rawLength() const { return rawEnd - rawBegin; }
 };

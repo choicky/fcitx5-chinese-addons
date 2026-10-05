@@ -237,6 +237,7 @@ EnglishCorrectionOracle::arcsAt(std::string_view raw, size_t begin,
             arc.confidence = conf;
             arc.boundaryConfidence = 0.55F;
             arc.sourceLocalRank = localRank++;
+            arc.resolvedOutput = hit->display;
             out.push_back(arc);
             ++produced;
         }

@@ -67,19 +67,19 @@ int main() {
         ChineseOracle ch;
         ch.arcs = {
             {0, 2, SegmentSource::Chinese, CandidateProvenance::Exact, 0.5F,
-             1.0F, 0},
+             1.0F, 0, ""},
             {2, 7, SegmentSource::Chinese, CandidateProvenance::Exact, 0.5F,
-             1.0F, 0},
+             1.0F, 0, ""},
             {7, 10, SegmentSource::Chinese, CandidateProvenance::Exact, 0.5F,
-             1.0F, 0},
+             1.0F, 0, ""},
             {16, 19, SegmentSource::Chinese, CandidateProvenance::Exact, 0.5F,
-             1.0F, 0},
+             1.0F, 0, ""},
             {19, 23, SegmentSource::Chinese, CandidateProvenance::Exact, 0.5F,
-             1.0F, 0},
+             1.0F, 0, ""},
         };
         EnglishOracle en;
         en.arcs = {{10, 16, SegmentSource::English, CandidateProvenance::Exact,
-                    0.95F, 1.0F, 0}};
+                    0.95F, 1.0F, 0, ""}};
 
         MixedSegmentationSearch search;
         auto paths = search.search(raw, ch, en);
@@ -113,10 +113,10 @@ int main() {
         std::string raw = "ai"; // 2 bytes
         ChineseOracle ch;
         ch.arcs = {{0, 2, SegmentSource::Chinese, CandidateProvenance::Exact,
-                    0.6F, 1.0F, 0}};
+                    0.6F, 1.0F, 0, ""}};
         EnglishOracle en;
         en.arcs = {{0, 2, SegmentSource::English, CandidateProvenance::Exact,
-                    0.6F, 1.0F, 0}};
+                    0.6F, 1.0F, 0, ""}};
         MixedSegmentationSearch search;
         auto paths = search.search(raw, ch, en);
         bool hasCh = false, hasEn = false;
@@ -139,13 +139,13 @@ int main() {
         // Path A: two high-confidence English arcs (cost .05 each)
         EnglishOracle en;
         en.arcs = {{0, 3, SegmentSource::English, CandidateProvenance::Exact,
-                    0.95F, 1.0F, 0},
+                    0.95F, 1.0F, 0, ""},
                    {3, 6, SegmentSource::English, CandidateProvenance::Exact,
-                    0.95F, 1.0F, 0}};
+                    0.95F, 1.0F, 0, ""}};
         // Path B: one low-confidence arc with a weak boundary
         ChineseOracle ch;
         ch.arcs = {{0, 6, SegmentSource::Chinese, CandidateProvenance::Exact,
-                    0.1F, 0.1F, 0}};
+                    0.1F, 0.1F, 0, ""}};
         MixedSegmentationSearch search;
         auto paths = search.search(raw, ch, en);
         check(!paths.empty(), "count-test: path exists");
@@ -169,9 +169,9 @@ int main() {
         std::string raw = "woxiangmaiiphonepeijian";
         EnglishOracle en;
         en.arcs = {{10, 16, SegmentSource::English, CandidateProvenance::Exact,
-                    0.95F, 1.0F, 0},
+                    0.95F, 1.0F, 0, ""},
                    {16, 23, SegmentSource::English, CandidateProvenance::Exact,
-                    0.95F, 1.0F, 0}};
+                    0.95F, 1.0F, 0, ""}};
         ChineseOracle ch; // no arcs -> only English path from begin
         MixedSegmentationSearch search;
         auto paths = search.searchFrom(raw, 10, ch, en);
@@ -187,11 +187,11 @@ int main() {
         EnglishOracle en;
         en.arcs = {
             {4, 2, SegmentSource::English, CandidateProvenance::Exact, 0.9F,
-             1.0F, 0}, // invalid: rawEnd < rawBegin and > i guard
+             1.0F, 0, ""}, // invalid: rawEnd < rawBegin and > i guard
             {0, 2, SegmentSource::English, CandidateProvenance::Exact, 0.9F,
-             1.0F, 0},
+             1.0F, 0, ""},
             {2, 4, SegmentSource::English, CandidateProvenance::Exact, 0.9F,
-             1.0F, 0},
+             1.0F, 0, ""},
         };
         ChineseOracle ch;
         MixedSegmentationSearch search;

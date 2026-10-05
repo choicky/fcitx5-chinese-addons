@@ -57,6 +57,7 @@ std::vector<SegmentationArc> EnglishArcOracle::arcsAt(std::string_view raw,
                                  : lex_->canonicalEvidence(*exact);
             arc.boundaryConfidence = caseMatchesSurface ? 1.0F : 0.95F;
             arc.sourceLocalRank = localRank++;
+            arc.resolvedOutput = exact->display;
             out.push_back(arc);
         }
         // Emit completion arcs at any prefix that has at least one non-literal
@@ -87,6 +88,7 @@ std::vector<SegmentationArc> EnglishArcOracle::arcsAt(std::string_view raw,
                     lex_->completionEvidence(*ce, folded->size(), fanout);
                 arc.boundaryConfidence = 0.60F;
                 arc.sourceLocalRank = localRank++;
+                arc.resolvedOutput = ce->display;
                 out.push_back(arc);
             }
         }

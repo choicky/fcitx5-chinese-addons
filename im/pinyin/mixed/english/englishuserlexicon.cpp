@@ -287,6 +287,7 @@ EnglishUserArcOracle::arcsAt(std::string_view raw, size_t begin,
         arc.confidence = lex_->evidence(*entry);
         arc.boundaryConfidence = 0.90F;
         arc.sourceLocalRank = localRank++;
+        arc.resolvedOutput = entry->display;
         out.push_back(arc);
     }
     return out;

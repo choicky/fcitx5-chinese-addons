@@ -1,0 +1,102 @@
+/*
+ * SPDX-FileCopyrightText: 2026 Fcitx5 Fusion contributors
+ *
+ * SPDX-License-Identifier: LGPL-2.1-or-later
+ */
+#ifndef _FCITX_PINYIN_MIXED_UNIFIEDRANKER_H_
+#define _FCITX_PINYIN_MIXED_UNIFIEDRANKER_H_
+
+#include <cstddef>
+#include <vector>
+
+#include "mixedcompositionstate.h"
+#include "segmentcomposer.h"
+
+namespace pinyin {
+
+// Cross-source features extracted from a UnifiedCandidate. All fields are
+// computed from source-local evidence that has already been normalized to
+// [0, 1] by the producing oracle; UnifiedRanker is allowed to combine them
+// but not to re-introduce raw LM floats (§19).
+struct RankFeatures {
+    std::size_t arcCount = 0;
+    std::size_t chineseArcs = 0;
+    std::size_t englishArcs = 0;
+    std::size_t exactArcs = 0;
+    std::size_t canonicalArcs = 0;
+    std::size_t completionArcs = 0;
+    std::size_t correctionArcs = 0;
+    std::size_t userArcs = 0;
+    // Language-source switches across the path (adjacent arcs with
+    // different SegmentSource). NOT penalized in the default weights (§11);
+    // recorded only so ranker tuning can observe it.
+    std::size_t boundarySwitches = 0;
+    float meanArcConfidence = 0.0F;
+    float minArcConfidence = 0.0F;
+    float meanBoundaryConfidence = 0.0F;
+    double segmentationCost = 0.0;
+};
+
+class FeatureBuilder {
+public:
+    RankFeatures build(const UnifiedCandidate &c) const;
+};
+
+// Classical, deterministic cross-source ranker. No learned model, no
+// neural net (Architecture A prohibitions). Combines source-local evidence
+// with a small hand-tuned weight vector documented below. Weights are
+// internal (not user exposed) and reviewed via unit tests.
+//
+// Score = w_exact * exactShare
+//       + w_canonical * canonicalShare
+//       + w_completion * completionShare
+//       + w_correction * correctionShare
+//       + w_user * userShare
+//       + w_confidence * meanArcConfidence
+//       - w_minConfidencePenalty * (1 - minArcConfidence)
+//       + w_boundary * meanBoundaryConfidence
+//       - w_cost * segmentationCost
+//
+// All shares are counts / arcCount (0 if arcCount is 0, which the caller
+// should filter). Higher score = better. The segmentation cost term keeps
+// the beam search's own preference alive even after re-normalization.
+class UnifiedRanker {
+public:
+    struct Weights {
+        float wExact = 0.30F;
+        float wCanonical = 0.22F;
+        float wCompletion = 0.14F;
+        float wCorrection = 0.06F;
+        float wUser = 0.10F;
+        float wConfidence = 0.35F;
+        float wMinConfidencePenalty = 0.15F;
+        float wBoundary = 0.10F;
+        float wCost = 0.20F;
+    };
+
+    UnifiedRanker();
+    explicit UnifiedRanker(Weights weights);
+
+    // Rank a pool by descending final score. Ties preserve insertion order
+    // (stable_sort), so the caller's cost-ascending insert convention
+    // yields a deterministic final order.
+    std::vector<UnifiedCandidate>
+    rank(const std::vector<UnifiedCandidate> &pool) const;
+
+    // Same as rank() but returns indices into the caller's pool vector.
+    std::vector<std::size_t>
+    rankIndices(const std::vector<UnifiedCandidate> &pool) const;
+
+    // Exposed for tests so assertions can pin the score directly rather
+    // than relying only on ordering.
+    float score(const RankFeatures &f) const;
+
+    const Weights &weights() const { return weights_; }
+
+private:
+    Weights weights_;
+};
+
+} // namespace pinyin
+
+#endif // _FCITX_PINYIN_MIXED_UNIFIEDRANKER_H_

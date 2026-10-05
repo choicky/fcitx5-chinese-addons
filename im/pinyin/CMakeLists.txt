@@ -7,6 +7,9 @@ set(PINYIN_SOURCES
     pinyinenginefactory.cpp
     mixed/mixedcompositionstate.cpp
     mixed/mixedsegmentation.cpp
+    mixed/segmentcomposer.cpp
+    mixed/unifiedranker.cpp
+    mixed/rewriter.cpp
     mixed/english/englishlexicon.cpp
     mixed/english/englisharcoracle.cpp
     mixed/english/englishuserlexicon.cpp

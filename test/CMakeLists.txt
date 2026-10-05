@@ -90,3 +90,18 @@ target_include_directories(testenglishcorrection PRIVATE
     ${PROJECT_SOURCE_DIR}/im/pinyin ${PROJECT_SOURCE_DIR}/im/pinyin/mixed
     ${PROJECT_SOURCE_DIR}/im/pinyin/mixed/english)
 add_test(NAME testenglishcorrection COMMAND testenglishcorrection)
+
+add_executable(testmixedpipeline testmixedpipeline.cpp
+    ../im/pinyin/mixed/mixedcompositionstate.cpp
+    ../im/pinyin/mixed/mixedsegmentation.cpp
+    ../im/pinyin/mixed/segmentcomposer.cpp
+    ../im/pinyin/mixed/unifiedranker.cpp
+    ../im/pinyin/mixed/rewriter.cpp
+    ../im/pinyin/mixed/english/englishlexicon.cpp
+    ../im/pinyin/mixed/english/englisharcoracle.cpp
+    ../im/pinyin/mixed/english/englishuserlexicon.cpp
+    ../im/pinyin/mixed/english/englishcorrectionoracle.cpp)
+target_include_directories(testmixedpipeline PRIVATE
+    ${PROJECT_SOURCE_DIR}/im/pinyin ${PROJECT_SOURCE_DIR}/im/pinyin/mixed
+    ${PROJECT_SOURCE_DIR}/im/pinyin/mixed/english)
+add_test(NAME testmixedpipeline COMMAND testmixedpipeline)
