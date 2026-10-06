@@ -19,6 +19,7 @@
 #include "mixed/english/englishuserlexicon.h"
 #include "mixed/hanwordresolver.h"
 #include "mixed/mixedengine.h"
+#include "mixed/unifiedranker.h"
 #include "notifications_public.h"
 #include "pinyincandidate.h"
 #include "pinyinhelper_public.h"
@@ -691,6 +692,32 @@ void PinyinEngine::updateUI(InputContext *inputContext) {
             //       classical candidates; un-Chinese-able spans like the
             //       "iphone" in "woxiangmaiiphone" or a typed capitalisation
             //       like "Apple" pass this bar naturally.
+            //   (c) Bounded insertion class (final ranking closure): rule
+            //       (a) as a BLANKET bury rule failed the product corpus —
+            //       a whole-raw Han tiling exists for nearly every lowercase
+            //       letter stream (force-decoded fragments count), so even a
+            //       whole-span Canonical respelling ("chatgpt" -> ChatGPT,
+            //       "macos" -> macOS) was pushed past the entire classical
+            //       list (observed ranks 113/88). Instead of comparing raw
+            //       scores across sources (prohibited, §19), a candidate
+            //       that explains the whole raw with a SINGLE Canonical or
+            //       CustomPhrase English arc takes a bounded lead slot:
+            //       that provenance only exists when the dictionary surface
+            //       differs from the typed span (proper/technical forms) or
+            //       the user confirmed it, so ambiguous lowercase overlaps
+            //       (win/long/game/pin/an/ai: provenance Exact) and
+            //       speculative Completion/Correction arcs keep the old
+            //       conservative placement.
+            //       Guard (corpus evidence): the class is suppressed when
+            //       the classical decoder has a SINGLE-syllable pure-Han
+            //       reading of the whole raw. Valid pinyin syllables that
+            //       are also English proper names ("chang" -> Chang, a
+            //       top-100 surname) are Chinese-input-first raws; without
+            //       this guard the class would displace 长/常 with Latin
+            //       surnames. Multi-segment forced coverages (chatgpt ->
+            //       茶通过平台, macos -> 马车哦是) are abbreviation
+            //       artefacts, not syllables, and do not suppress.
+            //       See UnifiedRanker::isBoundedInsertionClass.
             const bool chineseCoversWholeRaw = std::any_of(
                 pinyinCandidates.begin(), pinyinCandidates.end(),
                 [&](const auto &candidate) {
@@ -702,6 +729,19 @@ void PinyinEngine::updateUI(InputContext *inputContext) {
                     // Pure-Han test: every UTF-8 Han character encodes with
                     // all bytes >= 0x80, so any byte below it is a leftover
                     // letter/digit from a forced or fallback decode.
+                    const auto reading = candidate.toString();
+                    return std::none_of(
+                        reading.begin(), reading.end(),
+                        [](unsigned char ch) { return ch < 0x80; });
+                });
+            const bool chineseWholeRawSingleSyllable = std::any_of(
+                pinyinCandidates.begin(), pinyinCandidates.end(),
+                [&](const auto &candidate) {
+                    if (candidate.sentence().size() != 1 ||
+                        candidate.sentence().back()->to()->index() !=
+                            context.cursor()) {
+                        return false;
+                    }
                     const auto reading = candidate.toString();
                     return std::none_of(
                         reading.begin(), reading.end(),
@@ -731,6 +771,7 @@ void PinyinEngine::updateUI(InputContext *inputContext) {
             constexpr std::size_t kBehindClassicalSlot =
                 std::numeric_limits<std::size_t>::max() / 4;
             std::size_t position = 0;
+            std::size_t insertionPosition = 0;
             for (const auto &cand : mixedPool) {
                 bool hasEnglish = false;
                 for (const auto src : cand.sources) {
@@ -748,8 +789,21 @@ void PinyinEngine::updateUI(InputContext *inputContext) {
                 if (customCandidateMap.contains(cand.composedText)) {
                     continue;
                 }
+                // Lead slots: (b) pool-front mixed lead, plus (c) the
+                // bounded insertion class per candidate. Class members lead
+                // even when the classical decoder has a whole-raw reading,
+                // because their provenance cannot describe anything the
+                // user mistyped as Chinese; non-class candidates keep the
+                // old behind-classical placement.
+                const bool classLead =
+                    !mixedLeads && !chineseWholeRawSingleSyllable &&
+                    pinyin::UnifiedRanker::isBoundedInsertionClass(
+                        cand, pyBeforeCursor.size());
                 const std::size_t slot =
-                    mixedLeads ? position++ : kBehindClassicalSlot + position++;
+                    mixedLeads
+                        ? position++
+                        : (classLead ? insertionPosition++
+                                     : kBehindClassicalSlot + position++);
                 auto clone = std::make_unique<pinyin::UnifiedCandidate>(cand);
                 std::string text = clone->composedText;
                 customCandidateMap.emplace(
