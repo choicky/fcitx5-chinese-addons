@@ -248,6 +248,63 @@ void testUppercase(Instance *instance) {
     });
 }
 
+// Fusion closure §4 — Shuangpin mixed input through the real product path:
+// Ziranma raw "hsiphone" (火/国... + iphone) must reach the CandidateList as
+// a fused Han+iPhone candidate, commit exactly that candidate on selection,
+// and leave the engine clean for the next composition. The Ziranma single
+// key codes tile the whole raw, so the fused candidate may sit behind the
+// classical block (placement policy); this test therefore selects by
+// substring instead of asserting a top-1 position.
+void testMixedShuangpin(Instance *instance) {
+    instance->eventDispatcher().schedule([instance]() {
+        auto *testfrontend = instance->addonManager().addon("testfrontend");
+        auto uuid =
+            testfrontend->call<ITestFrontend::createInputContext>("testapp");
+        auto *ic = instance->inputContextManager().findByUUID(uuid);
+        FCITX_ASSERT(ic);
+        instance->setCurrentInputMethod(ic, "shuangpin", true);
+        ic->reset();
+
+        for (const char *k : {"h", "s", "i", "p", "h", "o", "n", "e"}) {
+            testfrontend->call<ITestFrontend::keyEvent>(uuid, Key(k), false);
+        }
+
+        auto *candidateList = ic->inputPanel().candidateList().get();
+        FCITX_ASSERT(candidateList);
+        FCITX_ASSERT(!candidateList->empty());
+        auto *bulk = candidateList->toBulk();
+        FCITX_ASSERT(bulk);
+        int mixedIndex = -1;
+        std::string mixedText;
+        for (int i = 0; i < bulk->totalSize(); i++) {
+            const auto text = bulk->candidateFromAll(i).text().toString();
+            if (text.find("iPhone") != std::string::npos) {
+                mixedIndex = i;
+                mixedText = text;
+                break;
+            }
+        }
+        FCITX_ASSERT(mixedIndex >= 0)
+            << "Failed to find a fused iPhone candidate for Ziranma raw "
+               "hsiphone";
+        FCITX_ASSERT(mixedText.find("iPhone") != std::string::npos);
+
+        testfrontend->call<ITestFrontend::pushCommitExpectation>(mixedText);
+        bulk->candidateFromAll(mixedIndex).select(ic);
+
+        // Continuation: the composition state must be fresh after the mixed
+        // selection commit; a plain Ziranma "ni" still composes normally.
+        testfrontend->call<ITestFrontend::keyEvent>(uuid, Key("n"), false);
+        testfrontend->call<ITestFrontend::keyEvent>(uuid, Key("i"), false);
+        candidateList = ic->inputPanel().candidateList().get();
+        FCITX_ASSERT(candidateList);
+        FCITX_ASSERT(!candidateList->empty());
+        const auto next = candidateList->candidate(0).text().toString();
+        testfrontend->call<ITestFrontend::pushCommitExpectation>(next);
+        testfrontend->call<ITestFrontend::keyEvent>(uuid, Key("space"), false);
+    });
+}
+
 void testForget(Instance *instance) {
     instance->eventDispatcher().schedule([instance]() {
         auto *testfrontend = instance->addonManager().addon("testfrontend");
@@ -693,6 +750,7 @@ int main() {
     testBasic(&instance);
     testSelectByChar(&instance);
     testUppercase(&instance);
+    testMixedShuangpin(&instance);
     testForget(&instance);
     testActionInStrokeFilter(&instance);
     testPinyinTabFilter(&instance);
