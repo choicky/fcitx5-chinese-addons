@@ -127,6 +127,11 @@ float UnifiedRanker::score(const RankFeatures &f) const {
                static_cast<double>(weights_.wBoundary) *
                    static_cast<double>(f.meanBoundaryConfidence) -
                static_cast<double>(weights_.wCost) * f.segmentationCost;
+    // Single-arc whole-span bonus — see Weights::wWholeSpan for the
+    // production corpus inversion this corrects.
+    if (f.arcCount == 1) {
+        s += static_cast<double>(weights_.wWholeSpan);
+    }
     return static_cast<float>(s);
 }
 

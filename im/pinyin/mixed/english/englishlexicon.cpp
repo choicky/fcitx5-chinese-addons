@@ -210,9 +210,20 @@ EnglishLexicon::completions(std::string_view foldedPrefix,
     if (foldedPrefix.empty() || maxResults == 0 || entries_.empty()) {
         return out;
     }
+    // Collect the prefix range under a scan budget, then keep the best
+    // `maxResults` by frequency tier rather than the first in lexicographic
+    // order. Feature-level rationale (fusion closure §6): completion arcs
+    // are scored by completionEvidence, which is tier-driven (§13); at
+    // production scale a lexicographic cut let dictionary neighbours
+    // ("applause", "applet", ...) crowd out the dominant word for the
+    // prefix ("apple", tier 9) inside the same cap. The budget keeps the
+    // worst-case per-span cost linear for 1-2 letter prefixes whose ranges
+    // are huge; ties break by key so the choice stays deterministic.
+    constexpr std::size_t kCompletionScanBudget = 512;
     const auto lo = lowerBound(foldedPrefix);
-    for (std::size_t i = lo; i < entries_.size() && out.size() < maxResults;
-         ++i) {
+    std::size_t scanned = 0;
+    for (std::size_t i = lo;
+         i < entries_.size() && scanned < kCompletionScanBudget; ++i) {
         const auto &e = entries_[i];
         if (e.key.size() <= foldedPrefix.size()) {
             continue;
@@ -223,7 +234,28 @@ EnglishLexicon::completions(std::string_view foldedPrefix,
         if (e.literalOnly) {
             continue;
         }
+        ++scanned;
         out.push_back(&e);
+    }
+    if (out.size() > maxResults) {
+        // Tier first; inside one tier the SHORTEST completion wins before
+        // key order. Feature-level note: the production resource ties most
+        // common words at tier 9, so a pure key tie-break would re-lean on
+        // lexicography (applaud* ahead of apple). Among equally frequent
+        // completions the shortest is the most likely intended word for the
+        // prefix the user actually typed.
+        std::sort(
+            out.begin(), out.end(),
+            [](const EnglishLexiconEntry *l, const EnglishLexiconEntry *r) {
+                if (l->tier != r->tier) {
+                    return l->tier > r->tier;
+                }
+                if (l->key.size() != r->key.size()) {
+                    return l->key.size() < r->key.size();
+                }
+                return l->key < r->key;
+            });
+        out.resize(maxResults);
     }
     return out;
 }

@@ -33,7 +33,11 @@ std::vector<SegmentationArc> EnglishArcOracle::arcsAt(std::string_view raw,
     }
 
     int localRank = 0;
-    for (size_t e = begin + 1; e <= endLimit; ++e) {
+    // Spans shorter than minSpanLength never participate as English evidence
+    // (single-letter SCOWL "words" are pinyin-initial noise; see header).
+    const size_t minEnd =
+        begin + std::max<std::size_t>(1, config_.minSpanLength);
+    for (size_t e = minEnd; e <= endLimit; ++e) {
         const std::string_view span = raw.substr(begin, e - begin);
         auto folded = EnglishLexicon::foldKey(span);
         if (!folded) {

@@ -162,6 +162,8 @@ add_executable(testmixedcorpus testmixedcorpus.cpp
 target_include_directories(testmixedcorpus PRIVATE
     ${PROJECT_SOURCE_DIR}/im/pinyin ${PROJECT_SOURCE_DIR}/im/pinyin/mixed
     ${PROJECT_SOURCE_DIR}/im/pinyin/mixed/english)
+target_compile_definitions(testmixedcorpus PRIVATE
+    FUSION_ENGLISH_LEXICON_PATH="${PROJECT_SOURCE_DIR}/im/pinyin/english_lexicon.tsv")
 add_test(NAME testmixedcorpus COMMAND testmixedcorpus)
 
 # Batch 10 — Shuangpin oracle smoke test (regression matrix). Drives the real

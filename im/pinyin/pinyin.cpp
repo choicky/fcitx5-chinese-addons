@@ -658,15 +658,29 @@ void PinyinEngine::updateUI(InputContext *inputContext) {
                                       *mixedEnglishOracle_, hanResolver);
             // Placement policy (architecture A §9, feature-level rationale):
             // two structural facts decide whether a mixed candidate may
-            // displace the classical list, both derived from the fusion
-            // engine's own explainable evidence — no new heuristic:
-            //   (a) Chinese coverage: if the mixed pool contains a reading
-            //       whose every arc is Chinese and resolves to Han, the
-            //       classical parser+dictionary already explains the whole
-            //       raw stream (e.g. "an" in "anquan", "pin", "nihao"), so
-            //       English variants are spelling alternatives and are
-            //       requested behind the pinyin list, still reachable by
-            //       paging/selection.
+            // displace the classical list, both derived from explainable
+            // evidence — no new heuristic:
+            //   (a) Chinese coverage: if the CLASSICAL decoder itself already
+            //       produced a PURE-HAN reading whose segments consume the
+            //       whole raw stream (e.g. "an" in "anquan", "ping",
+            //       "nihao"), English variants are spelling alternatives and
+            //       are placed behind the pinyin list, still reachable by
+            //       paging/selection. A forced decode that still contains
+            //       ASCII bytes is not a Han reading: the classical decoder
+            //       happily force-segments letter streams ("Apple" →
+            //       "A片跑了") and falls back to the raw text itself
+            //       ("iPhone"), and treating those as coverage would bury
+            //       the §9(b) lead evidence that the uppercase quick-typing
+            //       product path (testUppercase) relies on.
+            //       Production-scale finding (closure §6): coverage must be
+            //       read from the classical decoder, not from the mixed pool.
+            //       With the full SCOWL lexicon the pool is a bounded,
+            //       cost-ranked top-K whose Chinese-only readings can be
+            //       crowded out by English tiles of the same raw (e.g.
+            //       "ping"+"an" for "pingan"), so pool-derived coverage
+            //       flickered and let letter-level fragments lead. The
+            //       classical candidate list is the authoritative statement
+            //       of "the Chinese parser + dictionary explains this raw".
             //   (b) Lead evidence: with no Chinese coverage, English still
             //       may only lead when the ranked-best reading contains a
             //       *complete* English surface form spanning at least 3 raw
@@ -677,13 +691,20 @@ void PinyinEngine::updateUI(InputContext *inputContext) {
             //       "iphone" in "woxiangmaiiphone" or a typed capitalisation
             //       like "Apple" pass this bar naturally.
             const bool chineseCoversWholeRaw = std::any_of(
-                mixedPool.begin(), mixedPool.end(),
-                [](const pinyin::UnifiedCandidate &cand) {
+                pinyinCandidates.begin(), pinyinCandidates.end(),
+                [&](const auto &candidate) {
+                    if (candidate.sentence().empty() ||
+                        candidate.sentence().back()->to()->index() !=
+                            context.cursor()) {
+                        return false;
+                    }
+                    // Pure-Han test: every UTF-8 Han character encodes with
+                    // all bytes >= 0x80, so any byte below it is a leftover
+                    // letter/digit from a forced or fallback decode.
+                    const auto reading = candidate.toString();
                     return std::none_of(
-                        cand.sources.begin(), cand.sources.end(),
-                        [](const pinyin::SegmentSource src) {
-                            return src != pinyin::SegmentSource::Chinese;
-                        });
+                        reading.begin(), reading.end(),
+                        [](unsigned char ch) { return ch < 0x80; });
                 });
             bool englishLeadEvidence = false;
             if (!mixedPool.empty()) {

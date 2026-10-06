@@ -6,6 +6,7 @@
 #include "english/englisharcoracle.h"
 #include "english/englishlexicon.h"
 
+#include <algorithm>
 #include <cstdio>
 #include <sstream>
 #include <string>
@@ -162,23 +163,35 @@ int main() {
 
     // 7. Arc oracle: exact / canonical / completion provenance.
     EnglishArcOracle oracle(&lex);
-    std::string raw = "IwantiPhone"; // "I" (0,1) + "want" (miss) + "iPhone"
+    std::string raw = "IwantiPhone"; // single-letter "I" + junk + "iPhone"
     // The oracle is not a word-segmenter — spans must already be word
     // boundaries. Test each span independently.
+    // Production-scale contract (closure §6): spans shorter than
+    // minSpanLength (default 2) never become English arcs. Single-letter
+    // SCOWL "words" are pinyin-initial noise that only fragments the beam,
+    // so begin=0 here must yield nothing even though "i" is a lexicon key.
     {
         auto arcs = oracle.arcsAt(raw, 0, raw.size());
+        check(std::none_of(arcs.begin(), arcs.end(),
+                           [](const SegmentationArc &a) {
+                               return a.rawEnd - a.rawBegin < 2;
+                           }),
+              "oracle: no arc spans fewer than minSpanLength bytes");
         const auto *exactI = findArc(arcs, 0, 1, CandidateProvenance::Exact);
-        check(exactI != nullptr && exactI->source == SegmentSource::English,
-              "oracle: 'I' surfaces as exact (case matches display)");
-        check(exactI && exactI->boundaryConfidence > 0.9F,
+        check(exactI == nullptr,
+              "oracle: single-letter 'I' does not surface as an arc");
+    }
+    {
+        // "iPhone" at the real word boundary still resolves through the
+        // typed-case Exact rule (2-byte floor does not touch it).
+        std::string s = "iPhone";
+        auto arcs = oracle.arcsAt(s, 0, s.size());
+        const auto *exact = findArc(arcs, 0, 6, CandidateProvenance::Exact);
+        check(exact != nullptr && exact->source == SegmentSource::English &&
+                  exact->resolvedOutput == "iPhone",
+              "oracle: typed-case 'iPhone' surfaces as exact");
+        check(exact && exact->boundaryConfidence > 0.9F,
               "oracle: exact arc has strong boundary");
-        // Completion arcs for the "I" prefix must not include the exact key.
-        for (const auto &a : arcs) {
-            if (a.provenance == CandidateProvenance::Completion) {
-                check(a.rawBegin == 0 && a.rawEnd == 1,
-                      "oracle: completion arc at span 0..1");
-            }
-        }
     }
     {
         std::string s = "iphone";

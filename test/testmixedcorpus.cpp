@@ -124,6 +124,10 @@ const std::vector<EnglishLexiconEntry> &seedLexicon() {
         {"github", "GitHub", 5, true, false, false},
         {"wechat", "WeChat", 5, true, false, false},
         {"microsoft", "Microsoft", 5, true, false, false},
+        {"macos", "macOS", 7, true, false, false},
+        {"chatgpt", "ChatGPT", 6, true, false, false},
+        {"openwrt", "OpenWrt", 4, true, false, false},
+        {"libime", "LibIME", 4, true, false, false},
         {"peijian", "配件", 5, false, false, false},
     };
     return entries;
@@ -151,16 +155,37 @@ const std::vector<CorpusCase> &corpus() {
          {{0, 2, "我"}, {2, 6, "用"}},
          {"HTTPS", "VPN"},
          false},
-        // nihelloworld: ni(2) hao(3) -> "nhaoworld"? no, raw is
-        // "n-i-h-e-l-l-o-w-o-r-l-d" (12 bytes). Actually intended:
-        // nishijiedewo. Let's use a cleaner case: "nihao world" would be
-        // "ninhaoworld" (11 bytes) but that requires 你 at [0,2) 好 at [2,5).
-        // Simplify: openfile -> "openfile" (English only) is not mixed; skip.
-        // Use: "wodakaigithub" = wo(2) da(2) kai(3) github(6) = 13
+        // wodakaigithub = wo(2) da(2) kai(3) github(6) = 13
         {"mixed-open-github",
          "wodakaigithub",
          {{0, 2, "我"}, {2, 4, "打"}, {4, 7, "开"}},
          {"GitHub"},
+         false},
+        // Closure §6 expansions: canonical-cased brands in both switch
+        // directions (Chinese->English and English->Chinese).
+        // wodakaimacos: wo(2) da(2) kai(3) macos(5) = 12
+        {"mixed-c-e-macos",
+         "wodakaimacos",
+         {{0, 2, "我"}, {2, 4, "打"}, {4, 7, "开"}},
+         {"我", "打", "开", "macOS"},
+         false},
+        // chatgptbangwo: chatgpt(7) bang(4) wo(2) = 13 (English first)
+        {"mixed-e-c-chatgpt",
+         "chatgptbangwo",
+         {{7, 11, "帮"}, {11, 13, "我"}},
+         {"ChatGPT", "帮", "我"},
+         false},
+        // anzhuangopenwrt: an(2) zhuang(6) openwrt(7) = 15
+        {"mixed-c-e-openwrt",
+         "anzhuangopenwrt",
+         {{0, 2, "安"}, {2, 8, "装"}},
+         {"安", "装", "OpenWrt"},
+         false},
+        // kanlibimedaima: kan(3) libime(6) dai(3) ma(2) = 14
+        {"mixed-c-e-c-libime",
+         "kanlibimedaima",
+         {{0, 3, "看"}, {9, 12, "代"}, {12, 14, "码"}},
+         {"看", "LibIME", "代", "码"},
          false},
 
         // -- Ambiguous short raws (evidence, not fragmentation) --------
@@ -490,6 +515,232 @@ int main() {
     //    This is a coarse budget guard, not a product SLA.
     check(p95 < 5000.0, "latency: mixed p95 under 5 ms per corpus case");
     check(fp95 < 5000.0, "latency: fast-path p95 under 5 ms per corpus case");
+
+    // ---- Production-lexicon section (fusion closure §6) ----------------
+    //
+    // This section validates the SHIPPED resource itself: the production
+    // `english_lexicon.tsv` (94k+ entries) loaded through the exact same
+    // English Core oracles the addon runs. It is deliberately arc-level, not
+    // pool-level: at production scale the hand-authored Chinese test double
+    // above cannot faithfully model what the real LibIME dictionary decodes
+    // (e.g. 1-2 letter SCOWL words tile raws whose Chinese reading the double
+    // never emits). End-to-end ranking against the real dictionary + the
+    // placement policy is measured at the product surface instead, by
+    // testpinyin's mixed corpus harness, which reports Top-1 / Top-K / MRR
+    // and the false-pollution gate there.
+    //
+    // What is proven here, against the bytes that ship:
+    //   * Canonical-cased proper nouns resolve to their display form
+    //     (iPhone / macOS / GitHub / ChatGPT / OpenWrt / LibIME).
+    //   * User-typed case is preserved (Apple stays Apple).
+    //   * Prefix completion reaches long specific prefixes.
+    //   * Correction reaches one adjacent substitution and one transposition.
+    //   * The §17.4 false-correction guard: an intentional word emits no
+    //     Correction arc, and ambiguous short words (ai/an/pin/win/long/game)
+    //     are present as Exact evidence, which the >=3-byte lead rule and the
+    //     whole-raw-Chinese rule in pinyin.cpp then keep out of the top slots
+    //     of Chinese streams.
+    //   * Completion fan-out stays bounded per span.
+    {
+#ifndef FUSION_ENGLISH_LEXICON_PATH
+        check(false,
+              "production lexicon: FUSION_ENGLISH_LEXICON_PATH not defined");
+#endif
+        EnglishLexicon realLex;
+        {
+            std::ifstream in(FUSION_ENGLISH_LEXICON_PATH);
+            check(in.is_open(),
+                  "production lexicon: shipped english_lexicon.tsv readable");
+            realLex.load(in);
+        }
+        check(realLex.size() >= 50000,
+              "production lexicon: shipped resource has >= 50k entries");
+
+        EnglishArcOracle sysEn(&realLex);
+        EnglishCorrectionOracle corrEn(&realLex);
+
+        auto hasArc = [&](std::string_view raw, const std::string &output,
+                          CandidateProvenance prov) {
+            const auto arcs = sysEn.arcsAt(raw, 0, raw.size());
+            for (const auto &a : arcs) {
+                if (a.resolvedOutput == output && a.provenance == prov) {
+                    return true;
+                }
+            }
+            return false;
+        };
+
+        std::fprintf(stderr, "=== production-lexicon core report ===\n");
+
+        // Canonical-cased brands/technical terms resolve to display form.
+        struct CanonicalCase {
+            const char *raw;
+            const char *display;
+        };
+        const std::vector<CanonicalCase> canonicals = {
+            {"iphone", "iPhone"},   {"macos", "macOS"},
+            {"github", "GitHub"},   {"chatgpt", "ChatGPT"},
+            {"openwrt", "OpenWrt"}, {"libime", "LibIME"},
+        };
+        size_t canonicalHits = 0;
+        for (const auto &c : canonicals) {
+            const bool ok =
+                hasArc(c.raw, c.display, CandidateProvenance::Canonical);
+            if (ok) {
+                ++canonicalHits;
+            }
+            std::fprintf(stderr, "  canonical %-8s -> %-8s %s\n", c.raw,
+                         c.display, ok ? "OK" : "MISS");
+            check(ok, "production lexicon: canonical display resolution");
+        }
+
+        // User-typed case is preserved exactly (the arc that ships the
+        // as-typed surface must exist for the brand and a generic word).
+        const bool typedApple =
+            hasArc("Apple", "Apple", CandidateProvenance::Exact);
+        const bool typedIPhone =
+            hasArc("IPhone", "IPhone", CandidateProvenance::Exact);
+        std::fprintf(stderr, "  typed-case Apple=%s IPhone=%s\n",
+                     typedApple ? "OK" : "MISS", typedIPhone ? "OK" : "MISS");
+        check(typedApple && typedIPhone,
+              "production lexicon: user-typed case preserved");
+
+        // Prefix completion (long specific prefixes reach the brand).
+        const bool compIphone =
+            hasArc("iphon", "iPhone", CandidateProvenance::Completion);
+        const bool compChatgpt =
+            hasArc("chatgp", "ChatGPT", CandidateProvenance::Completion);
+        const bool compGithub =
+            hasArc("githu", "GitHub", CandidateProvenance::Completion);
+        std::fprintf(stderr,
+                     "  completion iphon->iPhone=%s chatgp->ChatGPT=%s "
+                     "githu->GitHub=%s\n",
+                     compIphone ? "OK" : "MISS", compChatgpt ? "OK" : "MISS",
+                     compGithub ? "OK" : "MISS");
+        check(compIphone && compChatgpt && compGithub,
+              "production lexicon: prefix completion reaches brands");
+
+        // Correction: one adjacent substitution and one transposition, and
+        // the guard that intentional words are never corrected.
+        const auto corrArcsR = corrEn.arcsAt("iphonr", 0, 6);
+        const auto corrArcsT = corrEn.arcsAt("iphnoe", 0, 6);
+        const auto corrArcsG = corrEn.arcsAt("githun", 0, 6);
+        const auto hasOutputIn = [](const std::vector<SegmentationArc> &arcs,
+                                    const std::string &out) {
+            for (const auto &a : arcs) {
+                if (a.resolvedOutput == out) {
+                    return true;
+                }
+            }
+            return false;
+        };
+        const bool corrR = hasOutputIn(corrArcsR, "iPhone");
+        const bool corrT = hasOutputIn(corrArcsT, "iPhone");
+        const bool corrG = hasOutputIn(corrArcsG, "GitHub");
+        const auto cleanArcs = corrEn.arcsAt("iphone", 0, 6);
+        const bool guardIntentional = std::none_of(
+            cleanArcs.begin(), cleanArcs.end(), [](const SegmentationArc &a) {
+                return a.provenance == CandidateProvenance::Correction;
+            });
+        std::fprintf(stderr,
+                     "  correction iphonr=%s iphnoe=%s githun=%s "
+                     "guard(iphone)=no-correction=%s\n",
+                     corrR ? "OK" : "MISS", corrT ? "OK" : "MISS",
+                     corrG ? "OK" : "MISS", guardIntentional ? "OK" : "MISS");
+        check(corrR && corrT && corrG,
+              "production lexicon: bounded correction reaches brands");
+        check(guardIntentional,
+              "production lexicon: intentional word emits no Correction arc");
+
+        // Ambiguous short words are present as Exact evidence; they must be,
+        // or the English Core would silently drop valid English readings.
+        // Their placement influence is neutralised by the structural
+        // placement policy (span >= 3 lead rule), which is product-path
+        // tested in testpinyin.
+        size_t ambiguousPresent = 0;
+        for (const char *w : {"ai", "an", "pin", "win", "long", "game"}) {
+            if (realLex.isExact(w)) {
+                ++ambiguousPresent;
+            }
+        }
+        std::fprintf(stderr, "  ambiguous short words exact: %zu/6\n",
+                     ambiguousPresent);
+        check(ambiguousPresent >= 4,
+              "production lexicon: ambiguous short English words present");
+
+        // Completion fan-out is capped per prefix span
+        // (maxCompletionsPerSpan = 4). arcsAt("appl", 0, 4) covers four
+        // distinct prefixes ("a", "ap", "app", "appl"), each of which may
+        // carry up to 4 completions; the bound that matters for per-tick
+        // cost is per-span, asserted here on the longest prefix.
+        const auto fanArcs = sysEn.arcsAt("appl", 0, 4);
+        size_t fullSpanCompletions = 0;
+        bool appleReachable = false;
+        for (const auto &a : fanArcs) {
+            if (a.provenance == CandidateProvenance::Completion &&
+                a.rawEnd - a.rawBegin == 4) {
+                ++fullSpanCompletions;
+                if (a.resolvedOutput == "apple") {
+                    appleReachable = true;
+                }
+            }
+        }
+        std::fprintf(stderr,
+                     "  completion fan-out on prefix \"appl\" (span 4): "
+                     "%zu (cap 4), apple reachable=%s\n",
+                     fullSpanCompletions, appleReachable ? "OK" : "MISS");
+        check(fullSpanCompletions <= 4,
+              "production lexicon: completion fan-out bounded per span");
+        check(appleReachable,
+              "production lexicon: completion reaches the common word for "
+              "its prefix");
+
+        // Negatives: non-alphabetic raws produce no arcs at all.
+        const auto digitArcs = sysEn.arcsAt("12345", 0, 5);
+        check(digitArcs.empty(),
+              "production lexicon: digit raws produce no English arcs");
+
+        // Latency at production scale (closure §7 numbers; thresholds are
+        // reported, not asserted, per the no-invented-thresholds rule).
+        {
+            std::vector<double> exactUs;
+            std::vector<double> complUs;
+            exactUs.reserve(2000);
+            complUs.reserve(2000);
+            for (int i = 0; i < 1000; ++i) {
+                auto t0 = std::chrono::steady_clock::now();
+                (void)sysEn.arcsAt("iphone", 0, 6);
+                auto t1 = std::chrono::steady_clock::now();
+                std::chrono::duration<double, std::micro> dt = t1 - t0;
+                exactUs.push_back(dt.count());
+            }
+            for (int i = 0; i < 1000; ++i) {
+                auto t0 = std::chrono::steady_clock::now();
+                (void)sysEn.arcsAt("iphon", 0, 5);
+                auto t1 = std::chrono::steady_clock::now();
+                std::chrono::duration<double, std::micro> dt = t1 - t0;
+                complUs.push_back(dt.count());
+            }
+            std::sort(exactUs.begin(), exactUs.end());
+            std::sort(complUs.begin(), complUs.end());
+            auto pct = [](std::vector<double> &v, double q) {
+                size_t idx = static_cast<size_t>(v.size() * q);
+                if (idx >= v.size()) {
+                    idx = v.size() - 1;
+                }
+                return v[idx];
+            };
+            std::fprintf(stderr,
+                         "  exact arcsAt p50/p95/p99/max (us): %.2f / %.2f "
+                         "/ %.2f / %.2f\n"
+                         "  completion arcsAt p50/p95/p99/max (us): %.2f / "
+                         "%.2f / %.2f / %.2f\n",
+                         pct(exactUs, 0.50), pct(exactUs, 0.95),
+                         pct(exactUs, 0.99), exactUs.back(), pct(complUs, 0.50),
+                         pct(complUs, 0.95), pct(complUs, 0.99),
+                         complUs.back());
+        }
+    }
 
     if (failures > 0) {
         std::fprintf(stderr, "testmixedcorpus: %d failure(s)\n", failures);

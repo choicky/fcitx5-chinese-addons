@@ -56,6 +56,7 @@ public:
 //       - w_minConfidencePenalty * (1 - minArcConfidence)
 //       + w_boundary * meanBoundaryConfidence
 //       - w_cost * segmentationCost
+//       + w_wholeSpan * (arcCount == 1 ? 1 : 0)
 //
 // All shares are counts / arcCount (0 if arcCount is 0, which the caller
 // should filter). Higher score = better. The segmentation cost term keeps
@@ -72,6 +73,17 @@ public:
         float wMinConfidencePenalty = 0.15F;
         float wBoundary = 0.10F;
         float wCost = 0.20F;
+        // Bonus for candidates whose whole raw suffix is explained by a
+        // single arc. Production corpus evidence: with the full SCOWL-backed
+        // lexicon, a fragmented tiling can outscore the whole-span reading
+        // on source-local evidence alone (e.g. "iphon" → Completion
+        // "iPhone" + Exact "on" = 0.4916 beats Completion "iPhone" over the
+        // whole span = 0.3986), and no wCost value can close that gap
+        // (reversal would need wCost > 1.44, which destroys cost ordering
+        // everywhere else). The bonus encodes the prior that a single
+        // dictionary interpretation of the whole suffix is stronger
+        // evidence than an ad-hoc multi-arc tiling.
+        float wWholeSpan = 0.15F;
     };
 
     UnifiedRanker();

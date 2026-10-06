@@ -72,7 +72,23 @@ MixedEngine::compute(std::string_view raw, const IChineseArcOracle &chinese,
     const std::size_t cap = config_.pool.maxSize;
     auto composed = composer_.composeAll(paths, hanResolver, cap);
     if (composed.empty()) {
-        return {};
+        // Production-scale finding (closure §6): the cheapest surviving
+        // readings are not always the composable ones. Long Chinese arcs that
+        // are parser-valid but have no dictionary word (e.g. the single arc
+        // "woxiangmai" spanning 10 bytes) have low segmentation cost yet can
+        // never resolve, so a wide raw can end with every top-K survivor
+        // rejected by the resolver and an empty pool. Widening the survivor
+        // set once (bounded, deterministic — same beam, more paths, the
+        // original survivors stay in the set) lets the resolvable readings
+        // compose instead of silently dropping the whole mixed layer.
+        auto wider = config_.search;
+        wider.topK = std::min<std::size_t>(wider.topK * 8, 64);
+        const MixedSegmentationSearch wideSearch(wider);
+        paths = wideSearch.search(raw, chinese, english);
+        composed = composer_.composeAll(paths, hanResolver, cap);
+        if (composed.empty()) {
+            return {};
+        }
     }
     CandidatePool pool(config_.pool);
     for (auto &c : composed) {

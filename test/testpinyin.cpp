@@ -7,7 +7,9 @@
 #include "testdir.h"
 #include "testfrontend_public.h"
 #include <algorithm>
+#include <cctype>
 #include <cstdint>
+#include <cstdio>
 #include <fcitx-config/rawconfig.h>
 #include <fcitx-utils/event.h>
 #include <fcitx-utils/eventdispatcher.h>
@@ -302,6 +304,142 @@ void testMixedShuangpin(Instance *instance) {
         const auto next = candidateList->candidate(0).text().toString();
         testfrontend->call<ITestFrontend::pushCommitExpectation>(next);
         testfrontend->call<ITestFrontend::keyEvent>(uuid, Key("space"), false);
+    });
+}
+
+// Formal production-resource validation at the product surface: types each
+// case through the real Pinyin input method (full dictionary + mixed engine +
+// placement policy) and reports Top-1 / Top-K recall / MRR plus the false
+// pollution gate. Metrics are printed for the closure report; the hard gates
+// are full recall of every scored case and zero English contamination of
+// classical-led pure-Chinese compositions.
+void testMixedProductCorpus(Instance *instance) {
+    instance->eventDispatcher().schedule([instance]() {
+        auto *testfrontend = instance->addonManager().addon("testfrontend");
+        auto uuid =
+            testfrontend->call<ITestFrontend::createInputContext>("testapp");
+        auto *ic = instance->inputContextManager().findByUUID(uuid);
+        FCITX_ASSERT(ic);
+        instance->setCurrentInputMethod(ic, "pinyin", true);
+
+        // Upstream reserves raws that begin with 'v' on an empty buffer for
+        // the V-as-quickphrase entry (pinyin.cpp checkV), so "vpn" never
+        // reaches any pinyin composition path while that option is ON. The
+        // formal corpus must measure the Architecture A product path, and
+        // VAsQuickphrase is a supported user toggle: turn it OFF for the
+        // scored cases and restore the default afterwards (the later
+        // testVQuickPhraseTrigger relies on the ON default).
+        auto *pinyin = instance->addonManager().addon("pinyin", true);
+        RawConfig config;
+        config.setValueByPath("VAsQuickphrase", "False");
+        pinyin->setConfig(config);
+
+        struct ProductCase {
+            const char *raw;
+            const char *needle;
+            bool classicalLead;
+        };
+        const ProductCase cases[] = {
+            {"nihao", "你", true},
+            {"pingan", "安", true},
+            {"zhongguo", "国", true},
+            {"woxiangmaiiphonepeijian", "iPhone", false},
+            {"wodakaigithub", "GitHub", false},
+            {"iphone", "iPhone", false},
+            {"chatgpt", "ChatGPT", false},
+            {"macos", "macOS", false},
+            {"iphon", "iPhone", false},
+            {"vpn", "VPN", false},
+        };
+
+        size_t scored = 0, top1 = 0, recall = 0;
+        double rrSum = 0.0;
+        size_t pollution = 0;
+        for (const auto &c : cases) {
+            ic->reset();
+            for (const char *p = c.raw; *p; ++p) {
+                testfrontend->call<ITestFrontend::keyEvent>(
+                    uuid, Key(std::string(1, *p)), false);
+            }
+            auto *candidateList = ic->inputPanel().candidateList().get();
+            std::string top;
+            if (candidateList && !candidateList->empty()) {
+                top = candidateList->candidate(0).text().toString();
+            }
+            if (c.classicalLead) {
+                bool ascii = false;
+                for (const char ch : top) {
+                    if (std::isalpha(static_cast<unsigned char>(ch))) {
+                        ascii = true;
+                        break;
+                    }
+                }
+                if (ascii) {
+                    ++pollution;
+                }
+                std::fprintf(stderr, "MIXEDCORP %s classical-lead top1=%s\n",
+                             c.raw, top.c_str());
+                continue;
+            }
+            ++scored;
+            int rank = -1;
+            auto *fresh = ic->inputPanel().candidateList().get();
+            if (fresh) {
+                if (auto *bulk = fresh->toBulk()) {
+                    for (int i = 0; i < bulk->totalSize(); i++) {
+                        if (bulk->candidateFromAll(i).text().toString().find(
+                                c.needle) != std::string::npos) {
+                            rank = i;
+                            break;
+                        }
+                    }
+                } else if (!fresh->empty() &&
+                           std::string(fresh->candidate(0).text().toString())
+                                   .find(c.needle) != std::string::npos) {
+                    rank = 0;
+                }
+            }
+            if (rank == 0) {
+                ++top1;
+            }
+            if (rank >= 0) {
+                ++recall;
+                rrSum += 1.0 / static_cast<double>(rank + 1);
+            } else if (fresh) {
+                // Miss diagnostic: dump the reachable candidate window so a
+                // failure names the actual panel state, not a guess.
+                std::fprintf(stderr, "MIXEDCORP %s MISS window:", c.raw);
+                if (auto *bulk = fresh->toBulk()) {
+                    std::fprintf(stderr, " total=%d\n", bulk->totalSize());
+                    const int limit = std::min(bulk->totalSize(), 24);
+                    for (int i = 0; i < limit; i++) {
+                        std::fprintf(
+                            stderr, "  [%d] %s\n", i,
+                            std::string(
+                                bulk->candidateFromAll(i).text().toString())
+                                .c_str());
+                    }
+                } else {
+                    std::fprintf(stderr, " non-bulk n=%d\n", fresh->size());
+                }
+            }
+            std::fprintf(stderr, "MIXEDCORP %s needle=%s rank=%d top1=%s\n",
+                         c.raw, c.needle, rank, top.c_str());
+        }
+        const double mrr = (scored == 0) ? 0.0 : rrSum / double(scored);
+        std::fprintf(stderr,
+                     "MIXEDCORP SUMMARY scored=%zu top1=%zu recall=%zu "
+                     "MRR=%.3f pollution=%zu\n",
+                     scored, top1, recall, mrr, pollution);
+        FCITX_ASSERT(recall == scored)
+            << "Product corpus: English needle not reachable on every "
+               "English-bearing case";
+        FCITX_ASSERT(pollution == 0)
+            << "Product corpus: English text polluted a classical-led pure "
+               "Chinese composition";
+        ic->reset();
+        config.setValueByPath("VAsQuickphrase", "True");
+        pinyin->setConfig(config);
     });
 }
 
@@ -751,6 +889,7 @@ int main() {
     testSelectByChar(&instance);
     testUppercase(&instance);
     testMixedShuangpin(&instance);
+    testMixedProductCorpus(&instance);
     testForget(&instance);
     testActionInStrokeFilter(&instance);
     testPinyinTabFilter(&instance);
