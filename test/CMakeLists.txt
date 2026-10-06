@@ -35,9 +35,16 @@ add_dependencies(testchttrans chttrans chttrans.conf.in-fmt copy-addon copy-test
 add_test(NAME testchttrans COMMAND testchttrans)
 
 add_subdirectory(addon)
+# Stage the pinned production English lexicon where StandardPaths PkgData
+# test mode resolves "pinyin/english_lexicon.tsv" (dataDirs root: this dir).
+add_custom_target(copy-english-lexicon ALL
+    COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_CURRENT_BINARY_DIR}/pinyin
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        ${CMAKE_CURRENT_SOURCE_DIR}/../im/pinyin/english_lexicon.tsv
+        ${CMAKE_CURRENT_BINARY_DIR}/pinyin/english_lexicon.tsv)
 add_executable(testpinyin testpinyin.cpp)
 target_link_libraries(testpinyin Fcitx5::Core Fcitx5::Module::TestFrontend)
-add_dependencies(testpinyin pinyin pinyinhelper copy-addon copy-im)
+add_dependencies(testpinyin pinyin pinyinhelper copy-addon copy-im copy-english-lexicon)
 add_test(NAME testpinyin COMMAND testpinyin)
 add_executable(testtable testtable.cpp)
 target_link_libraries(testtable Fcitx5::Core Fcitx5::Module::TestFrontend)

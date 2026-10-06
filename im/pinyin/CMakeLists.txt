@@ -43,6 +43,25 @@ install(FILES "${CMAKE_CURRENT_BINARY_DIR}/pinyin-addon.conf" RENAME pinyin.conf
 install(FILES "symbols" DESTINATION "${FCITX_INSTALL_PKGDATADIR}/pinyin" COMPONENT config)
 install(FILES "sp.dat.example" DESTINATION "${FCITX_INSTALL_PKGDATADIR}/pinyin" COMPONENT config)
 
+# Production English lexicon (Architecture A English Core). The manifest
+# recorded under data-licenses/english/ is the authoritative integrity
+# gate: a mismatch between the committed resource bytes and the manifest
+# SHA-256 is a hard configure failure (AUDIT.md §5).
+file(SHA256 "${CMAKE_CURRENT_SOURCE_DIR}/english_lexicon.tsv"
+     FUSION_ENGLISH_LEXICON_SHA)
+file(READ "${PROJECT_SOURCE_DIR}/data-licenses/english/manifest.json"
+     FUSION_ENGLISH_LEXICON_MANIFEST)
+string(REGEX MATCH "\"sha256\": \"([a-f0-9]+)\""
+       FUSION_ENGLISH_LEXICON_MANIFEST_MATCH "${FUSION_ENGLISH_LEXICON_MANIFEST}")
+if(NOT CMAKE_MATCH_1 STREQUAL FUSION_ENGLISH_LEXICON_SHA)
+  message(FATAL_ERROR
+    "im/pinyin/english_lexicon.tsv SHA-256 is ${FUSION_ENGLISH_LEXICON_SHA} "
+    "but data-licenses/english/manifest.json records ${CMAKE_MATCH_1}. "
+    "Rerun tools/prepare_english_lexicon.sh and re-review the resource.")
+endif()
+install(FILES "english_lexicon.tsv" DESTINATION "${FCITX_INSTALL_PKGDATADIR}/pinyin"
+        COMPONENT config)
+
 if (ENABLE_DATA)
 
   add_custom_command(

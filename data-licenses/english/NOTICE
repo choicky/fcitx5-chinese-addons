@@ -1,0 +1,17 @@
+Production English system lexicon (english_lexicon.tsv)
+
+Word inventory derived from SCOWL v2, (C) 2000-2026 Kevin Atkinson and
+the SCOWL contributors, https://github.com/en-wl/wordlist.git tag rel-2026.02.25
+(commit 7e99edab8e32f9f9ea2b15f249ca8d4d67237410).
+
+SCOWL license (verbatim excerpt from the pinned Copyright file):
+Copyright 2000-2026 by Kevin Atkinson Permission to use, copy, modify, distribute, and sell any part of SCOWLv2, or word lists created from it, is hereby granted without fee, provided that the above copyright notice appears in all copies and that both the above 
+
+The shipped TSV contains only lower-case lookup keys, a coarse SCOWL
+size-derived tier integer, the SCOWL surface spelling, and repository-
+curated proper/technical allow-list entries (LGPL-2.1-or-later, (C) 2026
+Fcitx5 Fusion contributors). No frequency-rank corpus content is included.
+
+SHA-256: defcefe35b4ab00a9f262fd3f0e8bfa62a3aee66a2b26cb3711f5e7de9ec6daf
+Bytes:   2090049
+Entries: 94713

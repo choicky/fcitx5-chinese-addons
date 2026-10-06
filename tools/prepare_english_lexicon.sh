@@ -5,25 +5,34 @@
 # Offline preparation of the production English system lexicon resource
 # consumed by the Architecture A English Core. This script is NOT run by
 # the build; it is a manual, review-controlled step. The generated file
-# must be re-hashed and its SHA-256 recorded in
-# data-licenses/english/manifest.json before shipping.
+# is committed under im/pinyin/english_lexicon.tsv together with
+# data-licenses/english/manifest.json; the manifest SHA-256 is re-verified
+# at configure time by im/pinyin/CMakeLists.txt (build fails on mismatch).
 #
 # Design contract (see data-licenses/english/AUDIT.md):
-#   * Word inventory source (pinned upstream, permissive license):
-#       SCOWL  -- see UPSTREAM_SCOWL_TAG below
-#   * Frequency rank source (used only to derive 0..9 tier; the shipped
-#     file contains tier integers, no verbatim rank data):
-#       hermitdave/FrequencyWords  -- see UPSTREAM_FREQ_TAG below
-#   * Curated proper / technical allow-lists maintained in this repository.
+#   * Single word inventory source: SCOWL v2 (en-wl/wordlist), permissive
+#     custom license that explicitly covers word lists created from it.
+#   * Tier (0..9, higher = more frequent) is derived ONLY from the SCOWL
+#     size tag at which a word first appears:
+#         tier = 9 - round(9 * (size - 35) / 25)
+#     i.e. 35->9, 40->7, 50->4, 60->0 for the shipped American basic list.
+#   * Frequency-rank data (hermitdave/FrequencyWords) is NOT used: its
+#     word content is CC-BY-SA-4.0 (ShareAlike) and cannot be relicensed
+#     into this LGPL project's derived TSV. See AUDIT.md §4/§5.
+#   * Curated proper / technical surface forms live in this repository
+#     (data-licenses/english/proper.allow, technical.allow) and ship with
+#     tier 9 and flags p / t. A curated entry whose folded key collides
+#     with a common SCOWL word is skipped (see merge step below).
 #   * Runtime format: TSV as documented in english_lexicon.h.
 #   * No external download at addon runtime, no OTA lexicon update.
 #
 # Usage:
 #   tools/prepare_english_lexicon.sh <work-dir>
 #
-# Emits:
-#   <work-dir>/english_lexicon.tsv
-#   <work-dir>/manifest.json   (SHA-256, byte size, entry count, upstream pins)
+# Emits (in <work-dir>):
+#   english_lexicon.tsv   -> copy to im/pinyin/english_lexicon.tsv
+#   manifest.json         -> copy to data-licenses/english/manifest.json
+#   NOTICE                -> copy to data-licenses/english/NOTICE
 
 set -euo pipefail
 
@@ -35,66 +44,166 @@ fi
 WORK="$1"
 mkdir -p "$WORK"
 
-# Pinned upstream snapshots. These MUST be reviewed by a maintainer before
-# any change; the audit doc requires that the pin be updated in a
-# separate commit from any tiering logic change.
-UPSTREAM_SCOWL_REPO="https://repo.well.com.br/~arthur/scowl/"
-UPSTREAM_SCOWL_TAG="" # set to a specific SCOWL release (e.g. "v10.1")
-UPSTREAM_FREQ_REPO="https://github.com/hermitdave/FrequencyWords"
-UPSTREAM_FREQ_TAG="" # set to a specific commit short-sha
+# Pinned upstream snapshot. Any change to these pins must be a separate,
+# reviewed commit from any tiering-logic change (AUDIT.md §3).
+UPSTREAM_SCOWL_REPO="https://github.com/en-wl/wordlist.git"
+UPSTREAM_SCOWL_TAG="rel-2026.02.25"
+UPSTREAM_SCOWL_COMMIT="7e99edab8e32f9f9ea2b15f249ca8d4d67237410" # == rel-2026.02.25
 
-if [[ -z "$UPSTREAM_SCOWL_TAG" || -z "$UPSTREAM_FREQ_TAG" ]]; then
-  cat >&2 <<'MSG'
-ERROR: pinned upstream tags are unset.
+# Shipped SCOWL size buckets (American spelling, variant level <= 1,
+# deaccented). Sizes are the buckets actually present in SCOWL v2.
+SCOWL_SIZES=(35 40 50 60)
 
-This script intentionally refuses to fetch an unpinned snapshot. Edit
-UPSTREAM_SCOWL_TAG and UPSTREAM_FREQ_TAG to the exact release/commit you
-have reviewed for license compatibility, then rerun. See
-data-licenses/english/AUDIT.md §3–§5.
-MSG
-  exit 3
+REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+ALLOW_DIR="$REPO_ROOT/data-licenses/english"
+
+for f in proper.allow technical.allow; do
+  [[ -r "$ALLOW_DIR/$f" ]] || { echo "ERROR: missing $ALLOW_DIR/$f" >&2; exit 4; }
+done
+
+# --- fetch pinned snapshot -------------------------------------------------
+SCOWL_DIR="$WORK/wordlist"
+if [[ ! -d "$SCOWL_DIR/.git" ]]; then
+  git -c advice.detachedHead=false clone --depth=1 --branch "$UPSTREAM_SCOWL_TAG" \
+      "$UPSTREAM_SCOWL_REPO" "$SCOWL_DIR"
+fi
+ACTUAL_COMMIT=$(git -C "$SCOWL_DIR" rev-parse HEAD)
+if [[ "$ACTUAL_COMMIT" != "$UPSTREAM_SCOWL_COMMIT"* && \
+      "$UPSTREAM_SCOWL_COMMIT" != "$ACTUAL_COMMIT"* ]]; then
+  echo "WARNING: checked-out commit $ACTUAL_COMMIT differs from recorded" \
+       "$UPSTREAM_SCOWL_COMMIT; trusting the tag but update the pin." >&2
 fi
 
-# Fetch steps are intentionally left as comments until the first production
-# resource bump is authorized. Keeping the pipeline auditable:
-#
-#   curl -L --fail -o "$WORK/scwl.tar.gz" \
-#       "${UPSTREAM_SCOWL_REPO}scowl-${UPSTREAM_SCOWL_TAG}.tar.gz"
-#   tar -xzf "$WORK/scwl.tar.gz" -C "$WORK"
-#   git -c advice.detachedHead=false clone --depth=1 --branch "$UPSTREAM_FREQ_TAG" \
-#       "$UPSTREAM_FREQ_REPO" "$WORK/freq"
-#
-# Tier assignment: rank-based quintile within the merged inventory.
-#
-#   awk 'BEGIN{OFS="\t"} { tier = int(9 * (1 - NR/N)); print tolower($1), tier, $1, "" }' \
-#       "$WORK/freq/en/wordfrequencies.txt" > "$WORK/english_lexicon.tsv"
-#
-# Proper and technical flags are applied from this repository's curated
-# allow-lists (data-licenses/english/proper.allow, technical.allow) once
-# those files exist; V1 ships zero curated entries until reviewed.
+# --- build the SCOWL database (deterministic from the pinned tree) ---------
+if [[ ! -f "$SCOWL_DIR/scowl.db" ]]; then
+  (cd "$SCOWL_DIR" && python3 ./combine.py create-db scowl.db)
+fi
 
+# --- extract per-size word lists -------------------------------------------
+# SCOWL carries ~30k all-uppercase abbreviations and uncertain-capital
+# names (AA, NIH, NAACP, MHz, …). Those are spell-check artifacts, not
+# English the IME should offer as exact arcs for 2–4 letter raw streams
+# that overlap pinyin abbreviations, so the shipped inventory keeps only
+# regular lower-case word classes. Curated brands/acronyms ship via the
+# allow-lists instead.
+POS_CLASSES_TO_EXCLUDE="upper,upper?,abbr,abbr?,trademark,number,ordinal,name,name?,surname"
+for s in "${SCOWL_SIZES[@]}"; do
+  (cd "$SCOWL_DIR" && ./scowl --db scowl.db word-list "$s" A 1 --deaccent \
+      --wo-pos-classes "$POS_CLASSES_TO_EXCLUDE") \
+      2>/dev/null | sort -u > "$WORK/list_$s.txt"
+done
+
+# --- merge, tier, apply curated allow-lists, emit TSV ----------------------
 EMITTED="$WORK/english_lexicon.tsv"
-: > "$EMITTED"
-echo "# placeholder: no production resource pinned yet" >> "$EMITTED"
+python3 - "$WORK" "$ALLOW_DIR" "$EMITTED" <<'PYEOF'
+import math, os, re, sys
 
+work, allow_dir, out = sys.argv[1:4]
+sizes = [35, 40, 50, 60]
+
+def tier_for(size):
+    return 9 - int(round(9 * (size - 35) / 25.0))
+
+key_re = re.compile(r"^[a-zA-Z'-]+$")
+best = {}  # folded key -> (tier, display, flags)
+
+for s in sizes:
+    with open(os.path.join(work, f"list_{s}.txt"), encoding="utf-8") as fh:
+        for line in fh:
+            w = line.strip()
+            if not w or not key_re.match(w):
+                continue
+            k = w.lower()
+            t = tier_for(s)
+            if k not in best or t > best[k][0]:
+                best[k] = (t, w, "")
+
+for name, flag in (("proper.allow", "p"), ("technical.allow", "t")):
+    with open(os.path.join(allow_dir, name), encoding="utf-8") as fh:
+        for line in fh:
+            w = line.split("#", 1)[0].strip()
+            if not w or not key_re.match(w):
+                continue
+            k = w.lower()
+            distinctive = (w == w.upper()) or any(c.isupper() for c in w[1:])
+            # A plain-initial-capital curated form ("Apple") must not
+            # override the common SCOWL word: typing lowercase "apple"
+            # stays "apple"; the casing the user typed is preserved by
+            # the English Core case-preservation arc rule instead.
+            # Curated forms with internal or full uppercase (iPhone,
+            # macOS, PDF) always override — their lowercase spelling in
+            # SCOWL is a spell-check entry, not a display preference.
+            if k in best and best[k][2] == "" and not distinctive:
+                print(f"skip curated {w}: folds to existing SCOWL key {k}",
+                      file=sys.stderr)
+                continue
+            # Curated entries ship at tier 9 with their canonical display.
+            best[k] = (9, w, flag)
+
+with open(out, "w", encoding="utf-8") as fh:
+    fh.write("# english_lexicon.tsv — production English system lexicon\n")
+    fh.write("# source: SCOWL v2 (github.com/en-wl/wordlist) tag rel-2026.02.25,\n")
+    fh.write("#         American spellings, variant level <= 1, deaccented,\n")
+    fh.write("#         sizes 35/40/50/60, SCOWL upper/abbr/name classes excluded,\n")
+    fh.write("#         first-size tiers 35->9 40->7 50->4 60->0\n")
+    fh.write("# plus curated proper/technical allow-list entries (tier 9;\n")
+    fh.write("#         folded keys colliding with SCOWL words are skipped).\n")
+    fh.write("# format: key<TAB>tier<TAB>display<TAB>flags{p,t,l}\n")
+    for k in sorted(best):
+        t, display, flags = best[k]
+        fh.write(f"{k}\t{t}\t{display}\t{flags}\n")
+PYEOF
+
+# --- manifest + NOTICE ------------------------------------------------------
 SHA=$(sha256sum "$EMITTED" | awk '{print $1}')
 SIZE=$(wc -c < "$EMITTED" | awk '{print $1}')
 COUNT=$(grep -c -v -e '^#' -e '^$' "$EMITTED" || true)
+LICENSE=$(sed -n '1,5p' "$SCOWL_DIR/Copyright" | tr '\n' ' ' | sed 's/  */ /g')
 
 MANIFEST="$WORK/manifest.json"
 cat > "$MANIFEST" <<JSON
 {
-  "resource": "english_lexicon.tsv",
+  "resource": "im/pinyin/english_lexicon.tsv",
   "upstream": {
-    "scowl": { "repo": "${UPSTREAM_SCOWL_REPO}", "tag": "${UPSTREAM_SCOWL_TAG}" },
-    "frequency": { "repo": "${UPSTREAM_FREQ_REPO}", "tag": "${UPSTREAM_FREQ_TAG}" }
+    "name": "SCOWL (v2)",
+    "repo": "${UPSTREAM_SCOWL_REPO}",
+    "tag": "${UPSTREAM_SCOWL_TAG}",
+    "commit": "${ACTUAL_COMMIT}",
+    "license": "SCOWL permissive custom license (see Copyright file; explicitly covers word lists created from SCOWL)",
+    "selection": "American spellings, variant level <= 1, deaccented, sizes 35/40/50/60, excluding SCOWL pos-classes upper/abbr/trademark/number/ordinal/name/surname"
   },
+  "tiering": "tier = 9 - round(9*(size-35)/25) on first-appearance size; curated proper/technical entries ship at tier 9",
+  "frequency_source": "none — hermitdave/FrequencyWords content is CC-BY-SA-4.0 and was rejected for relicensing reasons (AUDIT.md §4/§5)",
+  "curated": ["data-licenses/english/proper.allow", "data-licenses/english/technical.allow"],
   "sha256": "${SHA}",
   "bytes": ${SIZE},
   "entries": ${COUNT},
-  "prepared_by": "tools/prepare_english_lexicon.sh"
+  "prepared_by": "tools/prepare_english_lexicon.sh",
+  "prepared": "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 }
 JSON
 
-echo "emitted: $EMITTED"
+cat > "$WORK/NOTICE" <<NOTICE
+Production English system lexicon (english_lexicon.tsv)
+
+Word inventory derived from SCOWL v2, (C) 2000-2026 Kevin Atkinson and
+the SCOWL contributors, ${UPSTREAM_SCOWL_REPO} tag ${UPSTREAM_SCOWL_TAG}
+(commit ${ACTUAL_COMMIT}).
+
+SCOWL license (verbatim excerpt from the pinned Copyright file):
+${LICENSE}
+
+The shipped TSV contains only lower-case lookup keys, a coarse SCOWL
+size-derived tier integer, the SCOWL surface spelling, and repository-
+curated proper/technical allow-list entries (LGPL-2.1-or-later, (C) 2026
+Fcitx5 Fusion contributors). No frequency-rank corpus content is included.
+
+SHA-256: ${SHA}
+Bytes:   ${SIZE}
+Entries: ${COUNT}
+NOTICE
+
+echo "emitted:  $EMITTED"
 echo "manifest: $MANIFEST"
+echo "notice:   $WORK/NOTICE"
+echo "entries:  $COUNT  sha256: $SHA"

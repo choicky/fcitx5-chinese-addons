@@ -1,0 +1,25 @@
+# SPDX-FileCopyrightText: 2026 Fcitx5 Fusion contributors
+# SPDX-License-Identifier: LGPL-2.1-or-later
+#
+# Curated proper-noun allow-list for the production English system lexicon.
+# One surface form per line; lines starting with '#' are comments.
+# The lookup key is the ASCII case-folded form; the surface form here is the
+# shipped canonical display. A curated form whose canonical differs from its
+# fold only by a leading capital (Apple, Google) never overrides an existing
+# SCOWL word — lowercase typing keeps the generic display, and the casing
+# the user typed is preserved by the English Core arc rule. Curated forms
+# with internal or full uppercase (iPhone, macOS, PDF) always win.
+# Maintainers add entries only after review; see data-licenses/english/AUDIT.md §6.
+Apple
+Android
+ChatGPT
+Facebook
+GitHub
+Google
+LibIME
+OpenWrt
+Python
+Windows
+YouTube
+iPhone
+macOS

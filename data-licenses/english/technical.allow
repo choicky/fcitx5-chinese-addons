@@ -1,0 +1,21 @@
+# SPDX-FileCopyrightText: 2026 Fcitx5 Fusion contributors
+# SPDX-License-Identifier: LGPL-2.1-or-later
+#
+# Curated technical/acronym allow-list for the production English system
+# lexicon. One surface form per line; lines starting with '#' are comments.
+# Entries are ASCII uppercase acronyms that SCOWL (a spelling corpus) does
+# not carry. Display casing is canonical; see AUDIT.md §6.
+API
+APK
+DNS
+HTML
+HTTP
+HTTPS
+IDE
+JSON
+PDF
+SDK
+UI
+URL
+VPN
+XML
