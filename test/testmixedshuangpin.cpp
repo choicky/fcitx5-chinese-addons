@@ -22,11 +22,32 @@
 // is honored — `correctionEnabled()` must return false in Shuangpin mode
 // regardless of any profile pointer set on the oracle — so a future change
 // to the classical `ShuangpinProfile` correction behavior fails here first.
+//
+// Fusion closure §4 extends this file with the two remaining Shuangpin
+// product-path invariants:
+//   * Part B — `setMode()` round trip: switching between Pinyin and
+//     Shuangpin must invalidate the cached segmentation graph (the two modes
+//     are different parses of the same raw string) and must re-parse under
+//     the new mode, while re-setting the current mode keeps the graph.
+//   * Part C — Shuangpin × English through the real `MixedEngine`: a
+//     Ziranma raw like "hsiphone" must flow raw -> real Shuangpin parser ->
+//     segmentation -> English Core (lexicon arcs) -> composer -> pool ->
+//     ranker -> rewriter and come out as a fused Han+English candidate;
+//     a pure-Ziranma raw with no English evidence must keep the §9 fast
+//     path empty.
 
 #include "chinesearcoracle.h"
 
+#include "english/englisharcoracle.h"
+#include "english/englishcorrectionoracle.h"
+#include "english/englishlexicon.h"
+#include "english/englishuserlexicon.h"
+#include "mixedengine.h"
+#include "segmentcomposer.h"
+
 #include <cstdio>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include <libime/pinyin/pinyincorrectionprofile.h>
@@ -100,6 +121,162 @@ int main() {
             check(a.provenance != CandidateProvenance::Correction,
                   "shuangpin: profile set later still does not emit Correction "
                   "arcs");
+        }
+    }
+
+    // ---- Part B: setMode() round-trip invalidation (closure §4) ----
+    {
+        LibIMEChineseArcOracle seam(ChineseInputMode::Pinyin);
+        seam.setShuangpinProfile(&sp);
+        seam.setRaw("nihao");
+        check(seam.graphValid(),
+              "setMode: Pinyin graph is built by setRaw with a profile set");
+        seam.setMode(ChineseInputMode::Shuangpin);
+        check(!seam.graphValid(),
+              "setMode: switching modes invalidates the cached graph");
+
+        seam.setRaw("hsiphone");
+        check(seam.graphValid(),
+              "setMode: graph rebuilt after Shuangpin switch");
+        const auto spArcs = seam.arcsAt("hsiphone", 0, 8);
+        bool spHas02 = false;
+        for (const auto &a : spArcs) {
+            check(a.provenance != CandidateProvenance::Correction,
+                  "setMode: Shuangpin arcs never carry Correction");
+            if (a.rawBegin == 0 && a.rawEnd == 2 &&
+                a.source == SegmentSource::Chinese) {
+                spHas02 = true;
+            }
+        }
+        check(spHas02, "setMode: Ziranma \"hs\" yields a Chinese arc [0,2) "
+                       "under Shuangpin mode");
+
+        seam.setMode(ChineseInputMode::Pinyin);
+        check(!seam.graphValid(),
+              "setMode: switching back to Pinyin invalidates again");
+        seam.setRaw("hsiphone");
+        const auto pyArcs = seam.arcsAt("hsiphone", 0, 8);
+        bool pyHas02 = false;
+        for (const auto &a : pyArcs) {
+            if (a.rawBegin == 0 && a.rawEnd == 2 &&
+                a.source == SegmentSource::Chinese) {
+                pyHas02 = true;
+            }
+        }
+        check(!pyHas02, "setMode: \"hs\" is not a full Pinyin syllable; the "
+                        "re-parsed graph has no Chinese arc [0,2)");
+
+        seam.setMode(ChineseInputMode::Pinyin);
+        check(seam.graphValid(), "setMode: re-setting the current mode is a "
+                                 "no-op and keeps the cached graph");
+    }
+
+    // ---- Part C: Shuangpin x English through the real MixedEngine ----
+    {
+        EnglishLexicon lex;
+        lex.loadFromEntries({{"iphone", "iPhone", 9, true, false, false},
+                             {"us", "us", 9, false, false, false},
+                             {"apple", "apple", 9, false, false, false},
+                             {"vpn", "VPN", 9, false, true, false}});
+        EnglishArcOracle sysEn(&lex);
+        EnglishUserLexicon userLex;
+        EnglishUserArcOracle userEn(&userLex);
+        EnglishCorrectionOracle corrEn(&lex);
+        CompositeEnglishArcOracle composite;
+        composite.addSource(&sysEn);
+        composite.addSource(&userEn);
+        composite.addSource(&corrEn);
+
+        LibIMEChineseArcOracle ch(ChineseInputMode::Shuangpin);
+        ch.setShuangpinProfile(&sp);
+        MixedEngine engine;
+
+        // Context-free Han decode keyed on the Ziranma spelling of the arc's
+        // raw span. Unknown spans resolve to empty, which makes the composer
+        // reject paths that use them — exactly what keeps each case below
+        // pinned to the intended tiling.
+        auto resolverFor = [](std::string_view raw) {
+            std::string r(raw);
+            return [r](const SegmentationArc &arc) -> std::string {
+                const std::string span =
+                    r.substr(arc.rawBegin, arc.rawEnd - arc.rawBegin);
+                if (span == "hs") {
+                    return "国"; // Ziranma h + uo
+                }
+                if (span == "wo") {
+                    return "我";
+                }
+                if (span == "us") {
+                    return "中";
+                }
+                return {};
+            };
+        };
+
+        struct SpCase {
+            const char *raw;
+            const char *han;
+        };
+        const std::vector<SpCase> cases = {
+            {"hsiphone", "国"},
+            {"woiphone", "我"},
+        };
+        for (const auto &c : cases) {
+            const std::string_view raw = c.raw;
+            ch.setRaw(raw);
+            const auto pool =
+                engine.compute(raw, ch, composite, resolverFor(raw));
+            check(!pool.empty(),
+                  "pipeline: mixed Shuangpin raw produces a non-empty pool");
+            bool recall = false;
+            bool fused = false;
+            for (const auto &cand : pool) {
+                if (cand.composedText.find("iPhone") != std::string::npos) {
+                    recall = true;
+                }
+                if (cand.composedText.find(c.han) != std::string::npos &&
+                    cand.composedText.find("iPhone") != std::string::npos) {
+                    fused = true;
+                }
+            }
+            check(recall, "pipeline: pool recalls the canonical iPhone form");
+            check(fused, "pipeline: pool contains a fused Han+iPhone reading "
+                         "of the Ziranma raw");
+        }
+
+        // Pure-Ziranma raw with no English evidence anywhere: the §9 fast
+        // path must short-circuit before compose/rank/rewrite and return an
+        // empty pool, so classical Shuangpin keeps the whole candidate list.
+        // "hs" additionally proves the correction oracle cannot smuggle an
+        // English arc through 2-byte spans (minSpanLength = 3).
+        {
+            const std::string_view raw = "hs";
+            ch.setRaw(raw);
+            const auto pool =
+                engine.compute(raw, ch, composite, resolverFor(raw));
+            check(pool.empty(), "pipeline: pure-Ziranma raw keeps the §9 "
+                                "fast path empty");
+        }
+
+        // Staleness guard: flip the SAME oracle to Pinyin without any other
+        // change and re-run the fused case. The Ziranma [0,2) Han arc must
+        // be gone, so no candidate may still fuse 国 + iPhone. If a cached
+        // Shuangpin graph ever leaked across setMode, this fails.
+        {
+            const std::string_view raw = "hsiphone";
+            ch.setMode(ChineseInputMode::Pinyin);
+            ch.setRaw(raw);
+            const auto pool =
+                engine.compute(raw, ch, composite, resolverFor(raw));
+            bool staleFused = false;
+            for (const auto &cand : pool) {
+                if (cand.composedText.find("国") != std::string::npos &&
+                    cand.composedText.find("iPhone") != std::string::npos) {
+                    staleFused = true;
+                }
+            }
+            check(!staleFused, "pipeline: no stale Shuangpin Han segment "
+                               "survives the mode flip");
         }
     }
 

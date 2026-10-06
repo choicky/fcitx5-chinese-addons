@@ -175,9 +175,18 @@ add_test(NAME testmixedcorpus COMMAND testmixedcorpus)
 add_executable(testmixedshuangpin testmixedshuangpin.cpp
     ../im/pinyin/mixed/chinesearcoracle.cpp
     ../im/pinyin/mixed/mixedcompositionstate.cpp
-    ../im/pinyin/mixed/mixedsegmentation.cpp)
+    ../im/pinyin/mixed/mixedsegmentation.cpp
+    ../im/pinyin/mixed/segmentcomposer.cpp
+    ../im/pinyin/mixed/unifiedranker.cpp
+    ../im/pinyin/mixed/rewriter.cpp
+    ../im/pinyin/mixed/mixedengine.cpp
+    ../im/pinyin/mixed/english/englishlexicon.cpp
+    ../im/pinyin/mixed/english/englisharcoracle.cpp
+    ../im/pinyin/mixed/english/englishuserlexicon.cpp
+    ../im/pinyin/mixed/english/englishcorrectionoracle.cpp)
 target_link_libraries(testmixedshuangpin PRIVATE
     Fcitx5::Utils LibIME::Pinyin LibIME::Core)
 target_include_directories(testmixedshuangpin PRIVATE
-    ${PROJECT_SOURCE_DIR}/im/pinyin ${PROJECT_SOURCE_DIR}/im/pinyin/mixed)
+    ${PROJECT_SOURCE_DIR}/im/pinyin ${PROJECT_SOURCE_DIR}/im/pinyin/mixed
+    ${PROJECT_SOURCE_DIR}/im/pinyin/mixed/english)
 add_test(NAME testmixedshuangpin COMMAND testmixedshuangpin)
