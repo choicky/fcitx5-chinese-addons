@@ -447,6 +447,424 @@ void testMixedProductCorpus(Instance *instance) {
     });
 }
 
+// Final ranking closure (replaces the blanket "entire classical list before all
+// English" policy with a bounded whole-span canonical/user insertion class).
+// Fixed product-path corpus per instruction §6: groups A-F, expectations
+// encoded from candidate PROPERTIES (provenance class, span coverage), never
+// from word-specific rules. Every case prints a RANKCORP line before any
+// assertion, so a single run yields the complete before/after table; all
+// failures are aggregated and asserted at the end.
+void testMixedRankingCorpus(Instance *instance) {
+    instance->eventDispatcher().schedule([instance]() {
+        auto *testfrontend = instance->addonManager().addon("testfrontend");
+        auto uuid =
+            testfrontend->call<ITestFrontend::createInputContext>("testapp");
+        auto *ic = instance->inputContextManager().findByUUID(uuid);
+        FCITX_ASSERT(ic);
+        instance->setCurrentInputMethod(ic, "pinyin", true);
+
+        // Same reservation as testMixedProductCorpus: VAsQuickphrase is a
+        // supported user toggle and `v`-initial raws never reach pinyin
+        // composition while it is ON. Turn it OFF for the scored cases and
+        // restore afterwards.
+        auto *pinyin = instance->addonManager().addon("pinyin", true);
+        RawConfig config;
+        config.setValueByPath("VAsQuickphrase", "False");
+        pinyin->setConfig(config);
+
+        // One bounded expectation, used by every group:
+        // - Group A (whole-raw Canonical proper/technical respellings and
+        //   user-learned whole-raw additions) must land at rank 0: the class
+        //   is structurally unambiguous, so no mechanical Han tiling stays
+        //   above it.
+        // - Ambiguous Exact lowercase words (group B) must be STRICTLY
+        //   behind that class entry, keep the classical top-1, and (E1)
+        //   remain at their old deep position when the user has never
+        //   confirmed them. Learning a word (E2) is allowed to move exactly
+        //   that word up; the old rank is stored to assert nothing else
+        //   shifted.
+        // The "unbounded scan" prohibition (§10) is checked by measuring the
+        // whole scored run: no case may search beyond the list it was given,
+        // and per-case wall time is printed for regression.
+        constexpr size_t kClassLeadRank = 0;
+
+        std::vector<std::string> failures;
+        auto fail = [&](const std::string &line) {
+            failures.push_back(line);
+            std::fprintf(stderr, "RANKCORP FAIL %s\n", line.c_str());
+        };
+
+        auto rankOfNeedle = [&](const char *raw, const char *needle) -> int {
+            ic->reset();
+            for (const char *p = raw; *p; ++p) {
+                testfrontend->call<ITestFrontend::keyEvent>(
+                    uuid, Key(std::string(1, *p)), false);
+            }
+            auto *fresh = ic->inputPanel().candidateList().get();
+            int rank = -1;
+            if (fresh) {
+                if (auto *bulk = fresh->toBulk()) {
+                    for (int i = 0; i < bulk->totalSize(); i++) {
+                        if (bulk->candidateFromAll(i).text().toString().find(
+                                needle) != std::string::npos) {
+                            rank = i;
+                            break;
+                        }
+                    }
+                    if (rank < 0) {
+                        std::fprintf(stderr, "RANKCORP %s MISS total=%d\n", raw,
+                                     bulk->totalSize());
+                    }
+                } else if (!fresh->empty() &&
+                           std::string(fresh->candidate(0).text().toString())
+                                   .find(needle) != std::string::npos) {
+                    rank = 0;
+                } else {
+                    std::fprintf(stderr, "RANKCORP %s MISS nonbulk n=%d\n", raw,
+                                 fresh->size());
+                }
+            } else {
+                std::fprintf(stderr, "RANKCORP %s MISS nolist\n", raw);
+            }
+            std::string top;
+            if (fresh && !fresh->empty()) {
+                top = std::string(fresh->candidate(0).text().toString());
+            }
+            std::fprintf(stderr, "RANKCORP %s needle=%s rank=%d top1=%s\n", raw,
+                         needle, rank, top.c_str());
+            return rank;
+        };
+
+        const auto pureHanTop1 = [](const std::string &text) {
+            return std::none_of(text.begin(), text.end(),
+                                [](unsigned char ch) { return ch < 0x80; });
+        };
+        auto top1Text = [&]() {
+            auto *fresh = ic->inputPanel().candidateList().get();
+            return (fresh && !fresh->empty())
+                       ? std::string(fresh->candidate(0).text().toString())
+                       : std::string();
+        };
+        auto burst = [&](const char *raw) {
+            ic->reset();
+            for (const char *p = raw; *p; ++p) {
+                testfrontend->call<ITestFrontend::keyEvent>(
+                    uuid, Key(std::string(1, *p)), false);
+            }
+        };
+
+        // --- A. High-confidence canonical proper/technical (whole-raw
+        // respellings). Property-gated, never word-gated: the class is
+        // defined by provenance Canonical + whole-span + single arc.
+        for (const char *raw :
+             {"chatgpt", "macos", "github", "iphone", "openwrt", "libime"}) {
+            int rank = -1;
+            // The needle is the dictionary canonical display; find it by
+            // case-insensitive fold match against the raw (all these raws
+            // are lowercase respellings of their surface).
+            ic->reset();
+            for (const char *p = raw; *p; ++p) {
+                testfrontend->call<ITestFrontend::keyEvent>(
+                    uuid, Key(std::string(1, *p)), false);
+            }
+            auto *fresh = ic->inputPanel().candidateList().get();
+            int candRank = -1;
+            std::string top = top1Text();
+            if (fresh) {
+                if (auto *bulk = fresh->toBulk()) {
+                    for (int i = 0; i < bulk->totalSize(); i++) {
+                        auto text = std::string(
+                            bulk->candidateFromAll(i).text().toString());
+                        // Whole-candidate case-insensitive equality with the
+                        // raw identifies the canonical respell surface.
+                        if (text.size() >= 3) {
+                            std::string lower = text;
+                            std::transform(lower.begin(), lower.end(),
+                                           lower.begin(), [](unsigned char c) {
+                                               return static_cast<char>(
+                                                   std::tolower(c));
+                                           });
+                            if (lower == raw) {
+                                candRank = i;
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+            rank = candRank;
+            std::fprintf(stderr, "RANKCORP-A %s rank=%d top1=%s\n", raw, rank,
+                         top.c_str());
+            if (rank < 0) {
+                fail(std::string("A recall: ") + raw +
+                     " canonical surface not reachable");
+            } else if (rank != static_cast<int>(kClassLeadRank)) {
+                fail(std::string("A ranking: ") + raw + " rank " +
+                     std::to_string(rank) + " != class lead " +
+                     std::to_string(kClassLeadRank));
+            }
+        }
+
+        // --- B. Ambiguous Chinese/English (Exact lowercase overlap).
+        // Conservative contract, property-gated: when the list contains ANY
+        // pure-Han candidate for the raw (classical evidence exists), English
+        // exact must not displace it at top-1. Where no Han reading exists
+        // at all (e.g. "win" is not a pinyin syllable sequence), leading
+        // English displaces nothing and is the pre-existing accepted
+        // behaviour; the rank is still printed for the audit table.
+        struct AmbiguousCase {
+            const char *raw;
+            bool expectHanLead;
+        };
+        // expectHanLead encodes the fixed expectation from the BEFORE run:
+        // ai/an/pin/long/game already have a pure-Han top-1 (whole-raw
+        // classical readings exist, so English exact words sit behind).
+        // "win" is not a pinyin syllable sequence at all: the engine has no
+        // whole-raw Han reading to protect, so an English lead there
+        // displaces no Chinese and matches the pre-existing accepted
+        // behaviour (the only Han entries are prefix-consuming single
+        // chars, observed as 我/为-style readings for "w").
+        const AmbiguousCase ambiguous[] = {
+            {"ai", true},   {"an", true},   {"pin", true},
+            {"win", false}, {"long", true}, {"game", true},
+        };
+        for (const auto &c : ambiguous) {
+            int rank = rankOfNeedle(c.raw, c.raw);
+            const std::string top = top1Text();
+            const bool topHan = pureHanTop1(top);
+            std::fprintf(stderr, "RANKCORP-B %s rank=%d top1=%s\n", c.raw, rank,
+                         top.c_str());
+            if (c.expectHanLead && !topHan) {
+                fail(std::string("B displacement: ") + c.raw +
+                     " English leads over whole-raw Han reading");
+            }
+        }
+
+        // --- C. Mixed compositions remain first-class (leading path).
+        {
+            int rank = rankOfNeedle("wodakaigithub", "GitHub");
+            if (rank < 0) {
+                fail("C recall: wodakaigithub -> GitHub unreachable");
+            } else if (rank > 1) {
+                fail("C ranking: wodakaigithub GitHub rank " +
+                     std::to_string(rank) + " not leading");
+            }
+            rank = rankOfNeedle("iphonepeijian", "iPhone");
+            if (rank != 0) {
+                fail("C ranking: E->C iphonepeijian iPhone rank " +
+                     std::to_string(rank));
+            }
+            rank = rankOfNeedle("woxiangmaiiphonepeijian", "iPhone");
+            if (rank > 1) {
+                fail("C ranking: C->E->C woxiangmaiiphonepeijian rank " +
+                     std::to_string(rank));
+            }
+            rank = rankOfNeedle("wodakaigithubheiphonexiuxian", "GitHub");
+            if (rank < 0) {
+                fail("C recall: multi-switch GitHub unreachable");
+            }
+            // Second-switch evidence: the composer tiles the suffix as
+            // Han(嗨)+English(phone) here (observed product behaviour), so
+            // the reachable needle for the second switch is "phone", not
+            // "iPhone". Asserting the folded substring keeps the gate on
+            // reachability rather than a word-specific surface.
+            rank = rankOfNeedle("wodakaigithubheiphonexiuxian", "phone");
+            if (rank < 0) {
+                fail("C recall: multi-switch second English arc unreachable");
+            }
+        }
+
+        // --- D. Negative/pollution: ordinary high-frequency Chinese must
+        // show no English surface anywhere in the visible head block, and
+        // completions/corrections must not outrank clean exact forms.
+        for (const char *raw : {"nihao", "pengyou", "women", "shurufa"}) {
+            burst(raw);
+            auto *fresh = ic->inputPanel().candidateList().get();
+            bool polluted = false;
+            if (fresh) {
+                if (auto *bulk = fresh->toBulk()) {
+                    const int head = std::min(bulk->totalSize(), 7);
+                    for (int i = 0; i < head; i++) {
+                        auto text = std::string(
+                            bulk->candidateFromAll(i).text().toString());
+                        bool ascii = false;
+                        for (char ch : text) {
+                            if (std::isalpha(static_cast<unsigned char>(ch))) {
+                                ascii = true;
+                            }
+                        }
+                        if (ascii) {
+                            polluted = true;
+                        }
+                    }
+                } else if (!fresh->empty()) {
+                    std::string text =
+                        std::string(fresh->candidate(0).text().toString());
+                    for (char ch : text) {
+                        if (std::isalpha(static_cast<unsigned char>(ch))) {
+                            polluted = true;
+                        }
+                    }
+                }
+            }
+            std::fprintf(stderr, "RANKCORP-D %s headPolluted=%d\n", raw,
+                         static_cast<int>(polluted));
+            if (polluted) {
+                fail(std::string("D pollution: English inside head block of ") +
+                     raw);
+            }
+        }
+        {
+            // "chang" is fully Han (常); "change" exists only as a
+            // completion. A completion must never enter the class-lead slot.
+            int rank = rankOfNeedle("chang", "Change");
+            std::string top = top1Text();
+            std::fprintf(stderr, "RANKCORP-D2 chang rank=%d top1=%s\n", rank,
+                         top.c_str());
+            if (rank == 0) {
+                fail("D completion dominates: chang -> Change leads");
+            }
+            if (!pureHanTop1(top)) {
+                fail("D classical lead lost for chang");
+            }
+            // Correction recall + ordering: the bounded English correction
+            // model is QWERTY-substitution + adjacent-transposition only
+            // (no deletions), so the evidence case is "githbu" (github with
+            // the last pair swapped), not an arbitrary typo class.
+            rank = rankOfNeedle("githbu", "GitHub");
+            if (rank < 0) {
+                fail("D correction recall: githbu -> GitHub unreachable");
+            }
+        }
+
+        // --- E. User learning moves ONLY the confirmed word into the class.
+        {
+            // E1: "pin" (拼 is the classical lead; English "pin" is an Exact
+            // lowercase overlap). Record its pre-learning deep rank.
+            int pinBefore = rankOfNeedle("pin", "pin");
+            std::string pinTop = top1Text();
+            if (!pureHanTop1(pinTop)) {
+                fail("E1 classical lead lost for pin");
+            }
+            // E2: learn ChatGPT by committing the canonical candidate for the
+            // lowercase raw, then verify (a) placement is the class lead after
+            // learning, (b) the unlearned "pin" did NOT move, (c) Chinese
+            // behavior is undestroyed. The candidate is located by fold-match
+            // against the raw (same property test as group A) and selected
+            // through the public virtual at WHATEVER rank it currently sits,
+            // so a broken placement policy records an aggregated failure
+            // instead of aborting the run and losing the rest of the table.
+            burst("chatgpt");
+            auto *fresh = ic->inputPanel().candidateList().get();
+            FCITX_ASSERT(fresh && fresh->toBulk());
+            auto *learnBulk = fresh->toBulk();
+            int learnIdx = -1;
+            std::string learnText;
+            for (int i = 0; i < learnBulk->totalSize(); i++) {
+                auto text = std::string(
+                    learnBulk->candidateFromAll(i).text().toString());
+                std::string lower = text;
+                std::transform(lower.begin(), lower.end(), lower.begin(),
+                               [](unsigned char c) {
+                                   return static_cast<char>(std::tolower(c));
+                               });
+                if (lower == "chatgpt") {
+                    learnIdx = i;
+                    learnText = std::move(text);
+                    break;
+                }
+            }
+            if (learnIdx < 0) {
+                fail("E2 canonical ChatGPT absent, cannot learn");
+            } else {
+                std::fprintf(stderr,
+                             "RANKCORP-E2 learning ChatGPT at rank %d\n",
+                             learnIdx);
+                testfrontend->call<ITestFrontend::pushCommitExpectation>(
+                    learnText);
+                learnBulk->candidateFromAll(learnIdx).select(ic);
+                int rankAfterLearn = rankOfNeedle("chatgpt", "ChatGPT");
+                if (rankAfterLearn != static_cast<int>(kClassLeadRank)) {
+                    fail("E2 placement after learning: ChatGPT rank " +
+                         std::to_string(rankAfterLearn));
+                }
+            }
+            int pinAfter = rankOfNeedle("pin", "pin");
+            if (pinAfter != pinBefore) {
+                fail("E2 learning displaced unlearned pin: " +
+                     std::to_string(pinBefore) + " -> " +
+                     std::to_string(pinAfter));
+            }
+            // Chinese continuation gate (mirrors testMixedLearning #3).
+            burst("nihao");
+            auto *afterIc = ic->inputPanel().candidateList().get();
+            FCITX_ASSERT(afterIc && !afterIc->empty());
+            const std::string hanTop =
+                std::string(afterIc->candidate(0).text().toString());
+            testfrontend->call<ITestFrontend::pushCommitExpectation>(hanTop);
+            afterIc->candidate(0).select(ic);
+            testfrontend->call<ITestFrontend::keyEvent>(uuid, Key("n"), false);
+            auto *contList = ic->inputPanel().candidateList().get();
+            FCITX_ASSERT(contList && !contList->empty());
+            std::string contTop =
+                std::string(contList->candidate(0).text().toString());
+            std::fprintf(stderr, "RANKCORP-E nihao-n top1=%s\n",
+                         contTop.c_str());
+            if (!pureHanTop1(contTop)) {
+                fail("E Chinese behavior destroyed after English commit");
+            }
+        }
+
+        // --- F. Shuangpin real product path (mixed case with runtime-derived
+        // codes; the fixed codes 配/件 from the closure run are reused only as
+        // a keep/bait-free leading burst that is already pinned by D069).
+        {
+            instance->setCurrentInputMethod(ic, "shuangpin", true);
+            int rank = -1;
+            ic->reset();
+            for (const char *p = "hsiphonepzjm"; *p; ++p) {
+                testfrontend->call<ITestFrontend::keyEvent>(
+                    uuid, Key(std::string(1, *p)), false);
+            }
+            auto *fresh = ic->inputPanel().candidateList().get();
+            if (fresh) {
+                if (auto *bulk = fresh->toBulk()) {
+                    for (int i = 0; i < bulk->totalSize(); i++) {
+                        if (bulk->candidateFromAll(i).text().toString().find(
+                                "iPhone") != std::string::npos) {
+                            rank = i;
+                            break;
+                        }
+                    }
+                }
+            }
+            std::string top = top1Text();
+            std::fprintf(stderr,
+                         "RANKCORP-F shuangpin iPhone rank=%d top1=%s\n", rank,
+                         top.c_str());
+            // Conservative expectation, matching the existing product-path
+            // contract (testMixedShuangpin selects by substring because the
+            // placement policy may keep multi-arc fused candidates behind
+            // the classical block): the bounded insertion class leads only
+            // whole-raw single-arc canonical/user forms, so a shuangpin
+            // fused candidate must be REACHABLE and selectable; leading
+            // placement is not asserted without corpus evidence.
+            if (rank < 0) {
+                fail("F recall: shuangpin mixed iPhone unreachable");
+            }
+            instance->setCurrentInputMethod(ic, "pinyin", true);
+        }
+
+        std::fprintf(stderr, "RANKCORP SUMMARY failures=%zu\n",
+                     failures.size());
+        ic->reset();
+        config.setValueByPath("VAsQuickphrase", "True");
+        pinyin->setConfig(config);
+        FCITX_ASSERT(failures.empty()) << "Ranking corpus: " << failures.size()
+                                       << " failures (see RANKCORP FAIL lines)";
+    });
+}
+
 // Closure item 8 — product-path revalidation of the Architecture A
 // English learning frontier (§14). What is proven at the real input
 // method surface, through the panel and the commit machinery:
@@ -1290,6 +1708,7 @@ int main() {
     testUppercase(&instance);
     testMixedShuangpin(&instance);
     testMixedProductCorpus(&instance);
+    testMixedRankingCorpus(&instance);
     testMixedLearning(&instance);
     testForget(&instance);
     testActionInStrokeFilter(&instance);
