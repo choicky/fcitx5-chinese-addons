@@ -79,6 +79,28 @@ std::vector<SegmentationArc> EnglishArcOracle::arcsAt(std::string_view raw,
             arc.sourceLocalRank = localRank++;
             arc.resolvedOutput = std::move(output);
             out.push_back(arc);
+            if (!exactEvidence) {
+                // Product contract (D071): a canonical re-spelling must not
+                // erase the literal form the user typed — "chatgpt" yields
+                // both "ChatGPT" and "chatgpt". The literal rides the same
+                // dictionary hit as a parallel arc (distinct
+                // sourceLocalRank), so it composes, dedups
+                // (composedText-keyed) and ranks through the normal
+                // pipeline. Canonical provenance keeps ranker feature
+                // parity with the display arc; the weaker boundary
+                // confidence only breaks the cost tie so the canonical
+                // display stays deterministically ahead of the literal.
+                SegmentationArc literal;
+                literal.rawBegin = arc.rawBegin;
+                literal.rawEnd = arc.rawEnd;
+                literal.source = SegmentSource::English;
+                literal.provenance = CandidateProvenance::Canonical;
+                literal.confidence = arc.confidence;
+                literal.boundaryConfidence = 0.90F;
+                literal.sourceLocalRank = localRank++;
+                literal.resolvedOutput = std::string(span);
+                out.push_back(literal);
+            }
         }
         // Emit completion arcs at any prefix that has at least one non-literal
         // hit. No fixed minimum prefix (§13). Bounded fan-out per span.

@@ -563,19 +563,22 @@ void testMixedRankingCorpus(Instance *instance) {
         // --- A. High-confidence canonical proper/technical (whole-raw
         // respellings). Property-gated, never word-gated: the class is
         // defined by provenance Canonical + whole-span + single arc.
+        // Contract (D071): the candidate set preserves BOTH the canonical
+        // display and the literal typed surface; canonical may rank first.
         for (const char *raw :
              {"chatgpt", "macos", "github", "iphone", "openwrt", "libime"}) {
-            int rank = -1;
-            // The needle is the dictionary canonical display; find it by
+            // The canonical needle is the dictionary display; identify it by
             // case-insensitive fold match against the raw (all these raws
-            // are lowercase respellings of their surface).
+            // are lowercase respellings of their surface). The literal
+            // surface is the whole candidate equal to the raw byte-for-byte.
             ic->reset();
             for (const char *p = raw; *p; ++p) {
                 testfrontend->call<ITestFrontend::keyEvent>(
                     uuid, Key(std::string(1, *p)), false);
             }
             auto *fresh = ic->inputPanel().candidateList().get();
-            int candRank = -1;
+            int canonRank = -1;
+            int litRank = -1;
             std::string top = top1Text();
             if (fresh) {
                 if (auto *bulk = fresh->toBulk()) {
@@ -583,7 +586,7 @@ void testMixedRankingCorpus(Instance *instance) {
                         auto text = std::string(
                             bulk->candidateFromAll(i).text().toString());
                         // Whole-candidate case-insensitive equality with the
-                        // raw identifies the canonical respell surface.
+                        // raw identifies the respell class members.
                         if (text.size() >= 3) {
                             std::string lower = text;
                             std::transform(lower.begin(), lower.end(),
@@ -592,23 +595,36 @@ void testMixedRankingCorpus(Instance *instance) {
                                                    std::tolower(c));
                                            });
                             if (lower == raw) {
-                                candRank = i;
-                                break;
+                                if (text == raw) {
+                                    if (litRank < 0) {
+                                        litRank = i;
+                                    }
+                                } else if (canonRank < 0) {
+                                    canonRank = i;
+                                }
                             }
                         }
                     }
                 }
             }
-            rank = candRank;
-            std::fprintf(stderr, "RANKCORP-A %s rank=%d top1=%s\n", raw, rank,
-                         top.c_str());
-            if (rank < 0) {
+            std::fprintf(stderr, "RANKCORP-A %s rank=%d top1=%s\n", raw,
+                         canonRank, top.c_str());
+            std::fprintf(stderr, "RANKCORP-A2 %s literalRank=%d\n", raw,
+                         litRank);
+            if (canonRank < 0) {
                 fail(std::string("A recall: ") + raw +
                      " canonical surface not reachable");
-            } else if (rank != static_cast<int>(kClassLeadRank)) {
+            } else if (canonRank != static_cast<int>(kClassLeadRank)) {
                 fail(std::string("A ranking: ") + raw + " rank " +
-                     std::to_string(rank) + " != class lead " +
+                     std::to_string(canonRank) + " != class lead " +
                      std::to_string(kClassLeadRank));
+            }
+            if (litRank < 0) {
+                fail(std::string("A literal coexistence: ") + raw +
+                     " literal surface dropped from candidate set");
+            } else if (canonRank >= 0 && litRank <= canonRank) {
+                fail(std::string("A literal ordering: ") + raw +
+                     " literal ranks at or above the canonical display");
             }
         }
 
@@ -655,6 +671,15 @@ void testMixedRankingCorpus(Instance *instance) {
             } else if (rank > 1) {
                 fail("C ranking: wodakaigithub GitHub rank " +
                      std::to_string(rank) + " not leading");
+            }
+            // D071 literal coexistence inside a mixed composition: the
+            // lowercase span must remain reachable next to the canonical
+            // respell ("喔惮岂github" beside "喔惮岂GitHub").
+            const int litRank = rankOfNeedle("wodakaigithub", "github");
+            if (litRank < 0) {
+                fail("C literal coexistence: wodakaigithub github dropped");
+            } else if (rank >= 0 && litRank <= rank) {
+                fail("C literal ordering: github at or above GitHub");
             }
             rank = rankOfNeedle("iphonepeijian", "iPhone");
             if (rank != 0) {

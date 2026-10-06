@@ -19,9 +19,11 @@ namespace pinyin {
 // EnglishLexicon. Emits arcs for every valid English surface interpretation
 // of a raw span, subject to fan-out caps:
 //   * Exact:   span folds to a lexicon key with a case-identical surface.
-//   * Canonical: span folds to a lexicon key but differs in casing (e.g.
-//                user typed "iPhone" and the display form is "iPhone", or
-//                user typed "HELLO" and the display form is "hello").
+//   * Canonical: all-lowercase span folds to a lexicon key whose display
+//                form differs (e.g. "iphone" -> "iPhone"). The canonical
+//                display arc is accompanied by a parallel literal arc
+//                carrying the typed span ("iphone") so both surfaces
+//                coexist in the candidate list (D071).
 //   * Completion: span folds to a proper prefix of at least one non-literal
 //                lexicon entry. Top-`maxCompletionsPerSpan` completions by
 //                frequency tier (inside a tier: shortest completion first,
