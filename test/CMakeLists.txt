@@ -44,6 +44,8 @@ add_custom_target(copy-english-lexicon ALL
         ${CMAKE_CURRENT_BINARY_DIR}/pinyin/english_lexicon.tsv)
 add_executable(testpinyin testpinyin.cpp)
 target_link_libraries(testpinyin Fcitx5::Core Fcitx5::Module::TestFrontend)
+target_include_directories(testpinyin PRIVATE
+                           ${PROJECT_SOURCE_DIR}/modules/pinyinhelper)
 add_dependencies(testpinyin pinyin pinyinhelper copy-addon copy-im copy-english-lexicon)
 add_test(NAME testpinyin COMMAND testpinyin)
 add_executable(testtable testtable.cpp)

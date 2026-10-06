@@ -4,12 +4,14 @@
  * SPDX-License-Identifier: LGPL-2.1-or-later
  *
  */
+#include "pinyinhelper_public.h"
 #include "testdir.h"
 #include "testfrontend_public.h"
 #include <algorithm>
 #include <cctype>
 #include <cstdint>
 #include <cstdio>
+#include <cstring>
 #include <fcitx-config/rawconfig.h>
 #include <fcitx-utils/event.h>
 #include <fcitx-utils/eventdispatcher.h>
@@ -20,6 +22,7 @@
 #include <fcitx-utils/macros.h>
 #include <fcitx-utils/standardpaths.h>
 #include <fcitx-utils/testing.h>
+#include <fcitx-utils/utf8.h>
 #include <fcitx/addoninstance.h>
 #include <fcitx/addonmanager.h>
 #include <fcitx/candidateaction.h>
@@ -612,6 +615,234 @@ void testMixedLearning(Instance *instance) {
     });
 }
 
+// Closure item 9 — Stroke side of the Auxiliary Filter fusion boundary.
+// The filter is a post-CandidateList UI feature, never a ranker input;
+// the contract at the real product surface is:
+//   * Han frontier → filter normally (a mixed candidate whose leading
+//     Han run matches the stroke code survives filtering).
+//   * English frontier → the filter must not skip past the embedded
+//     English surface and match later Han. This is the exact Stroke-style
+//     regression the MoQi filter avoids by checking only the first
+//     character: filterByStroke now terminates its scan at the first
+//     character without a stroke mapping, so only the leading Han run of
+//     a candidate text is matchable.
+//   * Escape, Backspace-to-empty exit, second invocation and selection
+//     from the filtered list all keep working on the mixed path.
+// Stroke codes are queried from the fixed shipped table through the
+// pinyinhelper addon at runtime — never guessed — and the boundary
+// preconditions (配's full code matches none of 我想买) are asserted so a
+// table change fails this test loudly instead of silently weakening it.
+// The Disabled/Stroke/MoQi x Pinyin/Shuangpin full matrix lives on the
+// mixed+moqi fusion regression branch that carries the AuxiliaryFilter
+// config; this batch pins the shared Stroke semantics.
+void testMixedStrokeFilterFusion(Instance *instance) {
+    instance->eventDispatcher().schedule([instance]() {
+        auto *testfrontend = instance->addonManager().addon("testfrontend");
+        auto *ph = instance->addonManager().addon("pinyinhelper");
+        FCITX_ASSERT(ph);
+        auto uuid =
+            testfrontend->call<ITestFrontend::createInputContext>("testapp");
+        auto *ic = instance->inputContextManager().findByUUID(uuid);
+        FCITX_ASSERT(ic);
+        instance->setCurrentInputMethod(ic, "pinyin", true);
+        ic->reset();
+        for (const char *p = "woxiangmaiiphonepeijian"; *p; ++p) {
+            testfrontend->call<ITestFrontend::keyEvent>(
+                uuid, Key(std::string(1, *p)), false);
+        }
+
+        auto bulkCount = [ic]() {
+            auto candList = ic->inputPanel().candidateList();
+            auto *bulk = candList ? candList->toBulk() : nullptr;
+            return bulk ? bulk->totalSize() : 0;
+        };
+        auto findTextWith = [ic](std::string_view needle) -> std::string {
+            auto candList = ic->inputPanel().candidateList();
+            auto *bulk = candList ? candList->toBulk() : nullptr;
+            if (!bulk) {
+                return {};
+            }
+            for (int i = 0; i < bulk->totalSize(); ++i) {
+                auto text = bulk->candidateFromAll(i).text().toString();
+                if (text.find(needle) != std::string::npos) {
+                    return text;
+                }
+            }
+            return {};
+        };
+
+        auto strokeOf = [ph](const std::string &chr) {
+            return ph->call<IPinyinHelper::reverseLookupStroke>(chr);
+        };
+        auto utf8Chars = [](std::string_view s) {
+            std::vector<std::string> chars;
+            auto range = utf8::MakeUTF8CharRange(s);
+            for (auto iter = std::begin(range), end = std::end(range);
+                 iter != end; ++iter) {
+                chars.emplace_back(iter.charRange().first,
+                                   iter.charRange().second);
+            }
+            return chars;
+        };
+
+        // The bait candidate: non-empty leading Han run, then the English
+        // surface, then more Han behind it. Placement policy decides which
+        // mixed composition surfaces, so the candidate, its frontier chars
+        // and every stroke code are derived from the real list and the real
+        // shipped table at runtime — nothing here is guessed.
+        std::string mixedText;
+        std::string keepCode; // full stroke code of the frontier char
+        std::string baitCode; // full code of a trailing char that matches
+                              // no leading-run char
+        {
+            auto candList = ic->inputPanel().candidateList();
+            auto *bulk = candList ? candList->toBulk() : nullptr;
+            FCITX_ASSERT(bulk && bulk->totalSize() > 0);
+            for (int i = 0; i < bulk->totalSize(); ++i) {
+                const auto text = bulk->candidateFromAll(i).text().toString();
+                const auto engPos = text.find("iPhone");
+                if (engPos == std::string::npos || engPos == 0 ||
+                    engPos + strlen("iPhone") >= text.size()) {
+                    continue;
+                }
+                const auto lead = utf8Chars(text.substr(0, engPos));
+                const auto trail =
+                    utf8Chars(text.substr(engPos + strlen("iPhone")));
+                std::vector<std::string> leadCodes;
+                for (const auto &chr : lead) {
+                    leadCodes.push_back(strokeOf(chr));
+                }
+                std::vector<std::string> trailCodes;
+                for (const auto &chr : trail) {
+                    trailCodes.push_back(strokeOf(chr));
+                }
+                if (leadCodes.empty() || leadCodes.front().empty() ||
+                    trailCodes.empty()) {
+                    continue;
+                }
+                std::string bait;
+                for (const auto &code : trailCodes) {
+                    if (code.empty()) {
+                        continue;
+                    }
+                    bool clash = false;
+                    for (const auto &lc : leadCodes) {
+                        if (lc.starts_with(code)) {
+                            clash = true;
+                            break;
+                        }
+                    }
+                    if (!clash) {
+                        bait = code;
+                        break;
+                    }
+                }
+                if (!bait.empty()) {
+                    mixedText = text;
+                    keepCode = leadCodes.front();
+                    baitCode = std::move(bait);
+                    break;
+                }
+            }
+        }
+        FCITX_ASSERT(!mixedText.empty())
+            << "no mixed candidate with Han on both sides of the English "
+               "surface for woxiangmaiiphonepeijian";
+        // Boundary preconditions pinned against the real table: buffer =
+        // baitCode can only keep this candidate by skipping past the
+        // embedded English, buffer = keepCode matches the first frontier
+        // character exactly.
+        FCITX_ASSERT(!baitCode.starts_with(keepCode));
+
+        auto typeStrokeCode = [testfrontend, uuid](const std::string &code) {
+            for (const char d : code) {
+                const char *key = d == '1'   ? "h"
+                                  : d == '2' ? "s"
+                                  : d == '3' ? "p"
+                                  : d == '4' ? "n"
+                                             : "z";
+                testfrontend->call<ITestFrontend::keyEvent>(uuid, Key(key),
+                                                            false);
+            }
+        };
+        auto findExact = [ic](const std::string &text) {
+            auto candList = ic->inputPanel().candidateList();
+            auto *bulk = candList ? candList->toBulk() : nullptr;
+            if (!bulk) {
+                return false;
+            }
+            for (int i = 0; i < bulk->totalSize(); ++i) {
+                if (bulk->candidateFromAll(i).text().toString() == text) {
+                    return true;
+                }
+            }
+            return false;
+        };
+
+        // Enter stroke filtering on the mixed bulk list.
+        testfrontend->call<ITestFrontend::keyEvent>(uuid, Key("`"), false);
+
+        // Han frontier → filter normally: the frontier char's own code
+        // keeps the candidate.
+        typeStrokeCode(keepCode);
+        FCITX_ASSERT(findExact(mixedText))
+            << "leading-run match must keep the mixed candidate";
+
+        // Escape leaves filtering; everything is visible again.
+        testfrontend->call<ITestFrontend::keyEvent>(uuid, Key(FcitxKey_Escape),
+                                                    false);
+        FCITX_ASSERT(findExact(mixedText));
+        const auto unfiltered = bulkCount();
+
+        // English frontier boundary: the trailing char's full code must not
+        // keep the candidate through Han behind the embedded English — with
+        // the old any-character scan this matched behind "iPhone" and kept
+        // it. And no other iPhone-bearing candidate may survive either.
+        testfrontend->call<ITestFrontend::keyEvent>(uuid, Key("`"), false);
+        typeStrokeCode(baitCode);
+        FCITX_ASSERT(!findExact(mixedText))
+            << "stroke filter must not skip the English frontier";
+        FCITX_ASSERT(findTextWith("iPhone").empty())
+            << "no English-crossing match may survive";
+
+        // Backspace pops the buffer; emptying it and one further backspace
+        // exits filtering entirely.
+        for (std::size_t i = 0; i <= baitCode.size(); ++i) {
+            testfrontend->call<ITestFrontend::keyEvent>(uuid, Key("BackSpace"),
+                                                        false);
+        }
+        FCITX_ASSERT(findExact(mixedText))
+            << "backspace-to-empty must leave filtering";
+        FCITX_ASSERT(bulkCount() == unfiltered);
+
+        // Second invocation + selection through the filtered list: entering
+        // the filter again and selecting the mixed candidate commits the
+        // exact composed text.
+        testfrontend->call<ITestFrontend::keyEvent>(uuid, Key("`"), false);
+        typeStrokeCode(keepCode);
+        auto candList = ic->inputPanel().candidateList();
+        auto *bulk = candList->toBulk();
+        FCITX_ASSERT(bulk);
+        bool selected = false;
+        for (int i = 0; i < bulk->totalSize(); ++i) {
+            const auto &cw = bulk->candidateFromAll(i);
+            if (cw.text().toString() == mixedText) {
+                testfrontend->call<ITestFrontend::pushCommitExpectation>(
+                    mixedText);
+                cw.select(ic);
+                selected = true;
+                break;
+            }
+        }
+        FCITX_ASSERT(selected) << "mixed candidate missing in second filter";
+        std::fprintf(
+            stderr,
+            "MIXEDSTROKE product path OK: han-frontier filtering, escape, "
+            "backspace exit, english-frontier boundary and filtered "
+            "selection all behaved as contracted\n");
+    });
+}
+
 void testForget(Instance *instance) {
     instance->eventDispatcher().schedule([instance]() {
         auto *testfrontend = instance->addonManager().addon("testfrontend");
@@ -1062,6 +1293,7 @@ int main() {
     testMixedLearning(&instance);
     testForget(&instance);
     testActionInStrokeFilter(&instance);
+    testMixedStrokeFilterFusion(&instance);
     testPinyinTabFilter(&instance);
     testPinyinTabFilterWithSeparator(&instance);
     testPin(&instance);

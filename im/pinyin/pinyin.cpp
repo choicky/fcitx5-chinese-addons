@@ -2099,8 +2099,11 @@ bool PinyinEngine::handleStrokeFilter(
     if (event.key().check(FcitxKey_BackSpace)) {
         // Do backspace is stroke is not empty.
         if (!pinyinTabbed->popStroke()) {
-            // Exit stroke mode when stroke buffer is empty.
-            updateUI(inputContext);
+            // Exit stroke mode when stroke buffer is empty. The filter
+            // state must actually be reset: leaving inStrokeFilterMode()
+            // set with an empty buffer swallows the next filter trigger
+            // and breaks second invocation.
+            pinyinTabbed->resetStrokeFilterMode();
         }
         return true;
     }

@@ -854,6 +854,15 @@ bool PinyinTabbedCandidateList::filterByStroke(
             std::string chr(iter.charRange().first, iter.charRange().second);
             auto stroke = engine_->pinyinhelper()
                               ->call<IPinyinHelper::reverseLookupStroke>(chr);
+            // The auxiliary filter matches the composition frontier. The
+            // first character without a stroke mapping (English surface,
+            // digit, punctuation) ends the matchable run: a mixed candidate
+            // can never skip past the English frontier to match later Han,
+            // and an English-frontier candidate has no matchable run at all.
+            // Pure-Han candidates keep the original any-character match.
+            if (stroke.empty()) {
+                break;
+            }
             if (stroke.starts_with(strokeBuffer_.userInput())) {
                 return true;
             }
