@@ -64,6 +64,7 @@
 #include <cstdint>
 #include <cstdio>
 #include <fstream>
+#include <sstream>
 #include <string>
 #include <vector>
 
@@ -286,14 +287,39 @@ int main() {
     latenciesUs.reserve(corpus().size());
     std::vector<double> fastPathLatenciesUs;
     fastPathLatenciesUs.reserve(corpus().size());
+    std::vector<double> coldLatenciesUs;
+    coldLatenciesUs.reserve(corpus().size());
+
+    // Closure item 7 (RSS): coarse process-memory readout from
+    // /proc/self/status. Reported, not asserted: inventing a ceiling here
+    // would be a fabricated threshold; device-side IME-process RSS stays
+    // explicitly NOT RUN (Android soak, closure report).
+    auto procKb = [](const char *field) -> long {
+        std::ifstream status("/proc/self/status");
+        std::string line;
+        while (std::getline(status, line)) {
+            if (line.rfind(field, 0) == 0) {
+                std::istringstream vals(line);
+                std::string key;
+                long kb = -1;
+                vals >> key >> kb;
+                return kb;
+            }
+        }
+        return -1;
+    };
+    const long rssStart = procKb("VmRSS:");
 
     // Warm-up pass: run the whole corpus once against the same engine and
-    // discard results before timing. Without this the per-case `compute`
-    // measured below is a cold first call (allocator pool, English user
-    // lexicon, ranker scratch buffers not yet touched), which is a method
-    // error for a latency guard and inflates >10x on shared CI runners.
-    // Semantics are unchanged: same inputs, oracles and resolver as the
-    // timed pass, and the same engine instance used by the drift loop.
+    // time it separately as the COLD first-touch pass (allocator pool,
+    // English user lexicon, ranker scratch buffers not yet touched). The
+    // timed pass below then measures warm behavior. Without this split the
+    // per-case `compute` measured below would mix both regimes, which is a
+    // method error for a latency guard and inflates >10x on shared CI
+    // runners. Semantics are unchanged: same inputs, oracles and resolver
+    // as the timed pass, and the same engine instance used by the drift
+    // loop. Note only the first case is fully process-cold; the rest are
+    // first-touch per case.
     for (const auto &c : corpus()) {
         CorpusChineseOracle chWarm;
         chWarm.spans = c.han;
@@ -305,7 +331,11 @@ int main() {
             }
             return {};
         };
+        auto t0 = std::chrono::steady_clock::now();
         (void)engine.compute(c.raw, chWarm, oracles.composite, hanWarm);
+        auto t1 = std::chrono::steady_clock::now();
+        std::chrono::duration<double, std::micro> dt = t1 - t0;
+        coldLatenciesUs.push_back(dt.count());
     }
 
     std::fprintf(stderr, "=== batch 10 corpus report ===\n");
@@ -409,13 +439,20 @@ int main() {
     };
     std::sort(latenciesUs.begin(), latenciesUs.end());
     std::sort(fastPathLatenciesUs.begin(), fastPathLatenciesUs.end());
+    std::sort(coldLatenciesUs.begin(), coldLatenciesUs.end());
     const double p50 = percentile(latenciesUs, 0.50);
     const double p95 = percentile(latenciesUs, 0.95);
+    const double p99 = percentile(latenciesUs, 0.99);
     const double pmax = latenciesUs.empty() ? 0.0 : latenciesUs.back();
     const double fp50 = percentile(fastPathLatenciesUs, 0.50);
     const double fp95 = percentile(fastPathLatenciesUs, 0.95);
+    const double fp99 = percentile(fastPathLatenciesUs, 0.99);
     const double fpmax =
         fastPathLatenciesUs.empty() ? 0.0 : fastPathLatenciesUs.back();
+    const double c50 = percentile(coldLatenciesUs, 0.50);
+    const double c95 = percentile(coldLatenciesUs, 0.95);
+    const double c99 = percentile(coldLatenciesUs, 0.99);
+    const double cmax = coldLatenciesUs.empty() ? 0.0 : coldLatenciesUs.back();
     const size_t mixedCases = totalCases - pureChineseCases;
 
     // Long-run: re-iterate the full corpus 200 times against the SAME engine
@@ -480,12 +517,16 @@ int main() {
                  "  top-K recall (mixed, K = maxSize):   %zu/%zu\n"
                  "  fast-path empty pool (pure-Chinese): %zu/%zu\n"
                  "  false-correction (pure-Chinese):     %zu/%zu\n"
-                 "  mixed latency p50/p95/max (us):      %.1f / %.1f / %.1f\n"
-                 "  fast-path latency p50/p95/max (us):  %.1f / %.1f / %.1f\n",
+                 "  mixed latency p50/p95/p99/max (us):     %.1f / %.1f / %.1f"
+                 " / %.1f\n"
+                 "  fast-path latency p50/p95/p99/max (us): %.1f / %.1f / %.1f"
+                 " / %.1f\n"
+                 "  cold first-touch p50/p95/p99/max (us):  %.1f / %.1f / %.1f"
+                 " / %.1f\n",
                  totalCases, mixedCases, top1Hits, mixedCases, recallHits,
                  mixedCases, pureChineseEmptyPools, pureChineseCases,
-                 falseCorrection, pureChineseCases, p50, p95, pmax, fp50, fp95,
-                 fpmax);
+                 falseCorrection, pureChineseCases, p50, p95, p99, pmax, fp50,
+                 fp95, fp99, fpmax, c50, c95, c99, cmax);
 
     // Contract assertions:
     //  * Corpus must be exercised; empty is a wiring failure.
@@ -582,13 +623,9 @@ int main() {
             {"github", "GitHub"},   {"chatgpt", "ChatGPT"},
             {"openwrt", "OpenWrt"}, {"libime", "LibIME"},
         };
-        size_t canonicalHits = 0;
         for (const auto &c : canonicals) {
             const bool ok =
                 hasArc(c.raw, c.display, CandidateProvenance::Canonical);
-            if (ok) {
-                ++canonicalHits;
-            }
             std::fprintf(stderr, "  canonical %-8s -> %-8s %s\n", c.raw,
                          c.display, ok ? "OK" : "MISS");
             check(ok, "production lexicon: canonical display resolution");
@@ -739,6 +776,70 @@ int main() {
                          pct(exactUs, 0.99), exactUs.back(), pct(complUs, 0.50),
                          pct(complUs, 0.95), pct(complUs, 0.99),
                          complUs.back());
+        }
+
+        // Production end-to-end: full MixedEngine::compute pipeline against
+        // the shipped resource. The Chinese side is the corpus test double
+        // carrying the pinyin spans of the long raw (the real LibIME
+        // decode is exercised at the product surface by testpinyin); the
+        // English oracles, segmentation search, composer, pool, ranker and
+        // rewriter are production code over the 94k-entry lexicon.
+        // Reported, not asserted: a ceiling here would be a fabricated
+        // threshold (closure item 7); the coarse regression guard remains
+        // the seed corpus's p95 < 5 ms check.
+        {
+            EnglishUserLexicon prodUserLex;
+            EnglishUserArcOracle prodUserEn(&prodUserLex);
+            CompositeEnglishArcOracle prodComposite;
+            prodComposite.addSource(&sysEn);
+            prodComposite.addSource(&prodUserEn);
+            prodComposite.addSource(&corrEn);
+
+            const std::vector<HanSpan> spans = {{0, 2, "我"},
+                                                {2, 7, "想"},
+                                                {7, 10, "买"},
+                                                {16, 19, "配"},
+                                                {19, 23, "件"}};
+            CorpusChineseOracle ch;
+            ch.spans = spans;
+            ArcResolver han = [&](const SegmentationArc &arc) -> std::string {
+                for (const auto &s : spans) {
+                    if (s.begin == arc.rawBegin && s.end == arc.rawEnd) {
+                        return s.han;
+                    }
+                }
+                return {};
+            };
+            const std::string raw = "woxiangmaiiphonepeijian";
+            (void)engine.compute(raw, ch, prodComposite, han);
+            std::vector<double> prodUs;
+            prodUs.reserve(200);
+            for (int i = 0; i < 200; ++i) {
+                auto t0 = std::chrono::steady_clock::now();
+                (void)engine.compute(raw, ch, prodComposite, han);
+                auto t1 = std::chrono::steady_clock::now();
+                std::chrono::duration<double, std::micro> dt = t1 - t0;
+                prodUs.push_back(dt.count());
+            }
+            std::sort(prodUs.begin(), prodUs.end());
+            std::fprintf(stderr,
+                         "  production pipeline compute p50/p95/p99/max "
+                         "(us): %.1f / %.1f / %.1f / %.1f\n",
+                         percentile(prodUs, 0.50), percentile(prodUs, 0.95),
+                         percentile(prodUs, 0.99), prodUs.back());
+        }
+
+        // Coarse process-memory readout around the production load
+        // (reported; device-side IME RSS is NOT RUN — Android soak, see the
+        // closure report).
+        {
+            const long rssNow = procKb("VmRSS:");
+            const long hwm = procKb("VmHWM:");
+            std::fprintf(stderr,
+                         "  RSS VmRSS start=%ld KiB, after production "
+                         "lexicon=%ld KiB (delta=%ld KiB); VmHWM peak=%ld "
+                         "KiB\n",
+                         rssStart, rssNow, rssNow - rssStart, hwm);
         }
     }
 
