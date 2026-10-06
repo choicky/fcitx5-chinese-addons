@@ -61,6 +61,7 @@ class EnglishUserLexicon;
 class HanWordResolver;
 class LibIMEChineseArcOracle;
 class MixedEngine;
+struct UnifiedCandidate;
 } // namespace pinyin
 
 namespace fcitx {
@@ -476,6 +477,16 @@ public:
                          const std::string &customPhrase);
     void deleteCustomPhrase(InputContext *inputContext,
                             const std::string &customPhrase);
+
+    // Architecture A English frontier learning (§14): record the confirmed
+    // English surface forms of a committed (fully or partially selected)
+    // mixed candidate into the English user lexicon and persist the table
+    // crash-safely via StandardPaths::safeSave. Gated by shouldLearn, so
+    // PasswordOrSensitive contexts and Learning=OFF never train.
+    void noteMixedEnglishSelection(const pinyin::UnifiedCandidate &candidate,
+                                   std::string_view raw,
+                                   InputContext *inputContext,
+                                   std::size_t segmentLimit);
 
     FCITX_ADDON_DEPENDENCY_LOADER(cloudpinyin, instance_->addonManager());
     FCITX_ADDON_DEPENDENCY_LOADER(pinyinhelper, instance_->addonManager());

@@ -84,6 +84,7 @@ add_test(NAME testenglishlexicon COMMAND testenglishlexicon)
 add_executable(testenglishuserlexicon testenglishuserlexicon.cpp
     ../im/pinyin/mixed/english/englishuserlexicon.cpp
     ../im/pinyin/mixed/mixedsegmentation.cpp)
+target_link_libraries(testenglishuserlexicon Fcitx5::Utils)
 target_include_directories(testenglishuserlexicon PRIVATE
     ${PROJECT_SOURCE_DIR}/im/pinyin ${PROJECT_SOURCE_DIR}/im/pinyin/mixed
     ${PROJECT_SOURCE_DIR}/im/pinyin/mixed/english)

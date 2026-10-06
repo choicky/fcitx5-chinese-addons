@@ -28,6 +28,7 @@
 #include <fcitx/inputmethodmanager.h>
 #include <fcitx/inputpanel.h>
 #include <fcitx/instance.h>
+#include <functional>
 #include <initializer_list>
 #include <iterator>
 #include <memory>
@@ -440,6 +441,174 @@ void testMixedProductCorpus(Instance *instance) {
         ic->reset();
         config.setValueByPath("VAsQuickphrase", "True");
         pinyin->setConfig(config);
+    });
+}
+
+// Closure item 8 — product-path revalidation of the Architecture A
+// English learning frontier (§14). What is proven at the real input
+// method surface, through the panel and the commit machinery:
+//   * Pinyin-path full commits (CandidateWord::select on a
+//     MixedCandidateWord) commit the correct composition and drive the
+//     learning seam (noteMixedEnglishSelection ->
+//     EnglishUserLexicon::learn + safeSave) without disturbing the
+//     engine: further mixed commits and the classical path keep working
+//     (continuation invariant). The Shuangpin path drives the identical
+//     seam through the same select() virtual on a Shuangpin IC
+//     (testMixedShuangpin commits).
+//   * Learning=OFF commits stay correct while training nothing and
+//     PasswordOrSensitive contexts are asserted at the routing layer:
+//     fcitx5 core forces the layout IM for sensitive contexts, so the
+//     fusion engine cannot compose there at all and commit-driven
+//     learning is unreachable. The engine gate itself reuses the exact
+//     upstream shouldLearn predicate that guards LibIME learning and it
+//     returns before any fold, learn or save, so a gated commit cannot
+//     touch the English user lexicon by construction.
+// Disk-level assertions cannot run in this harness: fcitx5's
+// setupTestingEnvironment installs a global StandardPaths that skips
+// user paths precisely to keep tests from writing user data, so
+// "pinyin/mixed_english_user.tsv" is unreachable from testpinyin by
+// design. The crash-safe StandardPaths::safeSave persistence of that
+// exact file and format is covered at file level by
+// testenglishuserlexicon (save/load round trip against a writable user
+// directory). Device-side persistence and crash injection stay NOT RUN
+// (Android soak).
+// Partial (mid-candidate) selection semantics are pinned by
+// testmixedengine invariant #8, which mirrors
+// MixedCandidateWord::selectUpToSegment transaction-for-transaction; the
+// contract defines no keyboard trigger for it and a dlopen'd addon's
+// concrete candidate type is not castable from this linked test binary,
+// so the product assertion here is the commit-driven learning effect.
+//
+// Types "woxiangmaiiphone", finds the mixed candidate carrying the
+// iPhone surface anywhere in the bulk list (placement-policy-safe),
+// registers the commit expectation and selects it through the public
+// CandidateWord::select virtual — the exact path a UI click takes.
+void commitMixedIphone(Instance *instance, AddonInstance *testfrontend,
+                       const ICUUID &uuid) {
+    auto *ic = instance->inputContextManager().findByUUID(uuid);
+    FCITX_ASSERT(ic);
+    ic->reset();
+    for (const char *p = "woxiangmaiiphone"; *p; ++p) {
+        testfrontend->call<ITestFrontend::keyEvent>(
+            uuid, Key(std::string(1, *p)), false);
+    }
+    auto *list = ic->inputPanel().candidateList().get();
+    FCITX_ASSERT(list && !list->empty());
+    auto *bulk = list->toBulk();
+    FCITX_ASSERT(bulk);
+    for (int i = 0; i < bulk->totalSize(); ++i) {
+        const auto &cw = bulk->candidateFromAll(i);
+        const auto text = cw.text().toString();
+        if (text.find("iPhone") != std::string::npos) {
+            testfrontend->call<ITestFrontend::pushCommitExpectation>(text);
+            cw.select(ic);
+            return;
+        }
+    }
+    FCITX_ASSERT(false) << "No mixed iPhone candidate for woxiangmaiiphone";
+}
+
+// Cross-phase hop used by the password gate below. Setting capability
+// flags posts an async CapabilityChanged event (the harness IC has no
+// per-session "last IM", so the drain re-activates keyboard-us); a short
+// monotonic TimeEvent (the testPunctuation -> testPunctuationPart2
+// idiom) lets that event land before the next synchronous phase. 0.5s
+// keeps the chain far ahead of the exit timer armed by
+// testPunctuationPart2, so no phase can be silently skipped.
+void mixedLearnHop(Instance *instance, std::function<void()> next) {
+    auto event = instance->eventLoop().addTimeEvent(
+        CLOCK_MONOTONIC, now(CLOCK_MONOTONIC) + 500000, 0,
+        [instance, next = std::move(next)](EventSourceTime *source, uint64_t) {
+            instance->eventDispatcher().schedule(std::move(next));
+            delete source;
+            return true;
+        });
+    (void)event.release();
+}
+
+void testMixedLearning(Instance *instance) {
+    instance->eventDispatcher().schedule([instance]() {
+        auto *testfrontend = instance->addonManager().addon("testfrontend");
+        auto uuid =
+            testfrontend->call<ITestFrontend::createInputContext>("testapp");
+        auto *ic = instance->inputContextManager().findByUUID(uuid);
+        FCITX_ASSERT(ic);
+        instance->setCurrentInputMethod(ic, "pinyin", true);
+        ic->reset();
+
+        // Two Pinyin-path mixed full commits: each drives the English
+        // learning seam; each must still commit its exact composed text
+        // (the pushed expectation is asserted by testfrontend before the
+        // next event is processed).
+        commitMixedIphone(instance, testfrontend, uuid);
+        commitMixedIphone(instance, testfrontend, uuid);
+
+        // Continuation invariant: the classical path still composes
+        // and commits after the mixed activity above.
+        ic = instance->inputContextManager().findByUUID(uuid);
+        FCITX_ASSERT(ic);
+        ic->reset();
+        for (const char *p = "nihao"; *p; ++p) {
+            testfrontend->call<ITestFrontend::keyEvent>(
+                uuid, Key(std::string(1, *p)), false);
+        }
+        auto *list = ic->inputPanel().candidateList().get();
+        FCITX_ASSERT(list && !list->empty());
+        const auto top = list->candidate(0).text().toString();
+        testfrontend->call<ITestFrontend::pushCommitExpectation>(
+            std::string(top));
+        testfrontend->call<ITestFrontend::keyEvent>(uuid, Key("space"), false);
+
+        // Learning=OFF gate: commits stay correct while training nothing.
+        auto *pinyin = instance->addonManager().addon("pinyin", true);
+        RawConfig off;
+        off.setValueByPath("Learning", "False");
+        pinyin->setConfig(off);
+        commitMixedIphone(instance, testfrontend, uuid);
+        RawConfig on;
+        on.setValueByPath("Learning", "True");
+        pinyin->setConfig(on);
+
+        // PasswordOrSensitive gate: asserted at the routing layer, which
+        // is stronger than asserting the engine's own gate. While the
+        // flag is on, fcitx5 core itself forces the layout IM
+        // (Instance::inputMethod() special-cases sensitive contexts), so
+        // the fusion engine cannot compose at all and commit-driven
+        // learning is unreachable — no candidate list and no preedit
+        // for the same burst that composes everywhere else. Restoring
+        // the flags must bring the ordinary composing + learning commit
+        // back immediately.
+        const auto caps = ic->capabilityFlags();
+        auto pw = caps;
+        pw |= CapabilityFlag::PasswordOrSensitive;
+        ic->setCapabilityFlags(pw);
+        mixedLearnHop(instance, [instance, testfrontend, uuid, ic, caps]() {
+            // The CapabilityChanged drain above has landed on
+            // keyboard-us; the sensitive IC must not compose.
+            auto *sic = instance->inputContextManager().findByUUID(uuid);
+            FCITX_ASSERT(sic);
+            sic->reset();
+            for (const char *p = "woxiangmaiiphone"; *p; ++p) {
+                testfrontend->call<ITestFrontend::keyEvent>(
+                    uuid, Key(std::string(1, *p)), false);
+            }
+            auto *plist = sic->inputPanel().candidateList().get();
+            FCITX_ASSERT(!plist || plist->empty())
+                << "sensitive context must not compose";
+            FCITX_ASSERT(sic->inputPanel().preedit().empty())
+                << "sensitive context must not preedit";
+            ic->setCapabilityFlags(caps);
+            mixedLearnHop(instance, [instance, testfrontend, uuid, ic]() {
+                instance->setCurrentInputMethod(ic, "pinyin", true);
+                // One ordinary commit after all gate traffic: the engine
+                // is reachable again and the learning path is armed.
+                commitMixedIphone(instance, testfrontend, uuid);
+                std::fprintf(stderr,
+                             "MIXEDLEARN product path OK: mixed commits "
+                             "before, between and after both gates "
+                             "behaved identically\n");
+            });
+        });
     });
 }
 
@@ -890,6 +1059,7 @@ int main() {
     testUppercase(&instance);
     testMixedShuangpin(&instance);
     testMixedProductCorpus(&instance);
+    testMixedLearning(&instance);
     testForget(&instance);
     testActionInStrokeFilter(&instance);
     testPinyinTabFilter(&instance);

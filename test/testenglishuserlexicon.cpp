@@ -7,6 +7,13 @@
 
 #include <cstdint>
 #include <cstdio>
+#include <cstdlib>
+#include <fcitx-utils/fdstreambuf.h>
+#include <fcitx-utils/standardpaths.h>
+#include <fcitx-utils/unixfd.h>
+#include <filesystem>
+#include <istream>
+#include <ostream>
 #include <sstream>
 #include <string>
 
@@ -203,6 +210,52 @@ int main() {
         EnglishUserArcOracle oracle(&lex);
         auto arcs = oracle.arcsAt("hello", 0, 5);
         check(arcs.empty(), "oracle: empty lexicon yields no arcs");
+    }
+
+    // 14. Production persistence seam: StandardPaths::safeSave of the
+    //     exact engine file "pinyin/mixed_english_user.tsv" (PkgData),
+    //     then reload from disk through the same open path
+    //     PinyinEngine::loadMixedResources uses. safeSave writes to a
+    //     temporary file and renames atomically, so a killed process can
+    //     only ever leave the old complete file or the new complete file;
+    //     that crash-safe on-disk state is pinned here. (testpinyin
+    //     cannot assert this: fcitx5's setupTestingEnvironment installs a
+    //     global StandardPaths that skips user paths by design to keep
+    //     tests from writing user data.)
+    {
+        const auto base = std::filesystem::temp_directory_path() /
+                          ("fcitx5-eul-persist-" + std::to_string(::getpid()));
+        std::error_code ec;
+        std::filesystem::remove_all(base, ec);
+        setenv("XDG_DATA_HOME", base.string().c_str(), 1);
+        EnglishUserLexicon lex;
+        lex.learn("iphone", "iPhone", 500);
+        lex.learn("iphone", "iPhone", 600);
+        const bool saved = fcitx::StandardPaths::global().safeSave(
+            fcitx::StandardPathsType::PkgData, "pinyin/mixed_english_user.tsv",
+            [&lex](int fd) {
+                fcitx::OFDStreamBuf buffer(fd);
+                std::ostream out(&buffer);
+                lex.save(out);
+                return static_cast<bool>(out);
+            });
+        check(saved, "safeSave persists user lexicon to disk");
+        EnglishUserLexicon reloaded;
+        auto file = fcitx::StandardPaths::global().open(
+            fcitx::StandardPathsType::PkgData, "pinyin/mixed_english_user.tsv",
+            fcitx::StandardPathsMode::User);
+        check(file.isValid(), "reload: file readable at the engine path");
+        if (file.isValid()) {
+            fcitx::IFDStreamBuf buffer(file.fd());
+            std::istream in(&buffer);
+            check(reloaded.load(in), "reload: load returns true");
+            const auto *e = reloaded.lookup("iphone");
+            check(e && e->count == 2 && e->display == "iPhone" &&
+                      e->firstSeenSec == 500 && e->lastUsedSec == 600,
+                  "reload: persisted fields intact across process-level "
+                  "save/load");
+        }
+        std::filesystem::remove_all(base, ec);
     }
 
     if (failures == 0) {

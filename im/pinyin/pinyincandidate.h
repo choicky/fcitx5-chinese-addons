@@ -218,7 +218,8 @@ class MixedCandidateWord : public PinyinAbstractCandidateWord,
                            public InsertableAsCustomPhraseInterface {
 public:
     MixedCandidateWord(PinyinEngine *engine, std::string composed,
-                       size_t inputLength, CandidateOrder order,
+                       size_t inputLength, std::string raw,
+                       CandidateOrder order,
                        std::unique_ptr<pinyin::UnifiedCandidate> candidate);
     ~MixedCandidateWord() override;
 
@@ -241,6 +242,11 @@ public:
 private:
     PinyinEngine *engine_;
     std::string composed_;
+    // Raw suffix the candidate was computed over at updateUI time. The
+    // byte offsets on `candidate_` segments are relative to this string;
+    // the English-learning seam needs the typed bytes (folded span) to
+    // key user-confirmed surface forms.
+    std::string raw_;
     std::unique_ptr<pinyin::UnifiedCandidate> candidate_;
 };
 

@@ -27,6 +27,7 @@
 #include "workerthread.h"
 #include <algorithm>
 #include <cassert>
+#include <chrono>
 #include <cstddef>
 #include <cstdint>
 #include <ctime>
@@ -755,6 +756,7 @@ void PinyinEngine::updateUI(InputContext *inputContext) {
                     std::move(text),
                     std::make_unique<MixedCandidateWord>(
                         this, clone->composedText, pyBeforeCursor.size(),
+                        pyBeforeCursor,
                         CandidateOrder{slot, customCandidateMap.size()},
                         std::move(clone)));
             }
@@ -1923,22 +1925,77 @@ void PinyinEngine::saveMixedEnglishUserLexicon() {
         return;
     }
     instance_->eventDispatcher().scheduleWithContext(watch(), [this]() {
-        StandardPaths::global().safeSave(
-            StandardPathsType::PkgData, "pinyin/mixed_english_user.tsv",
-            [this](int fd) {
-                OFDStreamBuf buffer(fd);
-                std::ostream out(&buffer);
-                try {
-                    mixedEnglishUserLexicon_->save(out);
-                    return static_cast<bool>(out);
-                } catch (const std::exception &e) {
-                    PINYIN_ERROR() << "Failed to save mixed English user "
-                                      "lexicon: "
-                                   << e.what();
-                    return false;
-                }
-            });
+        if (!StandardPaths::global().safeSave(
+                StandardPathsType::PkgData, "pinyin/mixed_english_user.tsv",
+                [this](int fd) {
+                    OFDStreamBuf buffer(fd);
+                    std::ostream out(&buffer);
+                    try {
+                        mixedEnglishUserLexicon_->save(out);
+                        return static_cast<bool>(out);
+                    } catch (const std::exception &e) {
+                        PINYIN_ERROR() << "Failed to save mixed English user "
+                                          "lexicon: "
+                                       << e.what();
+                        return false;
+                    }
+                })) {
+            PINYIN_ERROR() << "Failed to persist mixed English user lexicon "
+                              "(pinyin/mixed_english_user.tsv); learned "
+                              "entries stay in memory for this session only.";
+        }
     });
+}
+
+void PinyinEngine::noteMixedEnglishSelection(
+    const pinyin::UnifiedCandidate &candidate, std::string_view raw,
+    InputContext *inputContext, std::size_t segmentLimit) {
+    if (!mixedEnglishUserLexicon_ || !shouldLearn(inputContext)) {
+        return;
+    }
+    const std::size_t n = std::min(segmentLimit, candidate.segments.size());
+    std::size_t learned = 0;
+    const auto nowSec = static_cast<std::uint64_t>(
+        std::chrono::system_clock::to_time_t(std::chrono::system_clock::now()));
+    for (std::size_t i = 0; i < n; ++i) {
+        const auto &seg = candidate.segments[i];
+        if (seg.source == pinyin::SegmentSource::Chinese) {
+            // Chinese frontier learning is LibIME's own user dictionary,
+            // driven by context_.learn() on commit (updateUI).
+            continue;
+        }
+        if (seg.rawEnd <= seg.rawBegin || seg.rawEnd > raw.size()) {
+            continue;
+        }
+        // Fold exactly the byte set EnglishUserArcOracle can later look up
+        // (isAllowedByte in englishuserlexicon.cpp): ASCII letters (case
+        // folded), digits, apostrophe and hyphen. Any other byte means the
+        // span is not re-recallable as a user key; skip rather than persist
+        // a dead entry.
+        std::string folded;
+        folded.reserve(seg.rawEnd - seg.rawBegin);
+        bool ok = true;
+        for (std::size_t b = seg.rawBegin; b < seg.rawEnd; ++b) {
+            const unsigned char c = static_cast<unsigned char>(raw[b]);
+            if (c >= 'A' && c <= 'Z') {
+                folded.push_back(static_cast<char>(c - 'A' + 'a'));
+            } else if ((c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') ||
+                       c == '\'' || c == '-') {
+                folded.push_back(static_cast<char>(c));
+            } else {
+                ok = false;
+                break;
+            }
+        }
+        if (!ok || folded.empty() || seg.output.empty()) {
+            continue;
+        }
+        mixedEnglishUserLexicon_->learn(folded, seg.output, nowSec);
+        ++learned;
+    }
+    if (learned > 0) {
+        saveMixedEnglishUserLexicon();
+    }
 }
 
 void PinyinEngine::pinCustomPhrase(InputContext *inputContext,

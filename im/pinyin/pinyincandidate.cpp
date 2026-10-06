@@ -303,15 +303,21 @@ void SpellCandidateWord::select(InputContext *inputContext) const {
 
 MixedCandidateWord::MixedCandidateWord(
     PinyinEngine *engine, std::string composed, size_t inputLength,
-    CandidateOrder order, std::unique_ptr<pinyin::UnifiedCandidate> candidate)
+    std::string raw, CandidateOrder order,
+    std::unique_ptr<pinyin::UnifiedCandidate> candidate)
     : PinyinAbstractCandidateWord(inputLength, order), engine_(engine),
-      composed_(std::move(composed)), candidate_(std::move(candidate)) {
+      composed_(std::move(composed)), raw_(std::move(raw)),
+      candidate_(std::move(candidate)) {
     setText(Text(composed_));
 }
 
 MixedCandidateWord::~MixedCandidateWord() = default;
 
 void MixedCandidateWord::select(InputContext *inputContext) const {
+    if (candidate_) {
+        engine_->noteMixedEnglishSelection(*candidate_, raw_, inputContext,
+                                           candidate_->segments.size());
+    }
     auto *state = inputContext->propertyFor(&engine_->factory());
     auto &context = state->context_;
     context.selectCustom(selectLength_, composed_);
@@ -355,6 +361,9 @@ bool MixedCandidateWord::selectUpToSegment(size_t k,
     if (rawLen > context.size() - context.selectedLength()) {
         return false; // beyond current raw suffix
     }
+    // The frozen prefix is a confirmed selection just like a full commit:
+    // train the English frontier for the first k segments only.
+    engine_->noteMixedEnglishSelection(*candidate_, raw_, inputContext, k);
     // selectCustom consumes `rawLen` raw bytes from the pending suffix and
     // injects `prefix` as a custom selection; the remaining raw range stays
     // active for continued decoding on the next keystroke.
