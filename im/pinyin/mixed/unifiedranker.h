@@ -99,6 +99,24 @@ public:
     std::vector<std::size_t>
     rankIndices(const std::vector<UnifiedCandidate> &pool) const;
 
+    // Bounded cross-source insertion class for product placement (final
+    // ranking closure; supersedes the blanket "classical pure-Han coverage
+    // puts every English candidate behind the whole Chinese list" rule).
+    // A candidate belongs to this class when it explains the WHOLE raw
+    // stream with a SINGLE English arc whose provenance is Canonical or
+    // CustomPhrase. Pure property test, no score comparison and no word
+    // list (§3): Canonical re-spelling only exists when the dictionary
+    // surface differs from the typed span in case form (chatgpt ->
+    // ChatGPT, macos -> macOS, openwrt -> OpenWrt), which ambiguous
+    // lowercase overlap words (win/long/game/pin/an/ai: surface == raw,
+    // hence Exact) can never satisfy. Completion/Correction arcs are
+    // excluded: they extrapolate beyond typed evidence. CustomPhrase
+    // inclusion lets a user-confirmed word move into the class by
+    // learning alone. Everything outside the class keeps the existing
+    // placement semantics (pool-front mixed lead, else behind classical).
+    static bool isBoundedInsertionClass(const UnifiedCandidate &c,
+                                        std::size_t rawSize);
+
     // Exposed for tests so assertions can pin the score directly rather
     // than relying only on ordering.
     float score(const RankFeatures &f) const;

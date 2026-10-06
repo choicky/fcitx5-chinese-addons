@@ -105,6 +105,22 @@ UnifiedRanker::UnifiedRanker() : UnifiedRanker(Weights{}) {}
 
 UnifiedRanker::UnifiedRanker(Weights weights) : weights_(weights) {}
 
+bool UnifiedRanker::isBoundedInsertionClass(const UnifiedCandidate &c,
+                                            std::size_t rawSize) {
+    if (c.arcCount != 1 || c.sources.size() != 1 || c.provenances.size() != 1 ||
+        c.alignment.size() != 1 || rawSize == 0) {
+        return false;
+    }
+    if (c.sources[0] != SegmentSource::English) {
+        return false;
+    }
+    if (c.provenances[0] != CandidateProvenance::Canonical &&
+        c.provenances[0] != CandidateProvenance::CustomPhrase) {
+        return false;
+    }
+    return c.alignment[0].rawBegin == 0 && c.alignment[0].rawEnd == rawSize;
+}
+
 float UnifiedRanker::score(const RankFeatures &f) const {
     if (f.arcCount == 0) {
         return -1e9F;
