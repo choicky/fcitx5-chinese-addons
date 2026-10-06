@@ -66,6 +66,13 @@ public:
     // gracefully degrades instead of crashing.
     void setShuangpinProfile(const libime::ShuangpinProfile *profile);
 
+    // Switch between the Pinyin and Shuangpin parse at runtime. The active
+    // input mode is a property of the input method entry ("pinyin" vs
+    // "shuangpin"), not of the add-on config, so the fusion seam calls this
+    // before every `setRaw`. Any cached graph is invalidated on change;
+    // calling with the current mode is a no-op.
+    void setMode(ChineseInputMode mode);
+
     // Configure the fuzzy flags for the graph parse (defaults to None). These
     // are the same flags the classical LibIME decoder uses, so the structural
     // validity of Chinese arcs in the mixed path matches the classical path.

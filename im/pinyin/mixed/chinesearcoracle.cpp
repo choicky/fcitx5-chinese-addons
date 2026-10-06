@@ -82,6 +82,21 @@ void LibIMEChineseArcOracle::setShuangpinProfile(
     d_->lastRaw.clear();
 }
 
+void LibIMEChineseArcOracle::setMode(ChineseInputMode mode) {
+    if (d_->mode == mode) {
+        return;
+    }
+    d_->mode = mode;
+    // The cached graph was parsed under the previous mode; a Shuangpin graph
+    // and a Pinyin graph are different segmentations of the same raw string,
+    // so it must not be reused across the switch.
+    d_->graph.reset();
+    d_->baseGraph.reset();
+    d_->endsFromBegin.clear();
+    d_->baseEndsFromBegin.clear();
+    d_->lastRaw.clear();
+}
+
 void LibIMEChineseArcOracle::setFuzzyFlags(libime::PinyinFuzzyFlags flags) {
     d_->flags = flags;
     d_->graph.reset();

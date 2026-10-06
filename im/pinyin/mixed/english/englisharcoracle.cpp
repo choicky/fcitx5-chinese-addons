@@ -44,20 +44,36 @@ std::vector<SegmentationArc> EnglishArcOracle::arcsAt(std::string_view raw,
         }
         const auto *exact = lex_->lookup(*folded);
         if (exact != nullptr) {
+            // Three-case surface resolution (replaces the retired ISpell
+            // upper-raw path, see design §10 / SpellEnabled repoint):
+            //  * span already equals the canonical display  -> Exact.
+            //  * span carries user-typed capitalisation (any upper byte) and
+            //    folds to the dictionary key -> the user's surface is
+            //    authoritative ("Apple" stays "Apple", not the dictionary's
+            //    "apple"); still Exact — the letters are a dictionary hit.
+            //  * all-lowercase span whose canonical display differs ->
+            //    Canonical re-spelling ("iphone" -> "iPhone").
+            const bool userTypedCase =
+                std::any_of(span.begin(), span.end(), [](char c) {
+                    return std::isupper(static_cast<unsigned char>(c)) != 0;
+                });
             const bool caseMatchesSurface = (span == exact->display);
+            std::string output = exact->display;
+            if (!caseMatchesSurface && userTypedCase) {
+                output = std::string(span);
+            }
+            const bool exactEvidence = caseMatchesSurface || userTypedCase;
             SegmentationArc arc;
             arc.rawBegin = begin;
             arc.rawEnd = e;
             arc.source = SegmentSource::English;
-            arc.provenance = caseMatchesSurface
-                                 ? CandidateProvenance::Exact
-                                 : CandidateProvenance::Canonical;
-            arc.confidence = caseMatchesSurface
-                                 ? lex_->exactEvidence(*exact)
-                                 : lex_->canonicalEvidence(*exact);
-            arc.boundaryConfidence = caseMatchesSurface ? 1.0F : 0.95F;
+            arc.provenance = exactEvidence ? CandidateProvenance::Exact
+                                           : CandidateProvenance::Canonical;
+            arc.confidence = exactEvidence ? lex_->exactEvidence(*exact)
+                                           : lex_->canonicalEvidence(*exact);
+            arc.boundaryConfidence = exactEvidence ? 1.0F : 0.95F;
             arc.sourceLocalRank = localRank++;
-            arc.resolvedOutput = exact->display;
+            arc.resolvedOutput = std::move(output);
             out.push_back(arc);
         }
         // Emit completion arcs at any prefix that has at least one non-literal

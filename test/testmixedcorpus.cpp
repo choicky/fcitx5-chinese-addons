@@ -24,21 +24,30 @@
 //   * Long streams (>= 20 raw bytes) exercising the beam budget and pool cap.
 //
 // Measurements reported to stdout (the Batch 10 baseline-vs-after numbers):
-//   TOP-1 ACCURACY        : corpus cases whose top-1 composed text contains
-//                           every expected display form.
+//   TOP-1 ACCURACY        : MIXED corpus cases whose top-1 composed text
+//                           contains every expected display form.
+//   FAST PATH (§9)        : pure-Chinese cases whose pool is EMPTY — with no
+//                           English arc evidence the engine must short-circuit
+//                           before compose/rank/rewrite. This is a strictly
+//                           stronger invariant than the older "English-free
+//                           pool" guard, which is retained below as a
+//                           belt-and-braces check.
 //   FALSE CORRECTION      : clean cases (no typo) whose top-1 stays Exact on
 //                           every span.
-//   RECALL                : corpus cases whose top-K (K = pool.maxSize)
+//   RECALL                : mixed corpus cases whose top-K (K = pool.maxSize)
 //                           contains at least one candidate matching the
 //                           expected composed text.
 //   PER-CASE LATENCY      : p50 / p95 / max wall-clock per compute() call in
-//                           microseconds, plus a coarse long-run RSS delta.
+//                           microseconds, reported separately for mixed cases
+//                           (full pipeline) and pure-Chinese cases (fast
+//                           path), plus a coarse long-run RSS delta.
 //
 // The gate is intentionally permissive on absolute performance (CI runners
-// and containers vary) but strict on accuracy: the corpus must remain 100%
-// top-1 correct and the latency ceiling must stay within the CI budget. If
-// either regresses, the change is not a compile-time issue but a ranking or
-// search regression caught by this harness.
+// and containers vary) but strict on accuracy: every mixed case must remain
+// top-1 correct (at most one miss allowed for tie-break differences, see
+// assertions) and every pure-Chinese case must hit the fast path. If either
+// regresses, the change is not a compile-time issue but a ranking, search or
+// fast-path regression caught by this harness.
 //
 // Long-running: 200 iterations across the same corpus. Not a substitute for
 // device-level soak; validates that no cache / pool / ranker state grows
@@ -90,9 +99,11 @@ struct CorpusCase {
     // substring so the assertion is order-independent across spans that the
     // pipeline may re-arrange in edge cases (which would itself be a bug).
     std::vector<std::string> expectedDisplays;
-    // When true, this case has no English intent: the top-1 must be a pure
-    // Chinese composition (no English source). Used for false-correction
-    // guard (a well-formed Chinese stream must not acquire an English arc).
+    // When true, this case has no English intent: the §9 fast path must make
+    // compute() short-circuit and return an EMPTY pool (no English evidence
+    // anywhere in the search result). A well-formed pure-Chinese stream that
+    // acquires any mixed candidate is a false-English event and fails both
+    // the emptiness guard and the English-free guard below.
     bool pureChineseExpected = false;
 };
 
@@ -244,9 +255,12 @@ int main() {
     size_t recallHits = 0;
     size_t falseCorrection = 0;
     size_t pureChineseCases = 0;
+    size_t pureChineseEmptyPools = 0;
 
     std::vector<double> latenciesUs;
     latenciesUs.reserve(corpus().size());
+    std::vector<double> fastPathLatenciesUs;
+    fastPathLatenciesUs.reserve(corpus().size());
 
     // Warm-up pass: run the whole corpus once against the same engine and
     // discard results before timing. Without this the per-case `compute`
@@ -286,12 +300,25 @@ int main() {
         auto pool = engine.compute(c.raw, ch, oracles.composite, han);
         auto t1 = std::chrono::steady_clock::now();
         std::chrono::duration<double, std::micro> dt = t1 - t0;
-        latenciesUs.push_back(dt.count());
+        if (c.pureChineseExpected) {
+            fastPathLatenciesUs.push_back(dt.count());
+        } else {
+            latenciesUs.push_back(dt.count());
+        }
 
         bool hit = false;
         bool recall = false;
+        bool fastPath = false;
         std::string topText;
-        if (!pool.empty()) {
+        if (c.pureChineseExpected) {
+            // §9 fast-path contract: with no English arc anywhere in the
+            // search result, MixedEngine::compute must short-circuit before
+            // compose / pool / rank / rewrite and return an EMPTY pool.
+            fastPath = pool.empty();
+            if (fastPath) {
+                ++pureChineseEmptyPools;
+            }
+        } else if (!pool.empty()) {
             topText = pool.front().composedText;
             hit = composedTextContainsAll(topText, c.expectedDisplays);
             for (const auto &cand : pool) {
@@ -311,8 +338,10 @@ int main() {
 
         if (c.pureChineseExpected) {
             ++pureChineseCases;
-            // Any English source in the top-K is a false-correction /
-            // false-English event for a well-formed pure-Chinese stream.
+            // English-source guard kept as belt-and-braces on top of the
+            // emptiness invariant: an empty pool passes trivially, but if
+            // the fast path ever regressed to returning Chinese-only mixed
+            // candidates, any English contamination still fails here.
             bool englishAppeared = false;
             for (const auto &cand : pool) {
                 for (const auto src : cand.sources) {
@@ -330,23 +359,39 @@ int main() {
             }
         }
 
-        std::fprintf(stderr,
-                     "  %-32s top1=%s recall=%s pool=%zu latency=%.1fus\n",
-                     c.label, hit ? "OK" : "MISS", recall ? "OK" : "MISS",
-                     pool.size(), latenciesUs.back());
+        if (c.pureChineseExpected) {
+            std::fprintf(stderr,
+                         "  %-32s fastpath=%s pool=%zu latency=%.1fus\n",
+                         c.label, fastPath ? "OK" : "MISS", pool.size(),
+                         fastPathLatenciesUs.back());
+        } else {
+            std::fprintf(stderr,
+                         "  %-32s top1=%s recall=%s pool=%zu latency=%.1fus\n",
+                         c.label, hit ? "OK" : "MISS", recall ? "OK" : "MISS",
+                         pool.size(), latenciesUs.back());
+        }
     }
 
+    auto percentile = [](std::vector<double> &sorted, double q) {
+        if (sorted.empty()) {
+            return 0.0;
+        }
+        size_t idx = static_cast<size_t>(sorted.size() * q);
+        if (idx >= sorted.size()) {
+            idx = sorted.size() - 1;
+        }
+        return sorted[idx];
+    };
     std::sort(latenciesUs.begin(), latenciesUs.end());
-    double p50 =
-        latenciesUs.empty() ? 0.0 : latenciesUs[latenciesUs.size() / 2];
-    double p95 =
-        latenciesUs.empty()
-            ? 0.0
-            : latenciesUs[static_cast<size_t>(latenciesUs.size() * 0.95) >=
-                                  latenciesUs.size()
-                              ? latenciesUs.size() - 1
-                              : static_cast<size_t>(latenciesUs.size() * 0.95)];
-    double pmax = latenciesUs.empty() ? 0.0 : latenciesUs.back();
+    std::sort(fastPathLatenciesUs.begin(), fastPathLatenciesUs.end());
+    const double p50 = percentile(latenciesUs, 0.50);
+    const double p95 = percentile(latenciesUs, 0.95);
+    const double pmax = latenciesUs.empty() ? 0.0 : latenciesUs.back();
+    const double fp50 = percentile(fastPathLatenciesUs, 0.50);
+    const double fp95 = percentile(fastPathLatenciesUs, 0.95);
+    const double fpmax =
+        fastPathLatenciesUs.empty() ? 0.0 : fastPathLatenciesUs.back();
+    const size_t mixedCases = totalCases - pureChineseCases;
 
     // Long-run: re-iterate the full corpus 200 times against the SAME engine
     // instance; assert the top-1 composed string is stable per case. This
@@ -404,34 +449,47 @@ int main() {
 
     std::fprintf(stderr,
                  "=== batch 10 summary ===\n"
-                 "  corpus size:                       %zu\n"
-                 "  top-1 accuracy:                    %zu/%zu\n"
-                 "  top-K recall (K = pool.maxSize):   %zu/%zu\n"
-                 "  false-correction (pure-Chinese):   %zu/%zu\n"
-                 "  latency p50 / p95 / max (us):      %.1f / %.1f / %.1f\n",
-                 totalCases, top1Hits, totalCases, recallHits, totalCases,
-                 falseCorrection, pureChineseCases, p50, p95, pmax);
+                 "  corpus size:                         %zu\n"
+                 "  mixed cases:                         %zu\n"
+                 "  top-1 accuracy (mixed):              %zu/%zu\n"
+                 "  top-K recall (mixed, K = maxSize):   %zu/%zu\n"
+                 "  fast-path empty pool (pure-Chinese): %zu/%zu\n"
+                 "  false-correction (pure-Chinese):     %zu/%zu\n"
+                 "  mixed latency p50/p95/max (us):      %.1f / %.1f / %.1f\n"
+                 "  fast-path latency p50/p95/max (us):  %.1f / %.1f / %.1f\n",
+                 totalCases, mixedCases, top1Hits, mixedCases, recallHits,
+                 mixedCases, pureChineseEmptyPools, pureChineseCases,
+                 falseCorrection, pureChineseCases, p50, p95, pmax, fp50, fp95,
+                 fpmax);
 
     // Contract assertions:
     //  * Corpus must be exercised; empty is a wiring failure.
     check(totalCases >= 7, "corpus: at least 7 labeled cases");
     //  * Every mixed (non-pure-Chinese) case must appear in top-K; a miss
     //    here is a genuine segmentation / compose / rank regression.
-    check(recallHits >= corpus().size() - pureChineseCases,
-          "recall: every non-pure-Chinese case appears in top-K");
+    check(recallHits >= mixedCases,
+          "recall: every mixed case appears in top-K");
+    //  * §9 fast path: every pure-Chinese stream must yield an EMPTY pool
+    //    (stronger than the English-free guard below; the classical Chinese
+    //    path owns these streams end-to-end).
+    check(pureChineseEmptyPools == pureChineseCases,
+          "fast path: every pure-Chinese stream yields an empty pool");
     //  * False-correction guard: well-formed pure-Chinese streams must never
     //    gain an English source in their pool.
     check(falseCorrection == 0,
           "false-correction: pure-Chinese streams keep an English-free pool");
-    //  * Top-1 accuracy is the strongest signal the orchestrator can produce
-    //    offline; allow at most one case to miss (a case where the corpus
-    //    expected span ranking differs from the pool tie-break, but recall
-    //    still holds). If two or more miss, ranking has regressed.
-    check(top1Hits + 1 >= totalCases,
-          "top-1 accuracy: at most one corpus miss");
+    //  * Top-1 accuracy over mixed cases is the strongest signal the
+    //    orchestrator can produce offline; allow at most one case to miss
+    //    (a case where the corpus expected span ranking differs from the
+    //    pool tie-break, but recall still holds). If two or more miss,
+    //    ranking has regressed.
+    check(top1Hits + 1 >= mixedCases,
+          "top-1 accuracy: at most one mixed corpus miss");
     //  * Latency ceiling: p95 under 5 ms per corpus case in the container
-    //    env. This is a coarse budget guard, not a product SLA.
-    check(p95 < 5000.0, "latency: p95 under 5 ms per corpus case");
+    //    env, separately for the full mixed pipeline and the §9 fast path.
+    //    This is a coarse budget guard, not a product SLA.
+    check(p95 < 5000.0, "latency: mixed p95 under 5 ms per corpus case");
+    check(fp95 < 5000.0, "latency: fast-path p95 under 5 ms per corpus case");
 
     if (failures > 0) {
         std::fprintf(stderr, "testmixedcorpus: %d failure(s)\n", failures);

@@ -85,6 +85,7 @@
 #include <libime/pinyin/pinyinime.h>
 #include <libime/pinyin/pinyinprediction.h>
 #include <libime/pinyin/shuangpinprofile.h>
+#include <limits>
 #include <list>
 #include <memory>
 #include <optional>
@@ -145,52 +146,6 @@ predictCandidateList(PinyinEngine *engine, const std::vector<T> &words) {
         candidateList->setGlobalCursorIndex(0);
     }
     return candidateList;
-}
-
-std::tuple<bool, int> englishNess(const std::string &input, bool sp) {
-    const auto pys = stringutils::split(input, " ");
-    constexpr int fullWeight = -2;
-    constexpr int shortWeight = 3;
-    constexpr int invalidWeight = 6;
-    constexpr int defaultWeight = shortWeight;
-    int weight = 0;
-    if (std::ranges::any_of(input, charutils::isupper)) {
-        return {true,
-                std::max<size_t>(1, ((invalidWeight * pys.size()) + 7) / 10)};
-    }
-
-    for (const auto &py : pys) {
-        if (sp) {
-            if (py.size() == 2) {
-                weight += fullWeight / 2;
-            } else {
-                weight += invalidWeight;
-            }
-        } else {
-            if (py == "ng") {
-                weight += fullWeight;
-            } else {
-                auto firstChr = py[0];
-                if (firstChr == '\'') {
-                    return {false, 0};
-                }
-                if (firstChr == 'i' || firstChr == 'u' || firstChr == 'v') {
-                    weight += invalidWeight;
-                } else if (py.size() <= 2) {
-                    weight += shortWeight;
-                } else if (py.find_first_of("aeiou") != std::string::npos) {
-                    weight += fullWeight;
-                } else {
-                    weight += defaultWeight;
-                }
-            }
-        }
-    }
-
-    if (weight < 0) {
-        return {false, 0};
-    }
-    return {false, (weight + 7) / 10};
 }
 
 bool isStroke(const std::string &input) {
@@ -640,51 +595,13 @@ void PinyinEngine::updateUI(InputContext *inputContext) {
         }
         /// }}}
 
-        /// Create spell candidate {{{
-        auto [parsedPy, parsedPyCursor] = state->context_.preeditWithCursor(
-            libime::PinyinPreeditMode::RawText);
-        if (*config_.spellEnabled && spell() &&
-            parsedPyCursor >= selectedSentence.size() &&
-            selectedLength <= context.cursor()) {
-            auto [hasUpper, engNess] =
-                englishNess(parsedPy, context.useShuangpin());
-            if (engNess) {
-                parsedPyCursor -= selectedSentence.length();
-                parsedPy = parsedPy.substr(
-                    selectedSentence.size(),
-                    parsedPyCursor > selectedSentence.length()
-                        ? parsedPyCursor - selectedSentence.length()
-                        : std::string::npos);
-                auto results = spell()->call<ISpell::hintWithProvider>(
-                    "en", SpellProvider::Custom, pyBeforeCursor, engNess);
-
-                // Our hint doesn't work well with mixed case, so, always put a
-                // word as is.
-                if (hasUpper && !pyBeforeCursor.empty()) {
-                    if (std::find(results.begin(), results.end(),
-                                  pyBeforeCursor) == results.end()) {
-                        if (!charutils::isupper(pyBeforeCursor[0])) {
-                            results.insert(results.begin(), pyBeforeCursor);
-                        } else {
-                            results.push_back(pyBeforeCursor);
-                        }
-                    }
-                }
-
-                int position = hasUpper ? 0 : 1;
-                for (const auto &result : results) {
-                    if (customCandidateMap.contains(result)) {
-                        continue;
-                    }
-                    customCandidateMap.emplace(
-                        result, std::make_unique<SpellCandidateWord>(
-                                    this, result, pyBeforeCursor.size(),
-                                    CandidateOrder{position++,
-                                                   customCandidateMap.size()}));
-                }
-            }
-        }
-        /// }}}
+        /// Spell sidecar retired ({{{ was: "Create spell candidate" }}})
+        // The classical ISpell single-word sidecar is superseded by
+        // Architecture A: English candidates now come exclusively from the
+        // English Core through the unified mixed pipeline below. Keeping
+        // both live would run two independent English pipelines from one
+        // config (contract §25: SpellEnabled is repointed to English Core,
+        // sidecar semantics retired).
 
         /// Create stroke candidate {{{
         if (*config_.strokeCandidateEnabled && pinyinhelper() &&
@@ -716,23 +633,81 @@ void PinyinEngine::updateUI(InputContext *inputContext) {
         /// }}}
 
         /// Create mixed Chinese-English candidate (Architecture A) {{{
-        // Only fires when:
-        //   * the option is enabled and mixed resources are available;
-        //   * the current input method is Pinyin (Shuangpin mixed is a
-        //     later batch);
-        //   * there is unselected raw at the cursor to segment.
+        // Architecture A is a normal capability of Pinyin AND Shuangpin —
+        // there is no "Enable Mixed Input" master switch (contract §25).
+        // English participation is gated solely by the repointed
+        // `SpellEnabled` option; with it OFF the composition stays on the
+        // classical Chinese path.
         // Pure-Han mixed candidates are skipped (the classical LibIME
         // decoder already produces them, and inserting them would only
         // duplicate the pinyinCandidates list at a worse rank).
-        if (*config_.mixedInputEnabled && mixedEngine_ && mixedChineseOracle_ &&
-            mixedEnglishOracle_ && !pyBeforeCursor.empty() &&
-            !context.useShuangpin()) {
+        if (*config_.spellEnabled && mixedEngine_ && mixedChineseOracle_ &&
+            mixedEnglishOracle_ && !pyBeforeCursor.empty()) {
+            // The active parse mode follows the input method entry
+            // (pinyin vs shuangpin), so the Chinese oracle segments the raw
+            // with exactly the same LibIME parser the classical decoder
+            // uses. setMode is a no-op unless the mode actually changed.
+            mixedChineseOracle_->setMode(
+                context.useShuangpin() ? pinyin::ChineseInputMode::Shuangpin
+                                       : pinyin::ChineseInputMode::Pinyin);
             mixedChineseOracle_->setRaw(pyBeforeCursor);
             const auto hanResolver =
                 mixedHanResolver_->asArcResolver(pyBeforeCursor);
             const auto mixedPool =
                 mixedEngine_->compute(pyBeforeCursor, *mixedChineseOracle_,
                                       *mixedEnglishOracle_, hanResolver);
+            // Placement policy (architecture A §9, feature-level rationale):
+            // two structural facts decide whether a mixed candidate may
+            // displace the classical list, both derived from the fusion
+            // engine's own explainable evidence — no new heuristic:
+            //   (a) Chinese coverage: if the mixed pool contains a reading
+            //       whose every arc is Chinese and resolves to Han, the
+            //       classical parser+dictionary already explains the whole
+            //       raw stream (e.g. "an" in "anquan", "pin", "nihao"), so
+            //       English variants are spelling alternatives and are
+            //       requested behind the pinyin list, still reachable by
+            //       paging/selection.
+            //   (b) Lead evidence: with no Chinese coverage, English still
+            //       may only lead when the ranked-best reading contains a
+            //       *complete* English surface form spanning at least 3 raw
+            //       bytes. Single/double-letter SCOWL words ("a", "b",
+            //       "us") and pure prefix completions overlap legitimate
+            //       pinyin abbreviation streams and must never displace the
+            //       classical candidates; un-Chinese-able spans like the
+            //       "iphone" in "woxiangmaiiphone" or a typed capitalisation
+            //       like "Apple" pass this bar naturally.
+            const bool chineseCoversWholeRaw = std::any_of(
+                mixedPool.begin(), mixedPool.end(),
+                [](const pinyin::UnifiedCandidate &cand) {
+                    return std::none_of(
+                        cand.sources.begin(), cand.sources.end(),
+                        [](const pinyin::SegmentSource src) {
+                            return src != pinyin::SegmentSource::Chinese;
+                        });
+                });
+            bool englishLeadEvidence = false;
+            if (!mixedPool.empty()) {
+                const auto &front = mixedPool.front();
+                const auto n =
+                    std::min(front.alignment.size(), front.sources.size());
+                for (std::size_t i = 0; i < n; ++i) {
+                    if (front.sources[i] != pinyin::SegmentSource::Chinese &&
+                        front.alignment[i].rawEnd >=
+                            front.alignment[i].rawBegin &&
+                        front.alignment[i].rawEnd -
+                                front.alignment[i].rawBegin >=
+                            3) {
+                        englishLeadEvidence = true;
+                        break;
+                    }
+                }
+            }
+            const bool mixedLeads =
+                !chineseCoversWholeRaw && englishLeadEvidence;
+            // A requested slot this large sorts behind every classical
+            // candidate after the custom-candidate normalisation below.
+            constexpr std::size_t kBehindClassicalSlot =
+                std::numeric_limits<std::size_t>::max() / 4;
             std::size_t position = 0;
             for (const auto &cand : mixedPool) {
                 bool hasEnglish = false;
@@ -751,13 +726,15 @@ void PinyinEngine::updateUI(InputContext *inputContext) {
                 if (customCandidateMap.contains(cand.composedText)) {
                     continue;
                 }
+                const std::size_t slot =
+                    mixedLeads ? position++ : kBehindClassicalSlot + position++;
                 auto clone = std::make_unique<pinyin::UnifiedCandidate>(cand);
                 std::string text = clone->composedText;
                 customCandidateMap.emplace(
                     std::move(text),
                     std::make_unique<MixedCandidateWord>(
                         this, clone->composedText, pyBeforeCursor.size(),
-                        CandidateOrder{position++, customCandidateMap.size()},
+                        CandidateOrder{slot, customCandidateMap.size()},
                         std::move(clone)));
             }
         }
@@ -1380,9 +1357,8 @@ void PinyinEngine::activate(const fcitx::InputMethodEntry &entry,
     // dependencies.
     fullwidth();
     chttrans();
-    if (*config_.spellEnabled) {
-        spell();
-    }
+    // Spell sidecar retired (see updateUI): English candidates come from the
+    // Architecture A English Core, so the ISpell addon is no longer required.
     if (pinyinhelper()) {
         // Preload stroke data, since we gonna use it anyway.
         pinyinhelper()->call<IPinyinHelper::loadStroke>();
@@ -1819,12 +1795,13 @@ void PinyinEngine::loadMixedResources() {
 
     const auto &standardPath = StandardPaths::global();
 
-    // System English lexicon. Absent file -> empty lexicon, mixed path
-    // degrades to no English arcs but the classical pinyin path is
-    // unaffected. Batch 10 (formal corpus) will ship the pinned resource.
+    // System English lexicon (production resource pinned and hashed in
+    // data-licenses/english/manifest.json). Absent file -> empty lexicon,
+    // mixed path degrades to no English arcs but the classical pinyin path
+    // is unaffected.
     {
         auto file = standardPath.open(StandardPathsType::PkgData,
-                                      "pinyin/mixed_english.tsv");
+                                      "pinyin/english_lexicon.tsv");
         if (file.isValid()) {
             IFDStreamBuf buffer(file.fd());
             std::istream in(&buffer);

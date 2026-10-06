@@ -183,9 +183,15 @@ FCITX_CONFIGURATION(
         this, "PageSize", _("Candidates Per Page"), 7, IntConstrain(3, 10)};
     Option<bool> spellEnabled{this, "SpellEnabled",
                               _("Show English Candidates"), true};
-    Option<bool> mixedInputEnabled{
-        this, "MixedInputEnabled",
-        _("Enable mixed Chinese-English input (Architecture A)"), false};
+    // Closure contract repair (D060-adjacent, Master Instruction §25–§26):
+    // there is deliberately NO "Enable Mixed Input" master switch. Mixed
+    // Chinese-English input (Architecture A) is a normal capability of both
+    // the Pinyin and Shuangpin input methods. `SpellEnabled` above is the
+    // single gate for English candidate participation: when ON (default),
+    // Architecture A's English Core supplies English candidates through the
+    // unified mixed pipeline; when OFF, composition stays on the classical
+    // Chinese path. The former ISpell sidecar was retired so that a config
+    // can never produce two independent English pipelines at once.
     // Batch 9 (§23): Auto-spacing at Chinese↔English candidate boundaries.
     // DEFAULT = OFF. Recorded rationale: verified current behavior inserts no
     // automatic CJK↔Latin space, and §26 requires preserving existing committed
@@ -573,7 +579,6 @@ private:
     FCITX_ADDON_DEPENDENCY_LOADER(chttrans, instance_->addonManager());
     FCITX_ADDON_DEPENDENCY_LOADER(punctuation, instance_->addonManager());
     FCITX_ADDON_DEPENDENCY_LOADER(notifications, instance_->addonManager());
-    FCITX_ADDON_DEPENDENCY_LOADER(spell, instance_->addonManager());
     FCITX_ADDON_DEPENDENCY_LOADER(imeapi, instance_->addonManager());
 
     static constexpr size_t NumBuiltInDict = 2;

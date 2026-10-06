@@ -5,6 +5,7 @@
  */
 #include "mixedengine.h"
 
+#include <algorithm>
 #include <utility>
 
 namespace pinyin {
@@ -47,6 +48,25 @@ MixedEngine::compute(std::string_view raw, const IChineseArcOracle &chinese,
     }
     auto paths = search_.search(raw, chinese, english);
     if (paths.empty()) {
+        return {};
+    }
+    // §9 pure-Chinese fast path (exact, not a heuristic): when none of the
+    // surviving paths carries an English arc, every candidate that compose +
+    // rank + rewrite could produce is Chinese-only, and the fusion seam
+    // drops Chinese-only mixed candidates by contract (the classical LibIME
+    // decoder already produces them). Skipping the tail is therefore
+    // behaviour-identical while keeping pure-Chinese composition on the
+    // classical cost profile. The beam search above is the English-evidence
+    // probe itself, so there is no recall loss: the moment an English arc
+    // survives in any path, the full mixed pipeline runs.
+    const bool hasEnglishEvidence =
+        std::any_of(paths.begin(), paths.end(), [](const SegmentationPath &p) {
+            return std::any_of(p.arcs.begin(), p.arcs.end(),
+                               [](const SegmentationArc &a) {
+                                   return a.source == SegmentSource::English;
+                               });
+        });
+    if (!hasEnglishEvidence) {
         return {};
     }
     const std::size_t cap = config_.pool.maxSize;
