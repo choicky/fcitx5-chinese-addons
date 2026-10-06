@@ -102,6 +102,6 @@ jobs:
           path: fcitx5-chinese-addons
       - name: Test
         run: |
-          ctest --test-dir fcitx5-chinese-addons/build
+          ctest --test-dir fcitx5-chinese-addons/build --output-on-failure
       - name: CodeQL Analysis
         uses: github/codeql-action/analyze@v2

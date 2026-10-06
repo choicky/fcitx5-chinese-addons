@@ -1691,10 +1691,16 @@ void PinyinEngine::updateFilter(InputContext *inputContext) {
 
     updatePreedit(inputContext);
     Text aux;
-    if (pinyinTabbed && pinyinTabbed->inStrokeFilterMode() && pinyinhelper()) {
+    if (pinyinTabbed &&
+        pinyinTabbed->auxiliaryFilterMode() == AuxiliaryFilterMode::Stroke &&
+        pinyinhelper()) {
         aux.append(_("[Stroke Filtering]"));
         aux.append(pinyinhelper()->call<IPinyinHelper::prettyStrokeString>(
-            pinyinTabbed->strokeBuffer()));
+            pinyinTabbed->auxiliaryFilterBuffer()));
+    } else if (pinyinTabbed && pinyinTabbed->auxiliaryFilterMode() ==
+                                   AuxiliaryFilterMode::MoQi) {
+        aux.append(_("[MoQi Filtering]"));
+        aux.append(pinyinTabbed->auxiliaryFilterBuffer());
     }
     inputPanel.setAuxUp(aux);
     inputPanel.setAuxDown(Text());
@@ -2030,56 +2036,42 @@ void PinyinEngine::deleteCustomPhrase(InputContext *inputContext,
     saveCustomPhrase();
 }
 
-bool PinyinEngine::handleStrokeFilter(
+bool PinyinEngine::handleAuxiliaryFilter(
     KeyEvent &event, const std::shared_future<uint32_t> &keyChr) {
     auto *inputContext = event.inputContext();
     auto candidateList = inputContext->inputPanel().candidateList();
     auto *state = inputContext->propertyFor(&factory_);
     auto *pinyinTabbed = currentPinyinTabbed(inputContext);
 
-    // Any candidate list without PinyinTabbedCandidateList will not be able to
-    // enter stroke filter mode.
-    if (!pinyinTabbed) {
+    if (!pinyinTabbed || !pinyinhelper() ||
+        state->mode_ != PinyinMode::Normal) {
         return false;
     }
 
-    // Stroke relies on PinyinHelper.
-    if (!pinyinhelper()) {
-        return false;
-    }
-
-    // Only available in normal mode.
-    if (state->mode_ != PinyinMode::Normal) {
-        return false;
-    }
-
-    if (!pinyinTabbed->inStrokeFilterMode()) {
-        assert(candidateList);
-        if (!candidateList->empty() && candidateList->toBulk() &&
-            event.key().checkKeyList(*config_.selectByStroke)) {
-            pinyinTabbed->setStrokeFilterMode();
-            updateFilter(inputContext);
-            handleNextPage(event);
-
-            event.filterAndAccept();
-            return true;
+    if (!pinyinTabbed->inAuxiliaryFilterMode()) {
+        if (*config_.auxiliaryFilter == AuxiliaryFilter::Disabled ||
+            !candidateList || candidateList->empty() ||
+            !candidateList->toBulk() ||
+            !event.key().checkKeyList(*config_.auxiliaryFilterTrigger)) {
+            return false;
         }
-        return false;
-    }
 
-    // If we are still not in stroke filter mode, return.
-    if (!pinyinTabbed->inStrokeFilterMode()) {
-        return false;
+        const auto mode = *config_.auxiliaryFilter == AuxiliaryFilter::Stroke
+                              ? AuxiliaryFilterMode::Stroke
+                              : AuxiliaryFilterMode::MoQi;
+        pinyinTabbed->setAuxiliaryFilterMode(mode);
+        handleNextPage(event);
+        event.filterAndAccept();
+        return true;
     }
 
     event.filterAndAccept();
-    // A special case that allow prev page to quit stroke filtering.
-    if ((pinyinTabbed->strokeBuffer().empty() &&
-         event.key().checkKeyList(*config_.prevPage))) {
-        auto candidateList = inputContext->inputPanel().candidateList();
-        if (candidateList && candidateList->toPageable() &&
-            candidateList->toPageable()->currentPage() <= 1) {
-            pinyinTabbed->resetStrokeFilterMode();
+    if (pinyinTabbed->auxiliaryFilterBuffer().empty() &&
+        event.key().checkKeyList(*config_.prevPage)) {
+        auto currentList = inputContext->inputPanel().candidateList();
+        if (currentList && currentList->toPageable() &&
+            currentList->toPageable()->currentPage() <= 1) {
+            pinyinTabbed->resetAuxiliaryFilterMode();
             return true;
         }
     }
@@ -2087,29 +2079,32 @@ bool PinyinEngine::handleStrokeFilter(
     if (handleCandidateList(event, keyChr)) {
         return true;
     }
-    // Skip all key combination.
     if (event.key().states().testAny(KeyState::SimpleMask)) {
         return true;
     }
-
     if (event.key().check(FcitxKey_Escape)) {
-        pinyinTabbed->resetStrokeFilterMode();
+        pinyinTabbed->resetAuxiliaryFilterMode();
         return true;
     }
     if (event.key().check(FcitxKey_BackSpace)) {
-        // Do backspace is stroke is not empty.
-        if (!pinyinTabbed->popStroke()) {
-            // Exit stroke mode when stroke buffer is empty. The filter
-            // state must actually be reset: leaving inStrokeFilterMode()
-            // set with an empty buffer swallows the next filter trigger
-            // and breaks second invocation.
-            pinyinTabbed->resetStrokeFilterMode();
+        // Backspace pops the buffer; emptying it exits filtering entirely.
+        // The mode must actually be reset: leaving it set with an empty
+        // buffer swallows the next filter trigger and breaks second
+        // invocation.
+        if (!pinyinTabbed->popAuxiliaryFilter()) {
+            pinyinTabbed->resetAuxiliaryFilterMode();
         }
         return true;
     }
-    // if it gonna commit something
-    auto c = keyChr.get();
+
+    const auto c = keyChr.get();
     if (!c) {
+        return true;
+    }
+    if (pinyinTabbed->auxiliaryFilterMode() == AuxiliaryFilterMode::MoQi) {
+        if (c >= 'a' && c <= 'z') {
+            pinyinTabbed->pushAuxiliaryFilter(static_cast<char>(c));
+        }
         return true;
     }
 
@@ -2124,10 +2119,9 @@ bool PinyinEngine::handleStrokeFilter(
             {FcitxKey_z, '5'}};
         if (auto iter = strokeMap.find(event.key().sym());
             iter != strokeMap.end()) {
-            pinyinTabbed->pushStroke(iter->second);
+            pinyinTabbed->pushAuxiliaryFilter(iter->second);
         }
     }
-
     return true;
 }
 
@@ -2384,7 +2378,7 @@ void PinyinEngine::keyEvent(const InputMethodEntry &entry, KeyEvent &event) {
     bool lastIsPunc = state->lastIsPunc_;
     state->lastIsPunc_ = false;
 
-    if (handleStrokeFilter(event, keyChr)) {
+    if (handleAuxiliaryFilter(event, keyChr)) {
         return;
     }
 
