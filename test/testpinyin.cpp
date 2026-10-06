@@ -971,7 +971,6 @@ AddonInstance *pinyinWithAuxiliaryFilter(Instance *instance,
 // the mixed list itself.
 void testMixedMoQiFilterFusion(Instance *instance) {
     instance->eventDispatcher().schedule([instance]() {
-        pinyinWithAuxiliaryFilter(instance, "MoQi");
         auto *testfrontend = instance->addonManager().addon("testfrontend");
         auto *ph = instance->addonManager().addon("pinyinhelper");
         FCITX_ASSERT(ph);
@@ -990,12 +989,33 @@ void testMixedMoQiFilterFusion(Instance *instance) {
                     uuid, Key(std::string(1, c)), false);
             }
         };
+        auto burst = [testfrontend, uuid, ic]() {
+            ic->reset();
+            for (const char *p = "woxiangmaiiphonepeijian"; *p; ++p) {
+                testfrontend->call<ITestFrontend::keyEvent>(
+                    uuid, Key(std::string(1, *p)), false);
+            }
+        };
 
-        ic->reset();
-        for (const char *p = "woxiangmaiiphonepeijian"; *p; ++p) {
-            testfrontend->call<ITestFrontend::keyEvent>(
-                uuid, Key(std::string(1, *p)), false);
-        }
+        // Disabled x Pinyin x mixed: the auxiliary-filter surface is gone
+        // (the 笔画/墨奇 tab actions disappear) and the mixed list is
+        // untouched. Mode unavailability is asserted at the action surface,
+        // mirroring testDisabledAuxiliaryFilter: a raw grave press here falls
+        // through to the upstream punctuation/commit fallback, which is
+        // independent of the fusion.
+        pinyinWithAuxiliaryFilter(instance, "Disabled");
+        burst();
+        FCITX_ASSERT(hasCandidateWith(ic, "iPhone"));
+        auto *tabbed = ic->inputPanel().candidateList()->toTabbed();
+        FCITX_ASSERT(tabbed);
+        const auto disabledActions = tabbed->tabActions();
+        FCITX_ASSERT(
+            std::ranges::none_of(disabledActions, [](const auto &action) {
+                return action.text() == "笔画" || action.text() == "墨奇";
+            }));
+
+        pinyinWithAuxiliaryFilter(instance, "MoQi");
+        burst();
         const auto bc = findFusionBoundaryCase(ic, codeOf);
         FCITX_ASSERT(!bc.text.empty())
             << "no mixed candidate with mapped Han on both sides of iPhone";
