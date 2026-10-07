@@ -79,6 +79,18 @@ struct SegmentationPath {
 // span and compete purely on evidence. The cost function penalizes weak
 // boundaries and unsupported/pathological fragmentation, but never the segment
 // count itself, so evidence-backed multiple C/E switches remain competitive.
+//
+// Retention (Phase 3A-2 diversity contract):
+// each frontier's window is partitioned into English-segment retention classes
+// (number of maximal consecutive-English runs on the prefix, capped at
+// Config::englishSegmentCap, with a last-source bit below the cap) and each
+// live class independently keeps its cheapest beamWidth prefixes. A prefix may
+// prune another only when both share frontier, capped run count and (below the
+// cap) last arc source — the smallest equivalence under which additive cost is
+// genuine dominance for every continuation. Terminal top-K reserves the head
+// of the highest non-empty English class, then fills by cost with zero-segment
+// paths last (placement consumes only English-bearing pool members, so this
+// never removes anything the product path could use).
 class MixedSegmentationSearch {
 public:
     struct Config {
@@ -86,6 +98,13 @@ public:
         size_t topK = 4;        // returned paths
         size_t maxArcSpan = 24; // max raw bytes per arc (bounded lookahead)
         float weakBoundaryWeight = 0.5F;
+        // Cmax: maximum distinct English-segment retention classes, derived
+        // from the committed multi-switch product contract (=2: RANKCORP C
+        // requires GitHub + phone on one path). Prefixes at or above the cap
+        // share one collapsed class where the last-source bit can no longer
+        // change the capped class trajectory. 0 restores the pre-diversity
+        // single cost-sorted window. Internal; NOT a user-exposed knob.
+        size_t englishSegmentCap = 2;
     };
 
     MixedSegmentationSearch();

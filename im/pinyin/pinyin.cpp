@@ -114,6 +114,60 @@ namespace {
 
 FCITX_DEFINE_LOG_CATEGORY(pinyin, "pinyin");
 
+// Phase 3A-1 Part 6 (mandated removable diagnostics, witness logging
+// only): ASCII-safe UTF-8 escaper for the MIXEDDIAG witness lines.
+// Non-ASCII scalars become \uXXXX (BMP) or \UXXXXXXXX (supplementary) so
+// the records survive adb logcat / Windows console transcoding; the raw
+// UTF-8 text is captured separately by reading the fcitx5 debug log file.
+std::string mixdiagEscapeUtf8(const std::string &text) {
+    static constexpr char digits[] = "0123456789ABCDEF";
+    std::string out;
+    for (std::size_t i = 0; i < text.size();) {
+        const unsigned char ch = static_cast<unsigned char>(text[i]);
+        unsigned int cp = 0;
+        std::size_t len = 1;
+        if (ch < 0x80) {
+            out.push_back(static_cast<char>(ch));
+            ++i;
+            continue;
+        } else if ((ch >> 5) == 0x6U) {
+            cp = ch & 0x1FU;
+            len = 2;
+        } else if ((ch >> 4) == 0xEU) {
+            cp = ch & 0x0FU;
+            len = 3;
+        } else if ((ch >> 3) == 0x1EU) {
+            cp = ch & 0x07U;
+            len = 4;
+        } else {
+            out += "\\xXX";
+            ++i;
+            continue;
+        }
+        bool valid = i + len <= text.size();
+        for (std::size_t k = 1; valid && k < len; ++k) {
+            const unsigned char next = static_cast<unsigned char>(text[i + k]);
+            if ((next >> 6) != 0x2U) {
+                valid = false;
+            } else {
+                cp = (cp << 6) | (next & 0x3FU);
+            }
+        }
+        if (!valid) {
+            out += "\\xXX";
+            ++i;
+            continue;
+        }
+        out += cp <= 0xFFFFU ? "\\u" : "\\U";
+        const unsigned int width = cp <= 0xFFFFU ? 4U : 8U;
+        for (int sh = static_cast<int>(4U * width - 4U); sh >= 0; sh -= 4) {
+            out.push_back(digits[(cp >> sh) & 0xFU]);
+        }
+        i += len;
+    }
+    return out;
+}
+
 #define PINYIN_DEBUG() FCITX_LOGC(pinyin, Debug)
 #define PINYIN_ERROR() FCITX_LOGC(pinyin, Error)
 
@@ -750,6 +804,16 @@ void PinyinEngine::updateUI(InputContext *inputContext) {
                 pinyinCandidates.begin(), pinyinCandidates.end(),
                 [&](const auto &candidate) {
                     if (candidate.sentence().size() != 1 ||
+                        // Phase 3A-1 Fix A: one sentence NODE is not one
+                        // SYLLABLE. A learned or dictionary word (qinghai ->
+                        // 青海, macos after user learning) decodes as a
+                        // single node whose path spans several syllables;
+                        // path().size() == 2 is the exact one-syllable
+                        // signature (start + end node only). Without this
+                        // check a multi-syllable whole-raw word would set
+                        // the single-syllable flag and suppress the bounded
+                        // insertion class it exists to allow.
+                        candidate.sentence().back()->path().size() != 2 ||
                         candidate.sentence().back()->to()->index() !=
                             context.cursor()) {
                         return false;
@@ -759,6 +823,61 @@ void PinyinEngine::updateUI(InputContext *inputContext) {
                         reading.begin(), reading.end(),
                         [](unsigned char ch) { return ch < 0x80; });
                 });
+            // Phase 3A-1 Part 6 — mandated removable witness logging.
+            // Dumps the classical candidates that feed the coversWhole /
+            // singleSyll decisions using only fields the public LibIME API
+            // exposes: node count, per-node from()/to() byte indices,
+            // path().size(), encodedPinyin(), isCorrection()/
+            // anyCorrectionOnPath() (packed as /cXY, X=isCorrection,
+            // Y=anyCorrectionOnPath). Reading text is escaped through
+            // mixdiagEscapeUtf8 (ASCII-safe). Diagnostics only: this block
+            // changes no predicate, no placement and no Fix C; delete it
+            // wholesale when the witness phase closes. KEPT in this batch:
+            // the next Android device round observes Fix C deferral with
+            // these witness records, and no other artifact carries the
+            // coversWhole/singleSyll predicate evidence from a real device
+            // session.
+            {
+                std::string witness;
+                std::size_t witnessCount = 0;
+                for (const auto &candidate : pinyinCandidates) {
+                    const auto &sentence = candidate.sentence();
+                    if (sentence.empty() ||
+                        sentence.front()->from()->index() != 0 ||
+                        sentence.back()->to()->index() != context.cursor()) {
+                        continue;
+                    }
+                    const auto reading = candidate.toString();
+                    if (std::any_of(
+                            reading.begin(), reading.end(),
+                            [](unsigned char ch) { return ch < 0x80; })) {
+                        continue;
+                    }
+                    if (witnessCount >= 3) {
+                        break;
+                    }
+                    ++witnessCount;
+                    witness += " |[";
+                    witness += mixdiagEscapeUtf8(reading);
+                    witness += " n=" + std::to_string(sentence.size());
+                    for (const auto *node : sentence) {
+                        const auto &pn = node->as<libime::PinyinLatticeNode>();
+                        witness +=
+                            " " + std::to_string(node->from()->index()) + "-" +
+                            std::to_string(node->to()->index()) + "/p" +
+                            std::to_string(node->path().size()) + "/e'" +
+                            pn.encodedPinyin() + "'/c" +
+                            std::to_string(int(pn.isCorrection())) +
+                            std::to_string(int(pn.anyCorrectionOnPath()));
+                    }
+                    witness += "]";
+                }
+                FCITX_DEBUG()
+                    << "MIXEDDIAG witness raw=" << pyBeforeCursor
+                    << " coversWhole=" << int(chineseCoversWholeRaw)
+                    << " singleSyll=" << int(chineseWholeRawSingleSyllable)
+                    << " witnesses=" << witnessCount << witness;
+            }
             bool englishLeadEvidence = false;
             if (!mixedPool.empty()) {
                 const auto &front = mixedPool.front();
@@ -2016,6 +2135,27 @@ void PinyinEngine::populateMixedConfig() {
     // per-arc correction provenance — recorded source ceiling, not
     // fabricated signal.
     mixedChineseOracle_->setCorrectionProfile(ime_->correctionProfile().get());
+
+    // Phase 3A-1 (fix design Revision B1): plumb LibIME's own PinyinIME into
+    // the Chinese arc oracle so it emits LM word arcs (spans of up to four
+    // graph edges — each edge is exactly one syllable) decoded by the same
+    // public call the classical path uses (`decoder->decode` over a
+    // `parseUserPinyin` / `parseUserShuangpin` graph with
+    // `model->nullState()`; pinyincontext.cpp:653, 704-708). The IME pointer
+    // is borrowed from `ime_` (PinyinEngine owns it for the add-on's
+    // lifetime). Revision B1 is source-forced: LibIME's dictionary matching
+    // reads fuzzy/shuangpin/correction semantics ONLY from a
+    // `PinyinMatchState` helper (PinyinMatchContext, pinyindictionary.cpp
+    // :303-325; the helper-less overload leaves them at None/nullptr, which
+    // syllabified Shuangpin span edges as Pinyin and made multi-syllable
+    // words unreachable). The oracle therefore builds the helper over its own
+    // input-less `PinyinContext`, reusing the exact same IME decoder, model
+    // and decode parameters the classical path reads. This is the
+    // source-traced fix for the generation defect (per-syllable table picks,
+    // no LM, no Shuangpin encoding): no LibIME modification, no second
+    // decoder or scorer, and the structural arcs (plus the HanWordResolver
+    // fallback) stay exactly as before.
+    mixedChineseOracle_->setWordDecoder(ime_.get());
 
     // Batch 9 (§23): plumb `MixedAutoSpacing` (default OFF) into the Rewriter
     // presentation policy. Rewriter is stateless, so updating its config at

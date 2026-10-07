@@ -10,9 +10,16 @@
 #include <string>
 #include <utility>
 
+#include <libime/core/lattice.h>
 #include <libime/core/segmentgraph.h>
+#include <libime/core/userlanguagemodel.h>
+
+#include <libime/pinyin/pinyincontext.h>
 #include <libime/pinyin/pinyincorrectionprofile.h>
+#include <libime/pinyin/pinyindecoder.h>
 #include <libime/pinyin/pinyinencoder.h>
+#include <libime/pinyin/pinyinime.h>
+#include <libime/pinyin/pinyinmatchstate.h>
 #include <libime/pinyin/shuangpinprofile.h>
 
 namespace pinyin {
@@ -43,6 +50,45 @@ std::vector<std::vector<size_t>> buildAdjacency(const libime::SegmentGraph &g,
     return adj;
 }
 
+// Phase 3A-1 Option B constants: word arcs cover spans of up to four
+// syllables (打开/我想买/配件 and idiom-length words; deeper spans cost
+// hundreds of sub-decodes per keystroke for no observed recall gain), and
+// each span emits at most this many LM decodes as parallel arcs.
+constexpr size_t kWordDecodeMaxSyllables = 4;
+constexpr size_t kWordDecodeNbest = 4;
+
+// Unique byte endpoints reachable from `begin` by 1..maxSyllables
+// consecutive graph edges. Every edge produced by `parseUserPinyin` /
+// `parseUserShuangpin` is exactly one syllable (Phase 3A-1 Part 1 source
+// trace), so a span tiled by k edges is a k-syllable span. BFS per depth
+// keeps shorter spans first.
+std::vector<size_t>
+reachableSpanEnds(const std::vector<std::vector<size_t>> &adj, size_t begin,
+                  size_t limit, size_t maxSyllables) {
+    std::vector<size_t> out;
+    std::set<size_t> seen;
+    std::vector<size_t> frontier{begin};
+    for (size_t depth = 0; depth < maxSyllables && !frontier.empty(); ++depth) {
+        std::vector<size_t> next;
+        for (const size_t pos : frontier) {
+            if (pos >= adj.size()) {
+                continue;
+            }
+            for (const size_t end : adj[pos]) {
+                if (end > limit) {
+                    break;
+                }
+                if (seen.insert(end).second) {
+                    next.push_back(end);
+                }
+            }
+        }
+        out.insert(out.end(), next.begin(), next.end());
+        frontier = std::move(next);
+    }
+    return out;
+}
+
 } // namespace
 
 struct LibIMEChineseArcOracle::Private {
@@ -62,6 +108,26 @@ struct LibIMEChineseArcOracle::Private {
     // reachable by a single graph edge (syllable). Built once per setRaw().
     std::vector<std::vector<size_t>> endsFromBegin;
     std::vector<std::vector<size_t>> baseEndsFromBegin;
+    // Phase 3A-1 Revision B1: classical span decode for LM word arcs.
+    // `wordIME` is borrowed from PinyinEngine (same ownership pattern as
+    // `correction`); null disables word arcs entirely, leaving behavior
+    // bit-identical to the pre-fix oracle. The private input-less
+    // `PinyinContext` plus `PinyinMatchState` exist because LibIME's
+    // dictionary matching reads fuzzy/shuangpin/correction semantics ONLY
+    // from a PinyinMatchState helper: `PinyinMatchContext`
+    // (pinyindictionary.cpp:303-325) copies `fuzzyFlags()`,
+    // `shuangpinProfile()` and `correctionProfile()` from the helper, and
+    // the helper-less `Decoder::decode` overload leaves them at
+    // None/nullptr, which made span decodes syllabify Shuangpin edges as
+    // Pinyin. This reuses the classical path's own objects; no second
+    // decoder or scorer, no LibIME modification.
+    libime::PinyinIME *wordIME = nullptr;
+    std::unique_ptr<libime::PinyinContext> wordContext;
+    std::unique_ptr<libime::PinyinMatchState> wordMatchState;
+    // Per-begin-position cache of word arcs, rebuilt whenever the graphs
+    // are invalidated (setRaw and every setter that clears them).
+    mutable std::vector<std::vector<SegmentationArc>> wordArcs;
+    mutable std::vector<char> wordArcsComputed;
 };
 
 LibIMEChineseArcOracle::LibIMEChineseArcOracle(ChineseInputMode mode)
@@ -80,6 +146,8 @@ void LibIMEChineseArcOracle::setShuangpinProfile(
     d_->endsFromBegin.clear();
     d_->baseEndsFromBegin.clear();
     d_->lastRaw.clear();
+    d_->wordArcs.clear();
+    d_->wordArcsComputed.clear();
 }
 
 void LibIMEChineseArcOracle::setMode(ChineseInputMode mode) {
@@ -87,6 +155,13 @@ void LibIMEChineseArcOracle::setMode(ChineseInputMode mode) {
         return;
     }
     d_->mode = mode;
+    // The word-decode context mirrors the mode: PinyinMatchState reports
+    // shuangpinProfile() only while its context has useShuangpin enabled,
+    // which is what makes dictionary matching syllabify edges with the
+    // Shuangpin table instead of Pinyin.
+    if (d_->wordContext) {
+        d_->wordContext->setUseShuangpin(mode == ChineseInputMode::Shuangpin);
+    }
     // The cached graph was parsed under the previous mode; a Shuangpin graph
     // and a Pinyin graph are different segmentations of the same raw string,
     // so it must not be reused across the switch.
@@ -95,6 +170,8 @@ void LibIMEChineseArcOracle::setMode(ChineseInputMode mode) {
     d_->endsFromBegin.clear();
     d_->baseEndsFromBegin.clear();
     d_->lastRaw.clear();
+    d_->wordArcs.clear();
+    d_->wordArcsComputed.clear();
 }
 
 void LibIMEChineseArcOracle::setFuzzyFlags(libime::PinyinFuzzyFlags flags) {
@@ -104,6 +181,8 @@ void LibIMEChineseArcOracle::setFuzzyFlags(libime::PinyinFuzzyFlags flags) {
     d_->endsFromBegin.clear();
     d_->baseEndsFromBegin.clear();
     d_->lastRaw.clear();
+    d_->wordArcs.clear();
+    d_->wordArcsComputed.clear();
 }
 
 void LibIMEChineseArcOracle::setCorrectionProfile(
@@ -133,10 +212,35 @@ void LibIMEChineseArcOracle::setCorrectionProfile(
     d_->endsFromBegin.clear();
     d_->baseEndsFromBegin.clear();
     d_->lastRaw.clear();
+    d_->wordArcs.clear();
+    d_->wordArcsComputed.clear();
 }
 
 bool LibIMEChineseArcOracle::correctionEnabled() const {
     return d_->mode == ChineseInputMode::Pinyin && d_->correction != nullptr;
+}
+
+void LibIMEChineseArcOracle::setWordDecoder(libime::PinyinIME *ime) {
+    if (d_->wordIME == ime && d_->wordMatchState) {
+        return;
+    }
+    d_->wordIME = ime;
+    d_->wordContext.reset();
+    d_->wordMatchState.reset();
+    if (ime != nullptr) {
+        // Input-less context: never receives user text, only acts as the
+        // parameter carrier LibIME's decoder requires (fuzzy flags,
+        // shuangpin profile, correction profile all flow through its
+        // PinyinMatchState).
+        d_->wordContext = std::make_unique<libime::PinyinContext>(ime);
+        d_->wordContext->setUseShuangpin(d_->mode ==
+                                         ChineseInputMode::Shuangpin);
+        d_->wordMatchState =
+            std::make_unique<libime::PinyinMatchState>(d_->wordContext.get());
+    }
+    // Cached word arcs were produced under the previous decode parameters.
+    d_->wordArcs.clear();
+    d_->wordArcsComputed.clear();
 }
 
 bool LibIMEChineseArcOracle::graphValid() const { return d_->graph != nullptr; }
@@ -151,6 +255,8 @@ void LibIMEChineseArcOracle::setRaw(std::string_view raw) {
     d_->baseGraph.reset();
     d_->endsFromBegin.clear();
     d_->baseEndsFromBegin.clear();
+    d_->wordArcs.clear();
+    d_->wordArcsComputed.clear();
     if (next.empty()) {
         return;
     }
@@ -200,6 +306,8 @@ void LibIMEChineseArcOracle::setRaw(std::string_view raw) {
         d_->baseGraph.reset();
         d_->endsFromBegin.clear();
         d_->baseEndsFromBegin.clear();
+        d_->wordArcs.clear();
+        d_->wordArcsComputed.clear();
         return;
     }
 }
@@ -296,6 +404,111 @@ LibIMEChineseArcOracle::arcsAt(std::string_view raw, size_t begin,
             // enumeration yielded nothing (unexpected; classical path
             // remains safe with a single Exact arc).
             pushArc(CandidateProvenance::Exact, 0.75F, 1.0F);
+        }
+    }
+    // Phase 3A-1 Revision B1: additionally emit LM word arcs produced by the
+    // classical span decode, on top of the structural per-syllable arcs
+    // above. With no IME plumbed (standalone oracle tests, corpus test
+    // doubles, or graceful degradation) the output is bit-identical to the
+    // pre-fix oracle.
+    if (d_->wordIME != nullptr && d_->wordMatchState != nullptr) {
+        if (d_->wordArcs.empty()) {
+            d_->wordArcs.resize(d_->lastRaw.size() + 1);
+            d_->wordArcsComputed.assign(d_->lastRaw.size() + 1, 0);
+        }
+        if (begin < d_->wordArcsComputed.size() &&
+            !d_->wordArcsComputed[begin]) {
+            d_->wordArcsComputed[begin] = 1;
+            auto &cache = d_->wordArcs[begin];
+            const bool wordCorrection = d_->mode == ChineseInputMode::Pinyin &&
+                                        d_->correction != nullptr;
+            if (d_->mode != ChineseInputMode::Shuangpin || d_->sp != nullptr) {
+                const auto spanEnds = reachableSpanEnds(
+                    d_->endsFromBegin, begin, limit, kWordDecodeMaxSyllables);
+                for (const auto end : spanEnds) {
+                    // PinyinEncoder parse entry points take std::string by
+                    // value; the span is copied once per decode.
+                    const std::string span(raw.substr(begin, end - begin));
+                    try {
+                        std::unique_ptr<libime::SegmentGraph> spanGraph;
+                        if (d_->mode == ChineseInputMode::Shuangpin) {
+                            spanGraph = std::make_unique<libime::SegmentGraph>(
+                                libime::PinyinEncoder::parseUserShuangpin(
+                                    span, *d_->sp, d_->flags));
+                        } else if (wordCorrection) {
+                            spanGraph = std::make_unique<libime::SegmentGraph>(
+                                libime::PinyinEncoder::parseUserPinyin(
+                                    span, d_->correction, d_->flags));
+                        } else {
+                            spanGraph = std::make_unique<libime::SegmentGraph>(
+                                libime::PinyinEncoder::parseUserPinyin(
+                                    span, d_->flags));
+                        }
+                        libime::Lattice lattice;
+                        // The match-state caches (matchedPaths, discarded
+                        // nodes) are keyed by SegmentGraphNode pointers of
+                        // the throwaway span graph; never let entries
+                        // outlive it.
+                        d_->wordMatchState->clear();
+                        const bool decoded = d_->wordIME->decoder()->decode(
+                            lattice, *spanGraph, kWordDecodeNbest,
+                            d_->wordIME->model()->nullState(),
+                            d_->wordIME->maxDistance(), d_->wordIME->minPath(),
+                            d_->wordIME->beamSize(), d_->wordIME->frameSize(),
+                            d_->wordMatchState.get());
+                        if (!decoded) {
+                            continue;
+                        }
+                        for (size_t i = 0; i < lattice.sentenceSize(); ++i) {
+                            const auto &result = lattice.sentence(i);
+                            if (result.sentence().empty()) {
+                                continue;
+                            }
+                            const std::string text = result.toString();
+                            // Pure-Han gate: a decode spilling a Latin
+                            // residue is a forced-fragment artefact, not a
+                            // Chinese reading; never emit it as a word arc.
+                            if (std::any_of(text.begin(), text.end(),
+                                            [](unsigned char ch) {
+                                                return ch < 0x80;
+                                            })) {
+                                continue;
+                            }
+                            bool viaCorrection = false;
+                            if (wordCorrection) {
+                                for (const auto *node : result.sentence()) {
+                                    if (node->as<libime::PinyinLatticeNode>()
+                                            .anyCorrectionOnPath()) {
+                                        viaCorrection = true;
+                                        break;
+                                    }
+                                }
+                            }
+                            SegmentationArc arc;
+                            arc.rawBegin = begin;
+                            arc.rawEnd = end;
+                            arc.source = SegmentSource::Chinese;
+                            arc.provenance =
+                                viaCorrection ? CandidateProvenance::Correction
+                                              : CandidateProvenance::Exact;
+                            arc.confidence = viaCorrection ? 0.55F : 0.75F;
+                            arc.boundaryConfidence =
+                                viaCorrection ? 0.85F : 1.0F;
+                            arc.sourceLocalRank = static_cast<int>(i);
+                            arc.resolvedOutput = text;
+                            cache.push_back(std::move(arc));
+                        }
+                    } catch (...) {
+                        // Parser/decode disagreement on this span drops
+                        // only its word arcs; the structural arcs above
+                        // remain.
+                    }
+                }
+            }
+        }
+        if (begin < d_->wordArcs.size()) {
+            out.insert(out.end(), d_->wordArcs[begin].begin(),
+                       d_->wordArcs[begin].end());
         }
     }
     return out;

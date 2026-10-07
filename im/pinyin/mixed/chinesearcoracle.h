@@ -17,6 +17,7 @@
 
 namespace libime {
 class PinyinCorrectionProfile;
+class PinyinIME;
 class ShuangpinProfile;
 } // namespace libime
 
@@ -35,7 +36,9 @@ enum class ChineseInputMode {
 // fusion seam (see HanWordResolver) turns each accepted arc into a Han string
 // via PinyinDictionary::matchWords. Confidence is fixed structural evidence
 // from the graph edge; per-candidate LM quality lives with the classical
-// decoder and is expressed through the top-N Han decodes the resolver emits.
+// decoder and, when a word decoder is configured (see `setWordDecoder`), is
+// emitted as additional LM-decoded word arcs; otherwise it is expressed
+// through the top-N Han decodes the resolver emits.
 //
 // Batch 8 correction preservation: when a `PinyinCorrectionProfile` is set
 // (Pinyin mode only; Shuangpin correction is baked into the ShuangpinProfile
@@ -91,6 +94,36 @@ public:
     // correction mapping; the public LibIME API does not expose per-arc
     // correction provenance for Shuangpin — recorded ceiling, not fabricated).
     void setCorrectionProfile(const libime::PinyinCorrectionProfile *profile);
+
+    // Phase 3A-1 (fix design Revision B1): enable LM word arcs. When the
+    // IME is configured (the fusion seam passes LibIME's own `PinyinIME`,
+    // borrowed — PinyinEngine owns it and outlives the per-InputContext
+    // state, same pattern as `setCorrectionProfile`), `arcsAt` ADDITIONALLY
+    // emits one arc per classical span decode over every span reachable from
+    // `begin` by up to four graph edges: the span substring is parsed with
+    // the SAME `parseUserPinyin` / `parseUserShuangpin` call `setRaw` uses
+    // and decoded with the public `Decoder::decode` — the exact classical
+    // call shape (pinyincontext.cpp). The IME (not just its decoder and
+    // model) is required because LibIME's dictionary matching reads
+    // fuzzy/shuangpin/correction semantics ONLY from a `PinyinMatchState`
+    // helper (PinyinMatchContext, pinyindictionary.cpp:303-325): the
+    // helper-less overload syllabifies Shuangpin edges as Pinyin. The oracle
+    // owns an input-less `PinyinContext` and builds that helper over it, so
+    // the span decode uses the identical IME decoder, model, language-model
+    // null state and decode parameters the classical path reads. Each
+    // returned sentence becomes an arc carrying `resolvedOutput` = the
+    // sentence text (pure-Han bytes only), `sourceLocalRank` = the sentence
+    // index, and provenance `CandidateProvenance::Correction` when any node
+    // reports `anyCorrectionOnPath()` and a correction profile is active
+    // (Pinyin mode), else Exact. This is purely additive: the structural
+    // per-syllable arcs above are still emitted unchanged, and with a null
+    // IME the class behaves bit-identically to before. The fix targets the
+    // source-traced root cause — Han text generation was a context-free
+    // single-syllable dictionary-table pick that never consulted the
+    // classical decoder, so multi-syllable words (打开/我想买/配件) were
+    // structurally unreachable and Shuangpin spans were misdecoded as
+    // Pinyin. No LibIME modification: only public API.
+    void setWordDecoder(libime::PinyinIME *ime);
 
     // Rebuild the internal graph for `raw`. Cheap; safe per keystroke.
     void setRaw(std::string_view raw);

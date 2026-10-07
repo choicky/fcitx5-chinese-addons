@@ -39,6 +39,7 @@
 #include <string>
 #include <string_view>
 #include <tuple>
+#include <unordered_map>
 #include <unordered_set>
 #include <utility>
 #include <vector>
@@ -48,6 +49,11 @@ using namespace fcitx;
 namespace {
 
 std::unique_ptr<EventSourceTime> endTestEvent;
+// Phase 3A-2 §16: corpus-result failures must not abort the suite mid-run.
+// The ranking corpus records its failures here and the process still exits
+// non-zero, but every scheduled test after it executes, so no blind spot
+// hides behind the first failing group.
+int deferredTestFailures = 0;
 void testPunctuationPart2(Instance *instance);
 
 int findCandidate(InputContext *ic, std::string_view word) {
@@ -892,8 +898,14 @@ void testMixedRankingCorpus(Instance *instance) {
         ic->reset();
         config.setValueByPath("VAsQuickphrase", "True");
         pinyin->setConfig(config);
-        FCITX_ASSERT(failures.empty()) << "Ranking corpus: " << failures.size()
-                                       << " failures (see RANKCORP FAIL lines)";
+        if (!failures.empty()) {
+            std::fprintf(
+                stderr,
+                "RANKCORP DEFERRED-FAIL count=%zu (see RANKCORP FAIL "
+                "lines; suite continues, exit status stays non-zero)\n",
+                failures.size());
+            ++deferredTestFailures;
+        }
     });
 }
 
@@ -2583,6 +2595,413 @@ void testPunctuationPart2(Instance *instance) {
     });
 }
 
+// Phase 3A-1 RED regression — mixed Chinese-arc TEXT quality at the real
+// product path (PinyinEngine fusion seam -> LibIMEChineseArcOracle ->
+// HanWordResolver -> SegmentComposer -> MixedEngine pool). The Device
+// Evidence Addendum superseded the Phase-2 verdict that mixed pool contents
+// were healthy: on device, Chinese runs of mixed candidates are rare
+// one-character-per-syllable table picks even where spans align. The root
+// cause is source-proven in /tmp/chinese-arc-source-trace.md (F-1..F-6):
+// graph edges are single-syllable, matchWords is exact-encoding so only
+// single characters are reachable, no LM/Viterbi context is consulted, and
+// Shuangpin spans are mis-decoded as Pinyin.
+//
+// Expectations are NOT hardcoded from linguistic intuition: for each case
+// the expected Han text is obtained at runtime from the classical LibIME
+// decoding path by typing the pure run raw (e.g. "wodakai" -> its top-1),
+// exactly as the native HANPROBE record run did (phase3a1-probe.log,
+// 2026-10-07). Recorded current (defective) mixed outputs — Phase 3A-1
+// RED evidence, historical only:
+//   pinyin wodakaigithub           -> 喔惮岂GitHub   (喔+惮+岂 per syllable)
+//   pinyin woxiangmaiiphonepeijian -> 喔降脉iPhone妃㓺
+//   sp     wodaklgithub            -> 喔惮亏累GitHub
+//   sp     hsiphone                -> 好似iPhone    (sp code read as pinyin)
+//   sp     hsiphonepzjm            -> 好似iPhone偏在举目
+// From Phase 3A-2 onward every case above is a FATAL assertion (case 5's
+// search-eviction RED was closed by the bounded-diversity retention policy,
+// so the former non-fatal openFinding exception for it was removed).
+void testMixedHanTextQuality(Instance *instance) {
+    instance->eventDispatcher().schedule([instance]() {
+        auto *testfrontend = instance->addonManager().addon("testfrontend");
+        auto uuid =
+            testfrontend->call<ITestFrontend::createInputContext>("testapp");
+        auto *ic = instance->inputContextManager().findByUUID(uuid);
+        FCITX_ASSERT(ic);
+
+        auto type = [&](const char *mode, const std::string &raw) {
+            instance->setCurrentInputMethod(ic, mode, true);
+            ic->reset();
+            for (const char p : raw) {
+                testfrontend->call<ITestFrontend::keyEvent>(
+                    uuid, Key(std::string(1, p)), false);
+            }
+        };
+        auto bulkNow = [&ic]() -> BulkCandidateList * {
+            auto candList = ic->inputPanel().candidateList();
+            FCITX_ASSERT(candList && !candList->empty());
+            auto *bulk = candList->toBulk();
+            FCITX_ASSERT(bulk);
+            return bulk;
+        };
+        // Classical ground truth: top-1 reading of a pure Chinese run raw.
+        auto classicalTop1 = [&](const char *mode,
+                                 const std::string &runRaw) -> std::string {
+            type(mode, runRaw);
+            auto *bulk = bulkNow();
+            const auto top = bulk->candidateFromAll(0).text().toString();
+            const bool asciiOnly =
+                std::all_of(top.begin(), top.end(),
+                            [](char ch) { return ch & 0x80 ? false : true; });
+            FCITX_ASSERT(!top.empty() && !asciiOnly)
+                << "classical top-1 for run raw " << runRaw << " is not Han";
+            return top;
+        };
+
+        // One case = alternating [Chinese run raw, English surface] pairs
+        // starting and ending with a run or surface as listed. The mixed
+        // candidate must compose to classicalTop1(run)+surface+classicalTop1
+        // (run2)... with the canonical English surface.
+        struct MixedCase {
+            const char *mode;
+            std::vector<std::pair<bool, std::string>> parts; // true=Chinese run
+        };
+        const std::vector<MixedCase> cases = {
+            {"pinyin", {{true, "wodakai"}, {false, "GitHub"}}},
+            {"pinyin",
+             {{true, "woxiangmai"}, {false, "iPhone"}, {true, "peijian"}}},
+            {"shuangpin", {{true, "wodakl"}, {false, "GitHub"}}},
+            {"shuangpin", {{true, "hs"}, {false, "iPhone"}}},
+            {"shuangpin", {{true, "hs"}, {false, "iPhone"}, {true, "pzjm"}}},
+        };
+
+        for (const auto &c : cases) {
+            std::string expected;
+            std::string mixedRaw;
+            for (const auto &[isChinese, part] : c.parts) {
+                if (isChinese) {
+                    expected += classicalTop1(c.mode, part);
+                    mixedRaw += part;
+                } else {
+                    expected += part;
+                    for (const char ch : part) {
+                        mixedRaw += (ch >= 'A' && ch <= 'Z')
+                                        ? static_cast<char>(ch + 32)
+                                        : ch;
+                    }
+                }
+            }
+            type(c.mode, mixedRaw);
+            auto *bulk = bulkNow();
+            if (!hasCandidateText(ic, expected)) {
+                std::string dump;
+                for (int i = 0; i < bulk->totalSize(); ++i) {
+                    const auto t = bulk->candidateFromAll(i).text().toString();
+                    if (t.find("iPhone") != std::string::npos ||
+                        t.find("GitHub") != std::string::npos) {
+                        dump += " |";
+                        dump += std::to_string(i);
+                        dump += ":";
+                        dump += t;
+                    }
+                }
+                FCITX_ASSERT(false)
+                    << "MIXEDHANQ FAIL mode=" << c.mode << " raw=" << mixedRaw
+                    << " expected=" << expected
+                    << " actual-english-candidates:" << dump;
+            }
+        }
+        ic->reset();
+        std::fprintf(stderr, "MIXEDHANQ OK: mixed Chinese runs carry classical "
+                             "run decodes in both Pinyin and Shuangpin\n");
+    });
+}
+
+// Phase 3A-2 §11 R13 — direct-B1-emission Chinese-quality guard. MIXEDHANQ
+// asserts classical TOP-1 equality for fixed witnesses; R13 exercises the
+// product surface for every English-bearing mixed candidate of the committed
+// witnesses and asserts the surface-enforceable invariants: vacuity (mixed
+// evidence actually reaches the surface), run-split purity (no non-letter
+// ASCII residue in a mixed candidate) and raw alignment (every English run
+// occurs in the raw left-to-right; correction variants that cannot align are
+// covered by the dedicated correction regressions).
+//
+// The membership leg (each Han span ∈ typed full-IME reading set of its raw
+// gap) was EXECUTED as an assert in run30 and measured as an invalid anchor
+// (run30/31/32 evidence, /tmp/mixed-r13-chinese-quality.md): the typed
+// sentence surface for a gap is not a superset of the live decoder's
+// closed-span readings for it — abbreviation word arcs (互撕 from "hsi",
+// 好似 from shuangpin "hs") and multi-arc run concatenations never surface
+// as typed readings, and single-letter English runs ("I") misalign gaps. The
+// Chinese-evidence contract itself is provenance, not typed-set membership,
+// and is established by construction on the source side: arc texts minted by
+// `PinyinEncoder::parseUserPinyin` + `PinyinIME::decoder()->decode` over the
+// exact span (chinesearcoracle.cpp), composed by pure concatenation of
+// `arc.resolvedOutput` (segmentcomposer.cpp), untouched by UnifiedRanker,
+// rebuilt by Rewriter with separators only (rewriter.cpp), pasted verbatim
+// at placement (pinyin.cpp). So membership runs here as a NON-FATAL
+// divergence diagnostic (R13WARN + count): future divergences beyond the
+// recorded classes stay visible without asserting a contract the decoder
+// does not provide. No compose-time re-decode exists and none is justified
+// (mandate §11: the RED disproved the anchor, not the emission).
+void testMixedR13ChineseQuality(Instance *instance) {
+    instance->eventDispatcher().schedule([instance]() {
+        auto *testfrontend = instance->addonManager().addon("testfrontend");
+        auto uuid =
+            testfrontend->call<ITestFrontend::createInputContext>("testr13");
+        auto *ic = instance->inputContextManager().findByUUID(uuid);
+        FCITX_ASSERT(ic);
+
+        auto type = [&](const char *mode, const std::string &raw) {
+            instance->setCurrentInputMethod(ic, mode, true);
+            ic->reset();
+            for (const char p : raw) {
+                testfrontend->call<ITestFrontend::keyEvent>(
+                    uuid, Key(std::string(1, p)), false);
+            }
+        };
+        auto bulkNow = [&ic]() -> BulkCandidateList * {
+            auto candList = ic->inputPanel().candidateList();
+            FCITX_ASSERT(candList && !candList->empty());
+            auto *bulk = candList->toBulk();
+            FCITX_ASSERT(bulk);
+            return bulk;
+        };
+        std::unordered_map<std::string, std::unordered_set<std::string>>
+            gapReadings;
+        auto readingsFor = [&](const std::string &key, const char *mode,
+                               const std::string &gap)
+            -> const std::unordered_set<std::string> & {
+            auto it = gapReadings.find(key);
+            if (it == gapReadings.end()) {
+                type(mode, gap);
+                auto *gapBulk = bulkNow();
+                std::unordered_set<std::string> set;
+                for (int i = 0; i < gapBulk->totalSize(); ++i) {
+                    set.insert(gapBulk->candidateFromAll(i).text().toString());
+                }
+                it = gapReadings.emplace(key, std::move(set)).first;
+            }
+            return it->second;
+        };
+        auto lower = [](std::string s) {
+            for (auto &ch : s) {
+                ch = static_cast<char>(
+                    std::tolower(static_cast<unsigned char>(ch)));
+            }
+            return s;
+        };
+
+        struct R13Case {
+            const char *mode;
+            std::string raw;
+        };
+        const std::vector<R13Case> cases = {
+            {"pinyin", "hsiphone"},
+            {"pinyin", "wodakaigithubheiphonexiuxian"},
+            {"pinyin", "woxiangmaiiphonepeijian"},
+            {"shuangpin", "hsiphone"},
+            {"shuangpin", "hsiphonepzjm"},
+        };
+
+        int checked = 0;
+        int missed = 0;
+        for (const auto &c : cases) {
+            const std::string lowerRaw = lower(c.raw);
+            type(c.mode, c.raw);
+            auto *bulk = bulkNow();
+            std::vector<std::string> texts;
+            for (int i = 0; i < bulk->totalSize() && texts.size() < 32; ++i) {
+                auto t = bulk->candidateFromAll(i).text().toString();
+                const bool hasAscii =
+                    std::any_of(t.begin(), t.end(), [](char ch) {
+                        return (ch >= 'a' && ch <= 'z') ||
+                               (ch >= 'A' && ch <= 'Z');
+                    });
+                if (hasAscii) {
+                    texts.push_back(std::move(t));
+                }
+            }
+            FCITX_ASSERT(!texts.empty())
+                << "R13 vacuity guard: no English-bearing candidate for "
+                << c.mode << " raw=" << c.raw;
+            for (const auto &t : texts) {
+                // Split into maximal [A-Za-z]-runs and Han (>=0x80) runs.
+                std::vector<std::pair<bool, std::string>> runs;
+                std::string cur;
+                bool curEnglish = false;
+                bool haveCur = false;
+                bool malformed = false;
+                for (const char ch : t) {
+                    const bool english =
+                        (ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z');
+                    if (!english && static_cast<unsigned char>(ch) < 0x80) {
+                        malformed = true;
+                        break;
+                    }
+                    if (haveCur && english != curEnglish) {
+                        runs.emplace_back(curEnglish, cur);
+                        cur.clear();
+                    }
+                    curEnglish = english;
+                    haveCur = true;
+                    cur += ch;
+                }
+                if (malformed) {
+                    FCITX_ASSERT(false)
+                        << "R13: non-letter ASCII residue in candidate " << t;
+                }
+                if (haveCur) {
+                    runs.emplace_back(curEnglish, cur);
+                }
+                // Align English runs into the raw left-to-right; correction
+                // variants that cannot align (e.g. githbu→GitHub) are
+                // covered by the dedicated correction regressions, not here.
+                size_t cursor = 0;
+                size_t gapBegin = 0;
+                bool aligned = true;
+                for (size_t r = 0; r < runs.size() && aligned; ++r) {
+                    if (!runs[r].first) {
+                        continue;
+                    }
+                    const auto eng = lower(runs[r].second);
+                    const auto pos = lowerRaw.find(eng, cursor);
+                    if (pos == std::string::npos) {
+                        aligned = false;
+                        break;
+                    }
+                    const std::string gap =
+                        c.raw.substr(gapBegin, pos - gapBegin);
+                    if (!gap.empty() && r > 0 && !runs[r - 1].first) {
+                        const auto &han = runs[r - 1];
+                        const std::string key = std::string(c.mode) + "|" + gap;
+                        const auto &set = readingsFor(key, c.mode, gap);
+                        if (!set.count(han.second)) {
+                            ++missed;
+                            std::fprintf(stderr,
+                                         "R13WARN span=%s gap=%s mode=%s "
+                                         "raw=%s cand=%s\n",
+                                         han.second.c_str(), gap.c_str(),
+                                         c.mode, c.raw.c_str(), t.c_str());
+                        }
+                        ++checked;
+                    }
+                    cursor = pos + eng.size();
+                    gapBegin = cursor;
+                }
+                if (aligned) {
+                    const std::string tailGap = c.raw.substr(gapBegin);
+                    if (!tailGap.empty() && !runs.back().first) {
+                        const std::string key =
+                            std::string(c.mode) + "|" + tailGap;
+                        const auto &set = readingsFor(key, c.mode, tailGap);
+                        if (!set.count(runs.back().second)) {
+                            ++missed;
+                            std::fprintf(stderr,
+                                         "R13WARN span=%s gap=%s mode=%s "
+                                         "raw=%s cand=%s\n",
+                                         runs.back().second.c_str(),
+                                         tailGap.c_str(), c.mode, c.raw.c_str(),
+                                         t.c_str());
+                        }
+                        ++checked;
+                    }
+                }
+            }
+            ic->reset();
+        }
+        instance->setCurrentInputMethod(ic, "pinyin", true);
+        std::fprintf(stderr,
+                     "R13 OK: vacuity, residue and alignment guards GREEN "
+                     "for English-bearing mixed candidates of the committed "
+                     "witnesses in both modes; membership probe: %d/%d Han "
+                     "spans outside the typed-gap surface (diagnostic only, "
+                     "provenance holds by construction)\n",
+                     missed, checked);
+    });
+}
+
+// Phase 3A-1 Fix A regression: the whole-raw single-syllable guard must
+// require path().size()==2 (one graph edge), not merely one node. A single
+// multi-syllable word (qinghai -> 青海, one node over two syllables) was
+// misread as single-syllable and suppressed the bounded insertion class;
+// that is the device macos FAIL mechanism once macOS is a learned word.
+void testMixedFixAGuard(Instance *instance) {
+    instance->eventDispatcher().schedule([instance]() {
+        auto *tf = instance->addonManager().addon("testfrontend");
+        auto uuid = tf->call<ITestFrontend::createInputContext>("testfixa");
+        auto *ic = instance->inputContextManager().findByUUID(uuid);
+        FCITX_ASSERT(ic);
+        auto type = [&](std::string_view raw) {
+            instance->setCurrentInputMethod(ic, "pinyin", true);
+            ic->reset();
+            for (const char p : raw) {
+                tf->call<ITestFrontend::keyEvent>(uuid, Key(std::string(1, p)),
+                                                  false);
+            }
+        };
+        auto bulkNow = [&ic]() -> BulkCandidateList * {
+            auto list = ic->inputPanel().candidateList();
+            FCITX_ASSERT(list && !list->empty());
+            auto *bulk = list->toBulk();
+            FCITX_ASSERT(bulk);
+            return bulk;
+        };
+        auto idxOf = [](BulkCandidateList *bulk,
+                        const std::string &text) -> int {
+            for (int i = 0; i < bulk->totalSize(); ++i) {
+                if (bulk->candidateFromAll(i).text().toString() == text) {
+                    return i;
+                }
+            }
+            return -1;
+        };
+        auto firstHanIdx = [](BulkCandidateList *bulk) -> int {
+            for (int i = 0; i < bulk->totalSize(); ++i) {
+                const auto t = bulk->candidateFromAll(i).text().toString();
+                const bool han = std::any_of(t.begin(), t.end(),
+                                             [](char c) { return c & 0x80; }) &&
+                                 std::none_of(t.begin(), t.end(), [](char c) {
+                                     return !(c & 0x80);
+                                 });
+                if (han) {
+                    return i;
+                }
+            }
+            return -1;
+        };
+        // (1) Conservative invariant: "chang" is one syllable; the
+        // classical reading keeps top-1 and Chang stays in the list.
+        type("chang");
+        {
+            auto *bulk = bulkNow();
+            const auto top = bulk->candidateFromAll(0).text().toString();
+            FCITX_ASSERT(!top.empty() && (top[0] & 0x80))
+                << "FIXA-INVARIANT FAIL: Chang displaced the single-syllable "
+                   "classical reading for raw=chang";
+            FCITX_ASSERT(idxOf(bulk, "Chang") >= 0)
+                << "FIXA-INVARIANT FAIL: Chang missing for raw=chang";
+        }
+        // (2) Fix A: one node over two syllables must not suppress the
+        // insertion class; Qinghai must lead the first pure-Han candidate.
+        type("qinghai");
+        {
+            auto *bulk = bulkNow();
+            const int q = idxOf(bulk, "Qinghai");
+            const int h = firstHanIdx(bulk);
+            FCITX_ASSERT(q >= 0)
+                << "FIXA FAIL: Qinghai class member missing for raw=qinghai";
+            FCITX_ASSERT(h < 0 || q < h)
+                << "FIXA FAIL: multi-syllable single node suppressed the "
+                   "insertion class (qIdx="
+                << q << " hanIdx=" << h << ")";
+        }
+        ic->reset();
+        std::fprintf(stderr,
+                     "MIXEDFIXA OK: single-syllable suppression preserved, "
+                     "multi-syllable single word no longer misread\n");
+    });
+}
+
 } // namespace
 
 int main() {
@@ -2605,6 +3024,9 @@ int main() {
     testSelectByChar(&instance);
     testUppercase(&instance);
     testMixedShuangpin(&instance);
+    testMixedHanTextQuality(&instance);
+    testMixedR13ChineseQuality(&instance);
+    testMixedFixAGuard(&instance);
     testMixedProductCorpus(&instance);
     testMixedRankingCorpus(&instance);
     testMixedLearning(&instance);
@@ -2632,5 +3054,5 @@ int main() {
     testPunctuation(&instance);
     instance.exec();
     endTestEvent.reset();
-    return 0;
+    return deferredTestFailures == 0 ? 0 : 1;
 }

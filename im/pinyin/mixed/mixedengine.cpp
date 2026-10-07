@@ -58,15 +58,21 @@ MixedEngine::compute(std::string_view raw, const IChineseArcOracle &chinese,
     // behaviour-identical while keeping pure-Chinese composition on the
     // classical cost profile. The beam search above is the English-evidence
     // probe itself, so there is no recall loss: the moment an English arc
-    // survives in any path, the full mixed pipeline runs.
-    const bool hasEnglishEvidence =
-        std::any_of(paths.begin(), paths.end(), [](const SegmentationPath &p) {
+    // survives in any path, the full mixed pipeline runs. The probe only
+    // ever reports "no evidence" when no English-arc path survived at all.
+    // Phase 3A-2 classed retention subsumes the earlier widening re-probe:
+    // an English-bearing path that survives any bounded window is reserved
+    // into the terminal selection (highest non-empty English class), so the
+    // false-negative shape the re-probe compensated for cannot recur.
+    const auto englishEvidence = [](const std::vector<SegmentationPath> &ps) {
+        return std::any_of(ps.begin(), ps.end(), [](const SegmentationPath &p) {
             return std::any_of(p.arcs.begin(), p.arcs.end(),
                                [](const SegmentationArc &a) {
                                    return a.source == SegmentSource::English;
                                });
         });
-    if (!hasEnglishEvidence) {
+    };
+    if (!englishEvidence(paths)) {
         return {};
     }
     const std::size_t cap = config_.pool.maxSize;
