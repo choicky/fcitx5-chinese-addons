@@ -648,13 +648,13 @@ void PinyinEngine::updateUI(InputContext *inputContext) {
         // label MIXEDDIAG so logcat can be filtered. Logs the raw that the
         // user is typing in the diagnostic session only; never changes any
         // candidate, slot or decision.
-        FCITX_DEBUG()
-            << "MIXEDDIAG gate spell=" << int(*config_.spellEnabled)
-            << " engine=" << int(bool(mixedEngine_))
-            << " cOracle=" << int(bool(mixedChineseOracle_))
-            << " eOracle=" << int(bool(mixedEnglishOracle_))
-            << " raw=" << pyBeforeCursor << " cursor=" << context.cursor()
-            << " shuangpin=" << int(context.useShuangpin());
+        FCITX_DEBUG() << "MIXEDDIAG gate spell=" << int(*config_.spellEnabled)
+                      << " engine=" << int(bool(mixedEngine_))
+                      << " cOracle=" << int(bool(mixedChineseOracle_))
+                      << " eOracle=" << int(bool(mixedEnglishOracle_))
+                      << " raw=" << pyBeforeCursor
+                      << " cursor=" << context.cursor()
+                      << " shuangpin=" << int(context.useShuangpin());
         if (*config_.spellEnabled && mixedEngine_ && mixedChineseOracle_ &&
             mixedEnglishOracle_ && !pyBeforeCursor.empty()) {
             // The active parse mode follows the input method entry
@@ -778,14 +778,14 @@ void PinyinEngine::updateUI(InputContext *inputContext) {
             }
             const bool mixedLeads =
                 !chineseCoversWholeRaw && englishLeadEvidence;
-            FCITX_DEBUG()
-                << "MIXEDDIAG flags raw=" << pyBeforeCursor
-                << " coversWhole=" << int(chineseCoversWholeRaw)
-                << " singleSyll=" << int(chineseWholeRawSingleSyllable)
-                << " engLead=" << int(englishLeadEvidence)
-                << " mixedLeads=" << int(mixedLeads)
-                << " pool=" << mixedPool.size()
-                << " classical=" << pinyinCandidates.size();
+            FCITX_DEBUG() << "MIXEDDIAG flags raw=" << pyBeforeCursor
+                          << " coversWhole=" << int(chineseCoversWholeRaw)
+                          << " singleSyll="
+                          << int(chineseWholeRawSingleSyllable)
+                          << " engLead=" << int(englishLeadEvidence)
+                          << " mixedLeads=" << int(mixedLeads)
+                          << " pool=" << mixedPool.size()
+                          << " classical=" << pinyinCandidates.size();
             {
                 const size_t topN =
                     std::min<size_t>(3, pinyinCandidates.size());
@@ -807,9 +807,9 @@ void PinyinEngine::updateUI(InputContext *inputContext) {
                         align += std::to_string(a.rawBegin) + "-" +
                                  std::to_string(a.rawEnd) + " ";
                     }
-                    FCITX_DEBUG() << "MIXEDDIAG pool[" << i << "] "
-                                  << c.composedText << " srcs=" << srcs
-                                  << " align=" << align;
+                    FCITX_DEBUG()
+                        << "MIXEDDIAG pool[" << i << "] " << c.composedText
+                        << " srcs=" << srcs << " align=" << align;
                 }
             }
             // A requested slot this large sorts behind every classical
