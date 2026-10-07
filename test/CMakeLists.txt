@@ -195,3 +195,34 @@ target_include_directories(testmixedshuangpin PRIVATE
     ${PROJECT_SOURCE_DIR}/im/pinyin ${PROJECT_SOURCE_DIR}/im/pinyin/mixed
     ${PROJECT_SOURCE_DIR}/im/pinyin/mixed/english)
 add_test(NAME testmixedshuangpin COMMAND testmixedshuangpin)
+
+# Phase 3A-2 §17 — persisted-user-model seeded fixture. Builds a real
+# libime::PinyinIME exactly as PinyinEngine does, learns a multi-syllable
+# user word, persists it via save(UserDict, Binary) to a temp file, reloads
+# it in a second IME (simulated restart) and asserts the real
+# LibIMEChineseArcOracle emits the disk-backed word arc, that classed
+# retention keeps English-bearing paths despite that whole-span crowding arc,
+# and that the full MixedEngine pipeline recalls + fuses the persisted word
+# with an English witness in both positions. FUSION_LIBIME_PKGDATADIR comes
+# from the LibIMECore config package (set(LIBIME_INSTALL_PKGDATADIR ...)).
+add_executable(testmixedusermodel testmixedusermodel.cpp
+    ../im/pinyin/mixed/chinesearcoracle.cpp
+    ../im/pinyin/mixed/mixedcompositionstate.cpp
+    ../im/pinyin/mixed/mixedsegmentation.cpp
+    ../im/pinyin/mixed/segmentcomposer.cpp
+    ../im/pinyin/mixed/unifiedranker.cpp
+    ../im/pinyin/mixed/rewriter.cpp
+    ../im/pinyin/mixed/mixedengine.cpp
+    ../im/pinyin/mixed/hanwordresolver.cpp
+    ../im/pinyin/mixed/english/englishlexicon.cpp
+    ../im/pinyin/mixed/english/englisharcoracle.cpp
+    ../im/pinyin/mixed/english/englishuserlexicon.cpp
+    ../im/pinyin/mixed/english/englishcorrectionoracle.cpp)
+target_link_libraries(testmixedusermodel PRIVATE
+    Fcitx5::Utils LibIME::Pinyin LibIME::Core)
+target_include_directories(testmixedusermodel PRIVATE
+    ${PROJECT_SOURCE_DIR}/im/pinyin ${PROJECT_SOURCE_DIR}/im/pinyin/mixed
+    ${PROJECT_SOURCE_DIR}/im/pinyin/mixed/english)
+target_compile_definitions(testmixedusermodel PRIVATE
+    FUSION_LIBIME_PKGDATADIR="${LIBIME_INSTALL_PKGDATADIR}")
+add_test(NAME testmixedusermodel COMMAND testmixedusermodel)
