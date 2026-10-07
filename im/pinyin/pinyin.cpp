@@ -643,6 +643,18 @@ void PinyinEngine::updateUI(InputContext *inputContext) {
         // Pure-Han mixed candidates are skipped (the classical LibIME
         // decoder already produces them, and inserting them would only
         // duplicate the pinyinCandidates list at a worse rank).
+        // Runtime diagnostics (Android reality-gap investigation, dev-only):
+        // log the gate booleans and placement decisions with the stable
+        // label MIXEDDIAG so logcat can be filtered. Logs the raw that the
+        // user is typing in the diagnostic session only; never changes any
+        // candidate, slot or decision.
+        FCITX_DEBUG()
+            << "MIXEDDIAG gate spell=" << int(*config_.spellEnabled)
+            << " engine=" << int(bool(mixedEngine_))
+            << " cOracle=" << int(bool(mixedChineseOracle_))
+            << " eOracle=" << int(bool(mixedEnglishOracle_))
+            << " raw=" << pyBeforeCursor << " cursor=" << context.cursor()
+            << " shuangpin=" << int(context.useShuangpin());
         if (*config_.spellEnabled && mixedEngine_ && mixedChineseOracle_ &&
             mixedEnglishOracle_ && !pyBeforeCursor.empty()) {
             // The active parse mode follows the input method entry
@@ -766,6 +778,40 @@ void PinyinEngine::updateUI(InputContext *inputContext) {
             }
             const bool mixedLeads =
                 !chineseCoversWholeRaw && englishLeadEvidence;
+            FCITX_DEBUG()
+                << "MIXEDDIAG flags raw=" << pyBeforeCursor
+                << " coversWhole=" << int(chineseCoversWholeRaw)
+                << " singleSyll=" << int(chineseWholeRawSingleSyllable)
+                << " engLead=" << int(englishLeadEvidence)
+                << " mixedLeads=" << int(mixedLeads)
+                << " pool=" << mixedPool.size()
+                << " classical=" << pinyinCandidates.size();
+            {
+                const size_t topN =
+                    std::min<size_t>(3, pinyinCandidates.size());
+                for (size_t i = 0; i < topN; ++i) {
+                    FCITX_DEBUG() << "MIXEDDIAG classical[" << i << "] "
+                                  << pinyinCandidates[i].toString();
+                }
+            }
+            {
+                const size_t poolN = std::min<size_t>(12, mixedPool.size());
+                for (size_t i = 0; i < poolN; ++i) {
+                    const auto &c = mixedPool[i];
+                    std::string srcs;
+                    for (auto s : c.sources) {
+                        srcs += std::to_string(int(s)) + ",";
+                    }
+                    std::string align;
+                    for (const auto &a : c.alignment) {
+                        align += std::to_string(a.rawBegin) + "-" +
+                                 std::to_string(a.rawEnd) + " ";
+                    }
+                    FCITX_DEBUG() << "MIXEDDIAG pool[" << i << "] "
+                                  << c.composedText << " srcs=" << srcs
+                                  << " align=" << align;
+                }
+            }
             // A requested slot this large sorts behind every classical
             // candidate after the custom-candidate normalisation below.
             constexpr std::size_t kBehindClassicalSlot =
@@ -804,6 +850,11 @@ void PinyinEngine::updateUI(InputContext *inputContext) {
                         ? position++
                         : (classLead ? insertionPosition++
                                      : kBehindClassicalSlot + position++);
+                FCITX_DEBUG()
+                    << "MIXEDDIAG place raw=" << pyBeforeCursor
+                    << " text=" << cand.composedText
+                    << " classLead=" << int(classLead) << " slot=" << slot
+                    << " arcs=" << cand.alignment.size();
                 auto clone = std::make_unique<pinyin::UnifiedCandidate>(cand);
                 std::string text = clone->composedText;
                 customCandidateMap.emplace(
