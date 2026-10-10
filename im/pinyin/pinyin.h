@@ -60,6 +60,7 @@ class EnglishUserArcOracle;
 class EnglishUserLexicon;
 class HanWordResolver;
 class LibIMEChineseArcOracle;
+class ChineseWordArcTable;
 class MixedEngine;
 struct UnifiedCandidate;
 } // namespace pinyin
@@ -590,6 +591,9 @@ private:
         mixedEnglishCorrectionOracle_;
     std::unique_ptr<pinyin::CompositeEnglishArcOracle> mixedEnglishOracle_;
     std::unique_ptr<pinyin::LibIMEChineseArcOracle> mixedChineseOracle_;
+    // The whole-raw Chinese word-arc table the single LM-state-aware mixed
+    // search walks (M2+, see mixed/m2psearch.h).
+    std::unique_ptr<pinyin::ChineseWordArcTable> mixedWordArcs_;
     std::unique_ptr<pinyin::HanWordResolver> mixedHanResolver_;
     std::unique_ptr<pinyin::MixedEngine> mixedEngine_;
 

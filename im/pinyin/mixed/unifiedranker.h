@@ -27,6 +27,7 @@ struct RankFeatures {
     std::size_t completionArcs = 0;
     std::size_t correctionArcs = 0;
     std::size_t userArcs = 0;
+    std::size_t singleEnglishArcs = 0;
     // Language-source switches across the path (adjacent arcs with
     // different SegmentSource). NOT penalized in the default weights (§11);
     // recorded only so ranker tuning can observe it.
@@ -84,6 +85,11 @@ public:
         // dictionary interpretation of the whole suffix is stronger
         // evidence than an ad-hoc multi-arc tiling.
         float wWholeSpan = 0.15F;
+        // Canonical whole-span evidence must beat a cheaper tiling of the
+        // same bytes (for example Git + hub). This is a structural prior,
+        // independent of any particular lexicon entry.
+        float wCanonicalWholeSpan = 0.25F;
+        float wCanonicalSingleEnglish = 0.20F;
     };
 
     UnifiedRanker();

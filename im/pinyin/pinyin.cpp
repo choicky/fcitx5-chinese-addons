@@ -18,6 +18,7 @@
 #include "mixed/english/englishlexicon.h"
 #include "mixed/english/englishuserlexicon.h"
 #include "mixed/hanwordresolver.h"
+#include "mixed/m2psearch.h"
 #include "mixed/mixedengine.h"
 #include "mixed/unifiedranker.h"
 #include "notifications_public.h"
@@ -31,6 +32,7 @@
 #include <chrono>
 #include <cstddef>
 #include <cstdint>
+#include <cstdio>
 #include <ctime>
 #include <exception>
 #include <fcitx-config/iniparser.h>
@@ -112,61 +114,78 @@ namespace fcitx {
 
 namespace {
 
-FCITX_DEFINE_LOG_CATEGORY(pinyin, "pinyin");
+enum class StrongPart { Complete, Prefix, Separator, Invalid };
 
-// Phase 3A-1 Part 6 (mandated removable diagnostics, witness logging
-// only): ASCII-safe UTF-8 escaper for the MIXEDDIAG witness lines.
-// Non-ASCII scalars become \uXXXX (BMP) or \UXXXXXXXX (supplementary) so
-// the records survive adb logcat / Windows console transcoding; the raw
-// UTF-8 text is captured separately by reading the fcitx5 debug log file.
-std::string mixdiagEscapeUtf8(const std::string &text) {
-    static constexpr char digits[] = "0123456789ABCDEF";
-    std::string out;
-    for (std::size_t i = 0; i < text.size();) {
-        const unsigned char ch = static_cast<unsigned char>(text[i]);
-        unsigned int cp = 0;
-        std::size_t len = 1;
-        if (ch < 0x80) {
-            out.push_back(static_cast<char>(ch));
-            ++i;
-            continue;
-        } else if ((ch >> 5) == 0x6U) {
-            cp = ch & 0x1FU;
-            len = 2;
-        } else if ((ch >> 4) == 0xEU) {
-            cp = ch & 0x0FU;
-            len = 3;
-        } else if ((ch >> 3) == 0x1EU) {
-            cp = ch & 0x07U;
-            len = 4;
-        } else {
-            out += "\\xXX";
-            ++i;
-            continue;
-        }
-        bool valid = i + len <= text.size();
-        for (std::size_t k = 1; valid && k < len; ++k) {
-            const unsigned char next = static_cast<unsigned char>(text[i + k]);
-            if ((next >> 6) != 0x2U) {
-                valid = false;
-            } else {
-                cp = (cp << 6) | (next & 0x3FU);
+StrongPart classifyStrongPart(std::string_view part,
+                              const libime::ShuangpinProfile *profile) {
+    if (!part.empty() && part.front() == '\'') {
+        return StrongPart::Separator;
+    }
+    const auto syllables =
+        profile ? libime::PinyinEncoder::shuangpinToSyllablesWithFuzzyFlags(
+                      part, *profile, libime::PinyinFuzzyFlag::None)
+                : libime::PinyinEncoder::stringToSyllablesWithFuzzyFlags(
+                      part, nullptr, libime::PinyinFuzzyFlag::None);
+    bool complete = false;
+    bool prefix = false;
+    for (const auto &[initial, finals] : syllables) {
+        for (const auto &[final, flags] : finals) {
+            if (flags != libime::PinyinFuzzyFlag::None) {
+                continue;
+            }
+            if (final != libime::PinyinFinal::Invalid) {
+                complete = true;
+            } else if (initial != libime::PinyinInitial::Invalid) {
+                prefix = true;
             }
         }
-        if (!valid) {
-            out += "\\xXX";
-            ++i;
-            continue;
-        }
-        out += cp <= 0xFFFFU ? "\\u" : "\\U";
-        const unsigned int width = cp <= 0xFFFFU ? 4U : 8U;
-        for (int sh = static_cast<int>(4U * width - 4U); sh >= 0; sh -= 4) {
-            out.push_back(digits[(cp >> sh) & 0xFU]);
-        }
-        i += len;
     }
-    return out;
+    if (!profile && (part == "m" || part == "n" || part == "r")) {
+        return StrongPart::Prefix;
+    }
+    if (std::any_of(part.begin(), part.end(),
+                    [](char c) { return c >= 'A' && c <= 'Z'; })) {
+        return StrongPart::Invalid;
+    }
+    return complete ? StrongPart::Complete
+                    : (prefix ? StrongPart::Prefix : StrongPart::Invalid);
 }
+
+bool isStrongChinese(
+    std::string_view raw, bool shuangpin,
+    const std::shared_ptr<const libime::ShuangpinProfile> &profile) {
+    if (raw.empty() || (shuangpin && !profile)) {
+        return false;
+    }
+    const auto graph =
+        shuangpin
+            ? libime::PinyinEncoder::parseUserShuangpin(
+                  std::string(raw), *profile, libime::PinyinFuzzyFlag::None)
+            : libime::PinyinEncoder::parseUserPinyin(
+                  std::string(raw), libime::PinyinFuzzyFlag::None);
+    std::function<bool(const libime::SegmentGraphNode *)> visit =
+        [&](const libime::SegmentGraphNode *node) {
+            if (node == &graph.end()) {
+                return true;
+            }
+            for (const auto &next : node->nexts()) {
+                const auto part = graph.segment(node->index(), next.index());
+                const auto kind = classifyStrongPart(
+                    part, shuangpin ? profile.get() : nullptr);
+                const bool last = &next == &graph.end();
+                if ((kind == StrongPart::Complete ||
+                     kind == StrongPart::Separator ||
+                     (last && kind == StrongPart::Prefix)) &&
+                    visit(&next)) {
+                    return true;
+                }
+            }
+            return false;
+        };
+    return visit(&graph.start());
+}
+
+FCITX_DEFINE_LOG_CATEGORY(pinyin, "pinyin");
 
 #define PINYIN_DEBUG() FCITX_LOGC(pinyin, Debug)
 #define PINYIN_ERROR() FCITX_LOGC(pinyin, Error)
@@ -697,33 +716,33 @@ void PinyinEngine::updateUI(InputContext *inputContext) {
         // Pure-Han mixed candidates are skipped (the classical LibIME
         // decoder already produces them, and inserting them would only
         // duplicate the pinyinCandidates list at a worse rank).
-        // Runtime diagnostics (Android reality-gap investigation, dev-only):
-        // log the gate booleans and placement decisions with the stable
-        // label MIXEDDIAG so logcat can be filtered. Logs the raw that the
-        // user is typing in the diagnostic session only; never changes any
-        // candidate, slot or decision.
-        FCITX_DEBUG() << "MIXEDDIAG gate spell=" << int(*config_.spellEnabled)
-                      << " engine=" << int(bool(mixedEngine_))
-                      << " cOracle=" << int(bool(mixedChineseOracle_))
-                      << " eOracle=" << int(bool(mixedEnglishOracle_))
-                      << " raw=" << pyBeforeCursor
-                      << " cursor=" << context.cursor()
-                      << " shuangpin=" << int(context.useShuangpin());
         if (*config_.spellEnabled && mixedEngine_ && mixedChineseOracle_ &&
             mixedEnglishOracle_ && !pyBeforeCursor.empty()) {
             // The active parse mode follows the input method entry
             // (pinyin vs shuangpin), so the Chinese oracle segments the raw
             // with exactly the same LibIME parser the classical decoder
             // uses. setMode is a no-op unless the mode actually changed.
-            mixedChineseOracle_->setMode(
+            const auto mixedMode =
                 context.useShuangpin() ? pinyin::ChineseInputMode::Shuangpin
-                                       : pinyin::ChineseInputMode::Pinyin);
+                                       : pinyin::ChineseInputMode::Pinyin;
+            mixedChineseOracle_->setMode(mixedMode);
             mixedChineseOracle_->setRaw(pyBeforeCursor);
+            // M2+: one whole-raw word-arc table and one LM-state-aware
+            // bounded pass over it, replacing the per-gap classical decoding
+            // for the mixed pool when enabled.
+            std::unique_ptr<pinyin::MixedLmStateSearch> m2pSearch;
+            if (mixedWordArcs_) {
+                mixedWordArcs_->setMode(mixedMode);
+                mixedWordArcs_->build(pyBeforeCursor);
+                m2pSearch = std::make_unique<pinyin::MixedLmStateSearch>(
+                    pinyin::mixedM2PConfig(), ime_->model(), *mixedWordArcs_,
+                    context.state());
+            }
             const auto hanResolver =
                 mixedHanResolver_->asArcResolver(pyBeforeCursor);
-            const auto mixedPool =
-                mixedEngine_->compute(pyBeforeCursor, *mixedChineseOracle_,
-                                      *mixedEnglishOracle_, hanResolver);
+            const auto mixedPool = mixedEngine_->compute(
+                pyBeforeCursor, *mixedChineseOracle_, *mixedEnglishOracle_,
+                hanResolver, m2pSearch.get());
             // Placement policy (architecture A §9, feature-level rationale):
             // two structural facts decide whether a mixed candidate may
             // displace the classical list, both derived from explainable
@@ -784,159 +803,16 @@ void PinyinEngine::updateUI(InputContext *inputContext) {
             //       茶通过平台, macos -> 马车哦是) are abbreviation
             //       artefacts, not syllables, and do not suppress.
             //       See UnifiedRanker::isBoundedInsertionClass.
-            const bool chineseCoversWholeRaw = std::any_of(
-                pinyinCandidates.begin(), pinyinCandidates.end(),
-                [&](const auto &candidate) {
-                    if (candidate.sentence().empty() ||
-                        candidate.sentence().back()->to()->index() !=
-                            context.cursor()) {
-                        return false;
-                    }
-                    // Pure-Han test: every UTF-8 Han character encodes with
-                    // all bytes >= 0x80, so any byte below it is a leftover
-                    // letter/digit from a forced or fallback decode.
-                    const auto reading = candidate.toString();
-                    return std::none_of(
-                        reading.begin(), reading.end(),
-                        [](unsigned char ch) { return ch < 0x80; });
-                });
-            const bool chineseWholeRawSingleSyllable = std::any_of(
-                pinyinCandidates.begin(), pinyinCandidates.end(),
-                [&](const auto &candidate) {
-                    if (candidate.sentence().size() != 1 ||
-                        // Phase 3A-1 Fix A: one sentence NODE is not one
-                        // SYLLABLE. A learned or dictionary word (qinghai ->
-                        // 青海, macos after user learning) decodes as a
-                        // single node whose path spans several syllables;
-                        // path().size() == 2 is the exact one-syllable
-                        // signature (start + end node only). Without this
-                        // check a multi-syllable whole-raw word would set
-                        // the single-syllable flag and suppress the bounded
-                        // insertion class it exists to allow.
-                        candidate.sentence().back()->path().size() != 2 ||
-                        candidate.sentence().back()->to()->index() !=
-                            context.cursor()) {
-                        return false;
-                    }
-                    const auto reading = candidate.toString();
-                    return std::none_of(
-                        reading.begin(), reading.end(),
-                        [](unsigned char ch) { return ch < 0x80; });
-                });
-            // Phase 3A-1 Part 6 — mandated removable witness logging.
-            // Dumps the classical candidates that feed the coversWhole /
-            // singleSyll decisions using only fields the public LibIME API
-            // exposes: node count, per-node from()/to() byte indices,
-            // path().size(), encodedPinyin(), isCorrection()/
-            // anyCorrectionOnPath() (packed as /cXY, X=isCorrection,
-            // Y=anyCorrectionOnPath). Reading text is escaped through
-            // mixdiagEscapeUtf8 (ASCII-safe). Diagnostics only: this block
-            // changes no predicate, no placement and no Fix C; delete it
-            // wholesale when the witness phase closes. KEPT in this batch:
-            // the next Android device round observes Fix C deferral with
-            // these witness records, and no other artifact carries the
-            // coversWhole/singleSyll predicate evidence from a real device
-            // session.
-            {
-                std::string witness;
-                std::size_t witnessCount = 0;
-                for (const auto &candidate : pinyinCandidates) {
-                    const auto &sentence = candidate.sentence();
-                    if (sentence.empty() ||
-                        sentence.front()->from()->index() != 0 ||
-                        sentence.back()->to()->index() != context.cursor()) {
-                        continue;
-                    }
-                    const auto reading = candidate.toString();
-                    if (std::any_of(
-                            reading.begin(), reading.end(),
-                            [](unsigned char ch) { return ch < 0x80; })) {
-                        continue;
-                    }
-                    if (witnessCount >= 3) {
-                        break;
-                    }
-                    ++witnessCount;
-                    witness += " |[";
-                    witness += mixdiagEscapeUtf8(reading);
-                    witness += " n=" + std::to_string(sentence.size());
-                    for (const auto *node : sentence) {
-                        const auto &pn = node->as<libime::PinyinLatticeNode>();
-                        witness +=
-                            " " + std::to_string(node->from()->index()) + "-" +
-                            std::to_string(node->to()->index()) + "/p" +
-                            std::to_string(node->path().size()) + "/e'" +
-                            pn.encodedPinyin() + "'/c" +
-                            std::to_string(int(pn.isCorrection())) +
-                            std::to_string(int(pn.anyCorrectionOnPath()));
-                    }
-                    witness += "]";
-                }
-                FCITX_DEBUG()
-                    << "MIXEDDIAG witness raw=" << pyBeforeCursor
-                    << " coversWhole=" << int(chineseCoversWholeRaw)
-                    << " singleSyll=" << int(chineseWholeRawSingleSyllable)
-                    << " witnesses=" << witnessCount << witness;
-            }
-            bool englishLeadEvidence = false;
-            if (!mixedPool.empty()) {
-                const auto &front = mixedPool.front();
-                const auto n =
-                    std::min(front.alignment.size(), front.sources.size());
-                for (std::size_t i = 0; i < n; ++i) {
-                    if (front.sources[i] != pinyin::SegmentSource::Chinese &&
-                        front.alignment[i].rawEnd >=
-                            front.alignment[i].rawBegin &&
-                        front.alignment[i].rawEnd -
-                                front.alignment[i].rawBegin >=
-                            3) {
-                        englishLeadEvidence = true;
-                        break;
-                    }
-                }
-            }
-            const bool mixedLeads =
-                !chineseCoversWholeRaw && englishLeadEvidence;
-            FCITX_DEBUG() << "MIXEDDIAG flags raw=" << pyBeforeCursor
-                          << " coversWhole=" << int(chineseCoversWholeRaw)
-                          << " singleSyll="
-                          << int(chineseWholeRawSingleSyllable)
-                          << " engLead=" << int(englishLeadEvidence)
-                          << " mixedLeads=" << int(mixedLeads)
-                          << " pool=" << mixedPool.size()
-                          << " classical=" << pinyinCandidates.size();
-            {
-                const size_t topN =
-                    std::min<size_t>(3, pinyinCandidates.size());
-                for (size_t i = 0; i < topN; ++i) {
-                    FCITX_DEBUG() << "MIXEDDIAG classical[" << i << "] "
-                                  << pinyinCandidates[i].toString();
-                }
-            }
-            {
-                const size_t poolN = std::min<size_t>(12, mixedPool.size());
-                for (size_t i = 0; i < poolN; ++i) {
-                    const auto &c = mixedPool[i];
-                    std::string srcs;
-                    for (auto s : c.sources) {
-                        srcs += std::to_string(int(s)) + ",";
-                    }
-                    std::string align;
-                    for (const auto &a : c.alignment) {
-                        align += std::to_string(a.rawBegin) + "-" +
-                                 std::to_string(a.rawEnd) + " ";
-                    }
-                    FCITX_DEBUG()
-                        << "MIXEDDIAG pool[" << i << "] " << c.composedText
-                        << " srcs=" << srcs << " align=" << align;
-                }
-            }
+            const bool strongChinese =
+                isStrongChinese(pyBeforeCursor, context.useShuangpin(),
+                                ime_->shuangpinProfile());
             // A requested slot this large sorts behind every classical
             // candidate after the custom-candidate normalisation below.
             constexpr std::size_t kBehindClassicalSlot =
                 std::numeric_limits<std::size_t>::max() / 4;
             std::size_t position = 0;
-            std::size_t insertionPosition = 0;
+            std::size_t row1Position = 0;
+            std::size_t insertionPosition = strongChinese ? 1 : 0;
             for (const auto &cand : mixedPool) {
                 bool hasEnglish = false;
                 for (const auto src : cand.sources) {
@@ -954,26 +830,38 @@ void PinyinEngine::updateUI(InputContext *inputContext) {
                 if (customCandidateMap.contains(cand.composedText)) {
                     continue;
                 }
-                // Lead slots: (b) pool-front mixed lead, plus (c) the
+                // Lead slots: (b) §9(b) lead evidence, evaluated per
+                // candidate, plus (c) the
                 // bounded insertion class per candidate. Class members lead
                 // even when the classical decoder has a whole-raw reading,
                 // because their provenance cannot describe anything the
                 // user mistyped as Chinese; non-class candidates keep the
                 // old behind-classical placement.
+                bool candidateEnglishLead = false;
+                const auto alignmentCount =
+                    std::min(cand.alignment.size(), cand.sources.size());
+                for (std::size_t i = 0; i < alignmentCount; ++i) {
+                    if (cand.sources[i] == pinyin::SegmentSource::English &&
+                        cand.alignment[i].rawEnd >=
+                            cand.alignment[i].rawBegin &&
+                        cand.alignment[i].rawEnd - cand.alignment[i].rawBegin >=
+                            3) {
+                        candidateEnglishLead = true;
+                        break;
+                    }
+                }
+                const bool row1 = !strongChinese && candidateEnglishLead;
                 const bool classLead =
-                    !mixedLeads && !chineseWholeRawSingleSyllable &&
+                    strongChinese &&
                     pinyin::UnifiedRanker::isBoundedInsertionClass(
                         cand, pyBeforeCursor.size());
-                const std::size_t slot =
-                    mixedLeads
-                        ? position++
-                        : (classLead ? insertionPosition++
-                                     : kBehindClassicalSlot + position++);
-                FCITX_DEBUG()
-                    << "MIXEDDIAG place raw=" << pyBeforeCursor
-                    << " text=" << cand.composedText
-                    << " classLead=" << int(classLead) << " slot=" << slot
-                    << " arcs=" << cand.alignment.size();
+                std::size_t slot = kBehindClassicalSlot + position++;
+                if (row1) {
+                    slot = row1Position == 0 ? 0 : row1Position;
+                    ++row1Position;
+                } else if (classLead) {
+                    slot = insertionPosition++;
+                }
                 auto clone = std::make_unique<pinyin::UnifiedCandidate>(cand);
                 std::string text = clone->composedText;
                 customCandidateMap.emplace(
@@ -1000,7 +888,42 @@ void PinyinEngine::updateUI(InputContext *inputContext) {
         // Reserve the space for custom candidate and start to lay them out.
         candidates.resize(customCandidateMap.size());
 
-        for (size_t idx = 0; idx < pinyinCandidates.size(); ++idx) {
+        // LibIME sorts its candidates by score with an unstable sort whose
+        // input order follows pointer-keyed lattice maps, so exactly tied
+        // candidates come out in a different order from run to run. Give
+        // every run of equal scores a total order (text bytes, then segment
+        // boundaries); the LibIME index is kept for selection.
+        std::vector<size_t> classicalOrder(pinyinCandidates.size());
+        for (size_t i = 0; i < classicalOrder.size(); ++i) {
+            classicalOrder[i] = i;
+        }
+        const auto classicalTieKey = [&pinyinCandidates](size_t i) {
+            std::vector<size_t> boundaries;
+            for (const auto *node : pinyinCandidates[i].sentence()) {
+                boundaries.push_back(node->to()->index());
+            }
+            return std::make_pair(pinyinCandidates[i].toString(),
+                                  std::move(boundaries));
+        };
+        for (size_t begin = 0; begin < classicalOrder.size();) {
+            size_t end = begin + 1;
+            while (end < classicalOrder.size() &&
+                   pinyinCandidates[end].score() ==
+                       pinyinCandidates[begin].score()) {
+                ++end;
+            }
+            if (end - begin > 1) {
+                std::sort(classicalOrder.begin() + begin,
+                          classicalOrder.begin() + end,
+                          [&](size_t a, size_t b) {
+                              auto keyA = classicalTieKey(a);
+                              auto keyB = classicalTieKey(b);
+                              return keyA != keyB ? keyA < keyB : a < b;
+                          });
+            }
+            begin = end;
+        }
+        for (const size_t idx : classicalOrder) {
             const auto &candidate = pinyinCandidates[idx];
             auto candidateString = candidate.toString();
             auto iter = customCandidateMap.find(candidateString);
@@ -2102,6 +2025,14 @@ void PinyinEngine::loadMixedResources() {
 
     mixedChineseOracle_ = std::make_unique<pinyin::LibIMEChineseArcOracle>(
         pinyin::ChineseInputMode::Pinyin);
+    // M2+: the whole-raw Chinese word-arc table that the single LM-state-aware
+    // mixed search walks (see mixed/m2psearch.h). The table borrows ime_, so
+    // its parser, correction/Shuangpin profiles, UserDict and language model
+    // observe the live configuration.
+    if (pinyin::mixedM2PEnabled()) {
+        mixedWordArcs_ =
+            std::make_unique<pinyin::ChineseWordArcTable>(ime_.get());
+    }
     mixedHanResolver_ = std::make_unique<pinyin::HanWordResolver>(ime_->dict());
     mixedEngine_ = std::make_unique<pinyin::MixedEngine>();
 

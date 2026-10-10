@@ -17,6 +17,11 @@ RankFeatures FeatureBuilder::build(const UnifiedCandidate &c) const {
     if (f.arcCount == 0) {
         return f;
     }
+    for (const auto &seg : c.segments) {
+        if (seg.source == SegmentSource::English) {
+            ++f.singleEnglishArcs;
+        }
+    }
     double confSum = 0.0;
     double boundarySum = 0.0;
     float minConf = 1.0F;
@@ -147,6 +152,12 @@ float UnifiedRanker::score(const RankFeatures &f) const {
     // production corpus inversion this corrects.
     if (f.arcCount == 1) {
         s += static_cast<double>(weights_.wWholeSpan);
+        if (f.canonicalArcs == 1) {
+            s += static_cast<double>(weights_.wCanonicalWholeSpan);
+        }
+    }
+    if (f.canonicalArcs != 0 && f.singleEnglishArcs == 1) {
+        s += static_cast<double>(weights_.wCanonicalSingleEnglish);
     }
     return static_cast<float>(s);
 }

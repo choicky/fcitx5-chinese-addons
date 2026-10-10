@@ -6,7 +6,11 @@
 #include "mixedsegmentation.h"
 
 #include <algorithm>
+#include <map>
+#include <set>
+#include <string>
 #include <utility>
+#include <vector>
 
 namespace pinyin {
 
@@ -79,6 +83,118 @@ PathClasses classWindow(std::vector<SegmentationPath> &bucket, size_t cap,
     }
     return classes;
 }
+
+// The ordered English spans of a path: its maximal consecutive-English runs as
+// raw intervals. Two completions with the same shape are the same mixed
+// product reading with a different decode of the Chinese spans (or a different
+// surface of one English hit); two completions with different shapes are
+// different English hypotheses.
+using EnglishShape = std::vector<std::pair<size_t, size_t>>;
+
+EnglishShape englishShapeOf(const SegmentationPath &path) {
+    EnglishShape shape;
+    for (const auto &arc : path.arcs) {
+        if (arc.source == SegmentSource::English) {
+            shape.emplace_back(arc.rawBegin, arc.rawEnd);
+        }
+    }
+    return shape;
+}
+
+// The per-shape sibling quota is the header constant kTerminalSiblingsPerShape,
+// shared with the M2+r4 frontier guarantee.
+
+// The ordered English surfaces of a path: what its English spans resolve to.
+// Two paths with the same surfaces differ only in how the Chinese spans were
+// decoded; the canonical respelling and the literal typed surface are the two
+// surfaces D071 requires to coexist.
+std::vector<std::string> englishSurfacesOf(const SegmentationPath &path) {
+    std::vector<std::string> surfaces;
+    for (const auto &arc : path.arcs) {
+        if (arc.source == SegmentSource::English) {
+            surfaces.push_back(arc.resolvedOutput);
+        }
+    }
+    return surfaces;
+}
+
+const auto pathByCost = [](const SegmentationPath &a,
+                           const SegmentationPath &b) {
+    return a.cost < b.cost;
+};
+
+// Shape-windowed terminal selection (M2+). Retention by cost alone is not
+// enough when the Chinese side is not frozen to one reading per span: every
+// reading of one frame shares an identical arc cost, so the B cheapest members
+// of a retention class are B variants of ONE English hypothesis and every other
+// English hypothesis dies in the terminal window before compose. Grouping by
+// English shape keeps those variants inside their hypothesis instead of
+// competing across hypotheses. Inside a shape the cheapest members are ordered
+// so that each distinct English surface is represented before any surface is
+// repeated: the D071 literal sibling is then a survivor of the window rather
+// than a cost tie away from disappearing, and no arc cost or score moves. Each
+// shape contributes at most kTerminalSiblingsPerShape members, shapes are
+// ordered by their cheapest member, and the zero-English shape goes last for
+// the same reason the class-keyed selection defers pure-Chinese completions —
+// the classical decoder already supplies them after the pool. Every sort is
+// stable, so the caller's total order decides ties.
+std::vector<SegmentationPath>
+selectTerminalByShape(std::vector<SegmentationPath> arrivals, size_t beamWidth,
+                      size_t topK) {
+    std::map<EnglishShape, std::vector<SegmentationPath>> groups;
+    for (auto &path : arrivals) {
+        groups[englishShapeOf(path)].push_back(std::move(path));
+    }
+    const size_t perShape =
+        std::min(std::max<size_t>(1, beamWidth), kTerminalSiblingsPerShape);
+    std::vector<decltype(groups)::iterator> ordered;
+    ordered.reserve(groups.size());
+    for (auto it = groups.begin(); it != groups.end(); ++it) {
+        auto &paths = it->second;
+        std::stable_sort(paths.begin(), paths.end(), pathByCost);
+        std::vector<SegmentationPath> ranked;
+        ranked.reserve(paths.size());
+        std::vector<SegmentationPath> repeated;
+        std::set<std::vector<std::string>> seen;
+        for (auto &path : paths) {
+            if (seen.insert(englishSurfacesOf(path)).second) {
+                ranked.push_back(std::move(path));
+            } else {
+                repeated.push_back(std::move(path));
+            }
+        }
+        for (auto &path : repeated) {
+            ranked.push_back(std::move(path));
+        }
+        if (ranked.size() > perShape) {
+            ranked.resize(perShape);
+        }
+        it->second = std::move(ranked);
+        ordered.push_back(it);
+    }
+    std::stable_sort(
+        ordered.begin(), ordered.end(), [](const auto &a, const auto &b) {
+            const bool ae = a->first.empty(), be = b->first.empty();
+            if (ae != be) {
+                return !ae;
+            }
+            return a->second.front().cost < b->second.front().cost;
+        });
+    std::vector<SegmentationPath> selected;
+    for (const auto &it : ordered) {
+        for (auto &path : it->second) {
+            if (selected.size() >= topK) {
+                break;
+            }
+            selected.push_back(std::move(path));
+        }
+        if (selected.size() >= topK) {
+            break;
+        }
+    }
+    std::stable_sort(selected.begin(), selected.end(), pathByCost);
+    return selected;
+}
 } // namespace
 
 MixedSegmentationSearch::MixedSegmentationSearch()
@@ -87,12 +203,17 @@ MixedSegmentationSearch::MixedSegmentationSearch()
 MixedSegmentationSearch::MixedSegmentationSearch(Config config)
     : config_(config) {}
 
-double MixedSegmentationSearch::arcCost(const SegmentationArc &arc) const {
+double MixedSegmentationSearch::arcCostOf(const SegmentationArc &arc,
+                                          float weakBoundaryWeight) {
     const double base = 1.0 - static_cast<double>(clamp01(arc.confidence));
     const double weak =
-        static_cast<double>(config_.weakBoundaryWeight) *
+        static_cast<double>(weakBoundaryWeight) *
         (1.0 - static_cast<double>(clamp01(arc.boundaryConfidence)));
     return base + weak;
+}
+
+double MixedSegmentationSearch::arcCost(const SegmentationArc &arc) const {
+    return arcCostOf(arc, config_.weakBoundaryWeight);
 }
 
 std::vector<SegmentationPath>
@@ -157,6 +278,18 @@ MixedSegmentationSearch::searchFrom(std::string_view raw, size_t begin,
         }
     }
 
+    result = selectTerminal(std::move(beam[n]), cap, beamWidth,
+                            std::max<size_t>(1, config_.topK));
+    return result;
+}
+
+std::vector<SegmentationPath> MixedSegmentationSearch::selectTerminal(
+    std::vector<SegmentationPath> arrivals, size_t cap, size_t beamWidth,
+    size_t topK, bool reserveEnglishShapes) {
+    std::vector<SegmentationPath> result;
+    if (reserveEnglishShapes) {
+        return selectTerminalByShape(std::move(arrivals), beamWidth, topK);
+    }
     // Terminal window: same per-class retention, then top-K selection with a
     // single reachability reservation: the head (cheapest member) of the
     // HIGHEST non-empty English-bearing class. The product contract promises
@@ -168,14 +301,13 @@ MixedSegmentationSearch::searchFrom(std::string_view raw, size_t begin,
     // those variants carry the classical-lead Chinese readings the committed
     // MIXEDHANQ cases assert. When no English class completes, selection is
     // the legacy cost order.
-    auto finalClasses = classWindow(beam[n], cap, beamWidth);
+    auto finalClasses = classWindow(arrivals, cap, beamWidth);
     std::vector<SegmentationPath> pool;
     std::vector<std::pair<size_t, size_t>> spans; // [begin,end) per class
     for (const auto &cls : finalClasses) {
         spans.emplace_back(pool.size(), pool.size() + cls.size());
         pool.insert(pool.end(), cls.begin(), cls.end());
     }
-    const size_t topK = std::max<size_t>(1, config_.topK);
     std::vector<bool> taken(pool.size(), false);
     std::vector<SegmentationPath> selected;
     if (cap > 0) {

@@ -7,6 +7,7 @@
 #define _FCITX_PINYIN_MIXED_MIXEDENGINE_H_
 
 #include <cstddef>
+
 #include <string>
 #include <string_view>
 #include <vector>
@@ -18,6 +19,21 @@
 #include "unifiedranker.h"
 
 namespace pinyin {
+
+// M2+ LM-state-aware single-pass bounded mixed search, as an std-only hook so
+// this orchestrator keeps no LibIME dependency. The implementation lives in
+// mixed/m2psearch.cpp; the fusion seam owns it and passes it to `compute`.
+// A non-null hook replaces the std cost search with the LM-state pass over the
+// whole raw.
+class MixedLmStateSearchHook {
+public:
+    virtual ~MixedLmStateSearchHook() = default;
+    // Top-K complete paths over the whole raw, priced against the same
+    // admitted English arcs the cost search consumes.
+    virtual std::vector<SegmentationPath>
+    search(std::string_view raw, const IEnglishArcOracle &english,
+           size_t topK) const = 0;
+};
 
 // Merges the arc output of several IEnglishArcOracle implementations at each
 // begin position. Used to combine the System Lexicon, User Lexicon, and
@@ -85,12 +101,14 @@ public:
     // Full pipeline. `hanResolver` is called only for arcs whose
     // `resolvedOutput` is empty (typically Chinese partial-span arcs).
     // English arcs come pre-resolved from their oracles and are passed
-    // through. Returns the ranked + rewritten pool in descending final
-    // score order.
-    std::vector<UnifiedCandidate> compute(std::string_view raw,
-                                          const IChineseArcOracle &chinese,
-                                          const IEnglishArcOracle &english,
-                                          const ArcResolver &hanResolver) const;
+    // through. `m2p` is the LibIME-side LM-state search the fusion seam
+    // supplies; without it the pipeline runs the std bounded cost search,
+    // which is also what the LibIME-free unit fixtures drive.
+    // Returns the ranked + rewritten pool in descending final score order.
+    std::vector<UnifiedCandidate>
+    compute(std::string_view raw, const IChineseArcOracle &chinese,
+            const IEnglishArcOracle &english, const ArcResolver &hanResolver,
+            const MixedLmStateSearchHook *m2p = nullptr) const;
 
     // Split a candidate into per-span source-local commit transactions.
     // Order matches the candidate's segment list exactly.

@@ -487,9 +487,9 @@ void testMixedRankingCorpus(Instance *instance) {
 
         // One bounded expectation, used by every group:
         // - Group A (whole-raw Canonical proper/technical respellings and
-        //   user-learned whole-raw additions) must land at rank 0: the class
-        //   is structurally unambiguous, so no mechanical Han tiling stays
-        //   above it.
+        //   user-learned whole-raw additions) takes the hybrid placement
+        //   class lead: Row 1 is rank 0, while a StrongChinese remainder is
+        //   Row 2 at rank 1 after the classical head.
         // - Ambiguous Exact lowercase words (group B) must be STRICTLY
         //   behind that class entry, keep the classical top-1, and (E1)
         //   remain at their old deep position when the user has never
@@ -500,6 +500,9 @@ void testMixedRankingCorpus(Instance *instance) {
         // whole scored run: no case may search beyond the list it was given,
         // and per-case wall time is printed for regression.
         constexpr size_t kClassLeadRank = 0;
+        auto expectedClassLeadRank = [](const char *raw) {
+            return std::string_view(raw) == "libime" ? 1 : 0;
+        };
 
         std::vector<std::string> failures;
         auto fail = [&](const std::string &line) {
@@ -620,10 +623,10 @@ void testMixedRankingCorpus(Instance *instance) {
             if (canonRank < 0) {
                 fail(std::string("A recall: ") + raw +
                      " canonical surface not reachable");
-            } else if (canonRank != static_cast<int>(kClassLeadRank)) {
+            } else if (canonRank != expectedClassLeadRank(raw)) {
                 fail(std::string("A ranking: ") + raw + " rank " +
                      std::to_string(canonRank) + " != class lead " +
-                     std::to_string(kClassLeadRank));
+                     std::to_string(expectedClassLeadRank(raw)));
             }
             if (litRank < 0) {
                 fail(std::string("A literal coexistence: ") + raw +
@@ -2920,12 +2923,12 @@ void testMixedR13ChineseQuality(Instance *instance) {
     });
 }
 
-// Phase 3A-1 Fix A regression: the whole-raw single-syllable guard must
-// require path().size()==2 (one graph edge), not merely one node. A single
-// multi-syllable word (qinghai -> 青海, one node over two syllables) was
-// misread as single-syllable and suppressed the bounded insertion class;
-// that is the device macos FAIL mechanism once macOS is a learned word.
-void testMixedFixAGuard(Instance *instance) {
+// Phase 3C placement regression: the conservative single-syllable guard must
+// remain active for chang, while a multi-syllable whole-remainder English word
+// takes the frozen Row-2 slot after the classical head. This preserves the
+// Phase 3A-1 guard without reviving the earlier assumption that a mixed
+// candidate precedes the classical head.
+void testMixedSingleSyllableGuard(Instance *instance) {
     instance->eventDispatcher().schedule([instance]() {
         auto *tf = instance->addonManager().addon("testfrontend");
         auto uuid = tf->call<ITestFrontend::createInputContext>("testfixa");
@@ -2976,29 +2979,238 @@ void testMixedFixAGuard(Instance *instance) {
             auto *bulk = bulkNow();
             const auto top = bulk->candidateFromAll(0).text().toString();
             FCITX_ASSERT(!top.empty() && (top[0] & 0x80))
-                << "FIXA-INVARIANT FAIL: Chang displaced the single-syllable "
+                << "GUARD FAIL: Chang displaced the single-syllable "
                    "classical reading for raw=chang";
             FCITX_ASSERT(idxOf(bulk, "Chang") >= 0)
-                << "FIXA-INVARIANT FAIL: Chang missing for raw=chang";
+                << "GUARD FAIL: Chang missing for raw=chang";
         }
-        // (2) Fix A: one node over two syllables must not suppress the
-        // insertion class; Qinghai must lead the first pure-Han candidate.
+        // (2) A whole-remainder multi-syllable English word is Row 2: the
+        // classical head remains slot 0 and Qinghai is the bounded insertion
+        // candidate at slot 1.
         type("qinghai");
         {
             auto *bulk = bulkNow();
             const int q = idxOf(bulk, "Qinghai");
             const int h = firstHanIdx(bulk);
             FCITX_ASSERT(q >= 0)
-                << "FIXA FAIL: Qinghai class member missing for raw=qinghai";
-            FCITX_ASSERT(h < 0 || q < h)
-                << "FIXA FAIL: multi-syllable single node suppressed the "
-                   "insertion class (qIdx="
+                << "GUARD FAIL: Qinghai class member missing for raw=qinghai";
+            FCITX_ASSERT(h == 0 && q == 1)
+                << "ROW2 FAIL: whole-remainder insertion placement changed "
+                   "(qIdx="
                 << q << " hanIdx=" << h << ")";
         }
         ic->reset();
         std::fprintf(stderr,
-                     "MIXEDFIXA OK: single-syllable suppression preserved, "
-                     "multi-syllable single word no longer misread\n");
+                     "MIXEDGUARD OK: single-syllable guard and Row-2 placement "
+                     "preserved\n");
+    });
+}
+
+// Phase 3B placement regression (Android Round-2 device evidence). On the
+// device the correct mixed candidate (e.g. 我打开GitHub) was already pool[0]
+// with correct alignment, yet it was placed behind the whole classical list
+// (classLead=0, slot=SIZE_MAX/4). Android/iOS default the pinyin
+// "Correction" layout to QWERTY (pinyin.h FuzzyConfig) while every other
+// native test runs with None, so the device-only classical readings were
+// never exercised here. Each case therefore runs under BOTH layouts through
+// the real key-event product path. The Han part of the expected candidate
+// is the classical top-1 of the pure run under the same layout, never a
+// hardcoded string. Conservative guards (chang, ambiguous Exact overlaps,
+// pure Chinese, standalone canonical+literal) run under both layouts too.
+void testMixedPlacementWindow(Instance *instance) {
+    instance->eventDispatcher().schedule([instance]() {
+        auto *pinyin = instance->addonManager().addon("pinyin", true);
+        FCITX_ASSERT(pinyin);
+        auto *tf = instance->addonManager().addon("testfrontend");
+        auto uuid = tf->call<ITestFrontend::createInputContext>("testplace");
+        auto *ic = instance->inputContextManager().findByUUID(uuid);
+        FCITX_ASSERT(ic);
+
+        // Bounded visible window: the mixed candidate must be at index 0 or
+        // 1 (same bound as the RANKCORP C "leading path" contract).
+        constexpr int kMixedWindow = 1;
+
+        auto type = [&](const char *mode, const std::string &raw) {
+            instance->setCurrentInputMethod(ic, mode, true);
+            ic->reset();
+            for (const char p : raw) {
+                tf->call<ITestFrontend::keyEvent>(uuid, Key(std::string(1, p)),
+                                                  false);
+            }
+        };
+        auto bulkNow = [&ic]() -> BulkCandidateList * {
+            auto list = ic->inputPanel().candidateList();
+            FCITX_ASSERT(list && !list->empty());
+            auto *bulk = list->toBulk();
+            FCITX_ASSERT(bulk);
+            return bulk;
+        };
+        auto idxOf = [](BulkCandidateList *bulk,
+                        const std::string &text) -> int {
+            for (int i = 0; i < bulk->totalSize(); ++i) {
+                if (bulk->candidateFromAll(i).text().toString() == text) {
+                    return i;
+                }
+            }
+            return -1;
+        };
+        auto isPureHan = [](const std::string &t) {
+            return !t.empty() &&
+                   std::none_of(t.begin(), t.end(),
+                                [](unsigned char c) { return c < 0x80; });
+        };
+        auto classicalTop1 = [&](const char *mode, const std::string &run) {
+            type(mode, run);
+            const auto top = bulkNow()->candidateFromAll(0).text().toString();
+            FCITX_ASSERT(isPureHan(top))
+                << "MIXEDPLACE classical top-1 for run " << run
+                << " is not Han: " << top;
+            return top;
+        };
+
+        std::vector<std::string> failures;
+        auto fail = [&](const std::string &line) {
+            failures.push_back(line);
+            std::fprintf(stderr, "MIXEDPLACE FAIL %s\n", line.c_str());
+        };
+
+        struct PlaceCase {
+            const char *mode;
+            std::vector<std::pair<bool, std::string>> parts; // true=Han run
+        };
+        const std::vector<PlaceCase> cases = {
+            {"pinyin", {{true, "wodakai"}, {false, "GitHub"}}},
+            {"pinyin",
+             {{true, "woxiangmai"}, {false, "iPhone"}, {true, "peijian"}}},
+            {"shuangpin", {{true, "wodakl"}, {false, "GitHub"}}},
+        };
+
+        for (const char *layout : {"None", "QWERTY"}) {
+            RawConfig config;
+            config.setValueByPath("Fuzzy/Correction", layout);
+            pinyin->setConfig(config);
+
+            for (const auto &c : cases) {
+                std::string expected;
+                std::string literal;
+                std::string raw;
+                for (const auto &[isHan, part] : c.parts) {
+                    if (isHan) {
+                        const auto han = classicalTop1(c.mode, part);
+                        expected += han;
+                        literal += han;
+                        raw += part;
+                    } else {
+                        expected += part;
+                        std::string lower;
+                        for (const char ch : part) {
+                            lower += static_cast<char>(
+                                std::tolower(static_cast<unsigned char>(ch)));
+                        }
+                        literal += lower;
+                        raw += lower;
+                    }
+                }
+                type(c.mode, raw);
+                auto *bulk = bulkNow();
+                const int rank = idxOf(bulk, expected);
+                const int litRank = idxOf(bulk, literal);
+                const auto top = bulk->candidateFromAll(0).text().toString();
+                std::fprintf(stderr,
+                             "MIXEDPLACE layout=%s mode=%s raw=%s expected=%s "
+                             "rank=%d literalRank=%d total=%d top1=%s\n",
+                             layout, c.mode, raw.c_str(), expected.c_str(),
+                             rank, litRank, bulk->totalSize(), top.c_str());
+                const std::string where = std::string(" layout=") + layout +
+                                          " mode=" + c.mode + " raw=" + raw;
+                if (rank < 0) {
+                    fail("recall: " + expected + " absent" + where);
+                } else if (rank > kMixedWindow) {
+                    fail("placement: " + expected + " rank " +
+                         std::to_string(rank) + " outside window" + where);
+                }
+                if (litRank < 0) {
+                    fail("literal coexistence: " + literal + " absent" + where);
+                } else if (rank >= 0 && litRank <= rank) {
+                    fail("literal ordering: " + literal + " at or above " +
+                         expected + where);
+                }
+            }
+
+            // Conservative guards under the same layout (pinyin: chang,
+            // ambiguous Exact overlaps, pure Chinese head).
+            type("pinyin", "chang");
+            {
+                const auto top =
+                    bulkNow()->candidateFromAll(0).text().toString();
+                if (!isPureHan(top)) {
+                    fail(std::string("chang: top-1 not Han layout=") + layout +
+                         " top1=" + top);
+                }
+            }
+            for (const char *amb : {"ai", "an", "pin", "long", "game"}) {
+                type("pinyin", amb);
+                const auto t = bulkNow()->candidateFromAll(0).text().toString();
+                if (!isPureHan(t)) {
+                    fail(std::string("ambiguous: ") + amb +
+                         " top-1 not Han layout=" + layout + " top1=" + t);
+                }
+            }
+            for (const char *pure : {"nihao", "pengyou", "women", "shurufa"}) {
+                type("pinyin", pure);
+                auto *bulk = bulkNow();
+                const int head = std::min(bulk->totalSize(), 7);
+                for (int i = 0; i < head; ++i) {
+                    const auto t = bulk->candidateFromAll(i).text().toString();
+                    if (std::any_of(t.begin(), t.end(), [](unsigned char ch) {
+                            return std::isalpha(ch);
+                        })) {
+                        fail(std::string("pure Chinese: ") + pure +
+                             " English in head idx=" + std::to_string(i) +
+                             " layout=" + layout + " text=" + t);
+                        break;
+                    }
+                }
+            }
+            // Standalone canonical + literal (D071), both modes.
+            for (const char *mode : {"pinyin", "shuangpin"}) {
+                for (const auto &[raw, canonical] :
+                     std::vector<std::pair<std::string, std::string>>{
+                         {"chatgpt", "ChatGPT"},
+                         {"github", "GitHub"},
+                         {"macos", "macOS"}}) {
+                    type(mode, raw);
+                    auto *bulk = bulkNow();
+                    const int cr = idxOf(bulk, canonical);
+                    const int lr = idxOf(bulk, raw);
+                    std::fprintf(stderr,
+                                 "MIXEDPLACE-STANDALONE layout=%s mode=%s "
+                                 "raw=%s canonical=%d literal=%d\n",
+                                 layout, mode, raw.c_str(), cr, lr);
+                    // Row 1 starts at slot 0; a StrongChinese Shuangpin
+                    // remainder is Row 2 and therefore starts at slot 1.
+                    // In both cases the canonical sibling must precede its
+                    // literal sibling within the visible placement window.
+                    if (cr < 0 || lr < 0 || cr >= lr || cr > kMixedWindow) {
+                        fail("standalone: " + raw +
+                             " canonical=" + std::to_string(cr) +
+                             " literal=" + std::to_string(lr) +
+                             " layout=" + layout + " mode=" + mode);
+                    }
+                }
+            }
+        }
+
+        // Restore the host default for every later test.
+        RawConfig restore;
+        restore.setValueByPath("Fuzzy/Correction", "None");
+        pinyin->setConfig(restore);
+        ic->reset();
+
+        FCITX_ASSERT(failures.empty())
+            << "MIXEDPLACE FAIL count=" << failures.size();
+        std::fprintf(stderr, "MIXEDPLACE OK: mixed candidates inside the "
+                             "visible window under None and QWERTY layouts\n");
     });
 }
 
@@ -3026,7 +3238,8 @@ int main() {
     testMixedShuangpin(&instance);
     testMixedHanTextQuality(&instance);
     testMixedR13ChineseQuality(&instance);
-    testMixedFixAGuard(&instance);
+    testMixedSingleSyllableGuard(&instance);
+    testMixedPlacementWindow(&instance);
     testMixedProductCorpus(&instance);
     testMixedRankingCorpus(&instance);
     testMixedLearning(&instance);

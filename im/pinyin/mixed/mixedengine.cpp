@@ -6,9 +6,51 @@
 #include "mixedengine.h"
 
 #include <algorithm>
+#include <string_view>
 #include <utility>
+#include <vector>
 
 namespace pinyin {
+
+namespace {
+
+// Owns the English arcs admitted for one raw string: every well-formed arc the
+// source oracles produce at each begin position, cached so the segmentation
+// search and the M2+ pass read one consistent arc set.
+class CachedEnglish final : public IEnglishArcOracle {
+public:
+    CachedEnglish(std::string_view raw, const IEnglishArcOracle &source)
+        : raw_(raw), arcs_(raw.size() + 1) {
+        const size_t n = raw.size();
+        for (size_t i = 0; i < n; ++i) {
+            for (auto &arc : source.arcsAt(raw, i, n - i)) {
+                if (arc.source != SegmentSource::English || arc.rawBegin != i ||
+                    arc.rawEnd <= i || arc.rawEnd > n) {
+                    continue;
+                }
+                arcs_[i].push_back(std::move(arc));
+            }
+        }
+    }
+    std::vector<SegmentationArc> arcsAt(std::string_view raw, size_t begin,
+                                        size_t) const override {
+        if (raw != raw_ || begin >= arcs_.size()) {
+            return {};
+        }
+        return arcs_[begin];
+    }
+
+    bool empty() const {
+        return std::none_of(arcs_.begin(), arcs_.end(),
+                            [](const auto &arcs) { return !arcs.empty(); });
+    }
+
+private:
+    std::string raw_;
+    std::vector<std::vector<SegmentationArc>> arcs_;
+};
+
+} // namespace
 
 void CompositeEnglishArcOracle::addSource(const IEnglishArcOracle *oracle) {
     if (oracle == nullptr) {
@@ -42,11 +84,26 @@ MixedEngine::MixedEngine(Config config)
 std::vector<UnifiedCandidate>
 MixedEngine::compute(std::string_view raw, const IChineseArcOracle &chinese,
                      const IEnglishArcOracle &english,
-                     const ArcResolver &hanResolver) const {
+                     const ArcResolver &hanResolver,
+                     const MixedLmStateSearchHook *m2p) const {
     if (raw.empty()) {
         return {};
     }
-    auto paths = search_.search(raw, chinese, english);
+    CachedEnglish cachedEnglish(raw, english);
+    if (cachedEnglish.empty()) {
+        return {};
+    }
+    // M2+: one LM-state-aware bounded pass over the whole raw, supplied by the
+    // fusion seam through the hook. Without the hook the pipeline runs the std
+    // bounded cost search, which is also what the LibIME-free unit fixtures
+    // drive.
+    const bool useM2P = m2p != nullptr;
+    std::vector<SegmentationPath> paths;
+    if (useM2P) {
+        paths = m2p->search(raw, cachedEnglish, config_.search.topK);
+    } else {
+        paths = search_.searchFrom(raw, 0, chinese, cachedEnglish);
+    }
     if (paths.empty()) {
         return {};
     }
@@ -87,10 +144,16 @@ MixedEngine::compute(std::string_view raw, const IChineseArcOracle &chinese,
         // set once (bounded, deterministic — same beam, more paths, the
         // original survivors stay in the set) lets the resolvable readings
         // compose instead of silently dropping the whole mixed layer.
-        auto wider = config_.search;
-        wider.topK = std::min<std::size_t>(wider.topK * 8, 64);
-        const MixedSegmentationSearch wideSearch(wider);
-        paths = wideSearch.search(raw, chinese, english);
+        const size_t wideTopK =
+            std::min<std::size_t>(config_.search.topK * 8, 64);
+        if (useM2P) {
+            paths = m2p->search(raw, cachedEnglish, wideTopK);
+        } else {
+            auto wider = config_.search;
+            wider.topK = wideTopK;
+            const MixedSegmentationSearch wideSearch(wider);
+            paths = wideSearch.searchFrom(raw, 0, chinese, cachedEnglish);
+        }
         composed = composer_.composeAll(paths, hanResolver, cap);
         if (composed.empty()) {
             return {};
@@ -102,7 +165,8 @@ MixedEngine::compute(std::string_view raw, const IChineseArcOracle &chinese,
     }
     pool.evictToCap();
     auto ranked = ranker_.rank(pool.items());
-    return rewriter_.rewritePool(ranked);
+    auto rewritten = rewriter_.rewritePool(ranked);
+    return rewritten;
 }
 
 std::vector<MixedEngine::CommitTransaction>

@@ -12,6 +12,8 @@ set(PINYIN_SOURCES
     mixed/rewriter.cpp
     mixed/mixedengine.cpp
     mixed/chinesearcoracle.cpp
+    mixed/chinesewordarcs.cpp
+    mixed/m2psearch.cpp
     mixed/hanwordresolver.cpp
     mixed/english/englishlexicon.cpp
     mixed/english/englisharcoracle.cpp

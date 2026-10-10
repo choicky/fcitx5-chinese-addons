@@ -114,12 +114,16 @@ std::vector<SegmentationArc> EnglishArcOracle::arcsAt(std::string_view raw,
             // but also completing "hello", "help"). Skip only the case where
             // the exact word itself would be the sole completion (key == span).
             const std::size_t fanout = lex_->completionCount(*folded);
+            std::size_t emitted = 0;
             for (const auto *ce : completions) {
                 if (ce == nullptr) {
                     continue;
                 }
                 if (ce->key == *folded) {
                     continue;
+                }
+                if (emitted >= config_.maxCompletionsPerSpan) {
+                    break;
                 }
                 SegmentationArc arc;
                 arc.rawBegin = begin;
@@ -132,6 +136,20 @@ std::vector<SegmentationArc> EnglishArcOracle::arcsAt(std::string_view raw,
                 arc.sourceLocalRank = localRank++;
                 arc.resolvedOutput = ce->display;
                 out.push_back(arc);
+                ++emitted;
+                // Canonical completion surfaces obey the same literal-beside-
+                // canonical contract as exact hits. Reserve the second slot
+                // from this span's fan-out so the bound remains structural.
+                if (ce->display != ce->key &&
+                    emitted < config_.maxCompletionsPerSpan) {
+                    SegmentationArc literal = arc;
+                    literal.provenance = CandidateProvenance::Completion;
+                    literal.boundaryConfidence = 0.55F;
+                    literal.sourceLocalRank = localRank++;
+                    literal.resolvedOutput = ce->key;
+                    out.push_back(std::move(literal));
+                    ++emitted;
+                }
             }
         }
     }
