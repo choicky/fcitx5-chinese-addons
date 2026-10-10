@@ -2,6 +2,8 @@
 # source: SCOWL v2 (github.com/en-wl/wordlist) tag rel-2026.02.25,
 #         American spellings, variant level <= 1, deaccented,
 #         sizes 35/40/50/60, SCOWL upper/abbr/name classes excluded,
+#         SCOWL usage notes offensive-1/2 and vulgar-1/2/3 excluded,
+#         plus pinned MIT severe profanity list excluded.
 #         first-size tiers 35->9 40->7 50->4 60->0
 # plus curated proper/technical allow-list entries (tier 9;
 #         folded keys colliding with SCOWL words are skipped).
@@ -1359,11 +1361,11 @@ affront	9	affront
 affronted	9	affronted	
 affronting	9	affronting	
 affronts	9	affronts	
-afghan	4	afghan	
+afghan	4	Afghan	
 afghan's	4	Afghan's	
 afghanistan	4	Afghanistan	
 afghanistan's	4	Afghanistan's	
-afghans	4	afghans	
+afghans	4	Afghans	
 aficionado	4	aficionado	
 aficionado's	4	aficionado's	
 aficionados	4	aficionados	
@@ -1587,7 +1589,7 @@ ahmed	4	Ahmed
 ahmed's	4	Ahmed's	
 ahold	0	ahold	
 ahoy	9	ahoy	
-ai	4	AI	
+ai	9	AI	t
 aid	9	aid	
 aid's	9	aid's	
 aida	4	Aida	
@@ -1697,6 +1699,7 @@ airplane	9	airplane
 airplane's	9	airplane's	
 airplanes	9	airplanes	
 airplay	0	airplay	
+airpods	9	AirPods	p
 airport	9	airport	
 airport's	9	airport's	
 airports	9	airports	
@@ -2292,7 +2295,7 @@ amazement	9	amazement
 amazes	9	amazes	
 amazing	9	amazing	
 amazingly	9	amazingly	
-amazon	4	amazon	
+amazon	9	Amazon	p
 amazon's	4	amazon's	
 amazonian	0	amazonian	
 amazons	4	amazons	
@@ -2720,7 +2723,7 @@ androgen	4	androgen
 androgenic	0	androgenic	
 androgynous	4	androgynous	
 androgyny	0	androgyny	
-android	9	android	
+android	9	Android	p
 android's	4	android's	
 androids	9	androids	
 andy	4	Andy	
@@ -3463,7 +3466,7 @@ apothegms	0	apothegms
 apotheoses	4	apotheoses	
 apotheosis	4	apotheosis	
 apotheosis's	4	apotheosis's	
-app	4	app	
+app	9	App	t
 app's	4	app's	
 appall	9	appall	
 appalled	9	appalled	
@@ -3544,7 +3547,7 @@ applauders	0	applauders
 applauding	9	applauding	
 applauds	9	applauds	
 applause	9	applause	
-apple	9	apple	
+apple	9	Apple	p
 applejack	4	applejack	
 apples	9	apples	
 applesauce	7	applesauce	
@@ -3894,7 +3897,7 @@ archway	9	archway
 archways	9	archways	
 arcing	9	arcing	
 arcs	9	arcs	
-arctic	7	arctic	
+arctic	7	Arctic	
 arctic's	7	Arctic's	
 arctics	7	arctics	
 ardent	9	ardent	
@@ -4387,8 +4390,6 @@ aspirin's	9	aspirin's
 aspiring	9	aspiring	
 aspirins	9	aspirins	
 asps	4	asps	
-ass	9	ass	
-ass's	9	ass's	
 assail	9	assail	
 assailable	4	assailable	
 assailant	9	assailant	
@@ -4469,9 +4470,6 @@ asseverated	4	asseverated
 asseverates	4	asseverates	
 asseverating	4	asseverating	
 asseveration	0	asseveration	
-asshole	7	asshole	
-asshole's	7	asshole's	
-assholes	7	assholes	
 assiduity	0	assiduity	
 assiduous	4	assiduous	
 assiduously	4	assiduously	
@@ -4810,7 +4808,7 @@ attitudinize	4	attitudinize
 attitudinized	4	attitudinized	
 attitudinizes	4	attitudinizes	
 attitudinizing	4	attitudinizing	
-attn	0	attn	
+attn	0	Attn	
 attorney	9	attorney	
 attorney's	9	attorney's	
 attorneys	9	attorneys	
@@ -4931,7 +4929,7 @@ auguries	4	auguries
 auguring	4	auguring	
 augurs	4	augurs	
 augury	4	augury	
-august	9	august	
+august	9	August	
 august's	9	August's	
 augusta	4	Augusta	
 augusta's	4	Augusta's	
@@ -5285,6 +5283,7 @@ awoken	9	awoken
 awol	7	AWOL	
 awol's	7	AWOL's	
 awry	9	awry	
+aws	9	AWS	t
 ax	9	ax	
 ax's	9	ax's	
 axe	9	axe	
@@ -5328,7 +5327,7 @@ azerbaijani's	4	Azerbaijani's
 azerbaijanis	0	Azerbaijanis	
 azimuth	4	azimuth	
 azimuths	4	azimuths	
-azure	9	azure	
+azure	9	Azure	p
 azures	9	azures	
 b	7	b	
 baa	7	baa	
@@ -6146,7 +6145,7 @@ barnacle	9	barnacle
 barnacle's	9	barnacle's	
 barnacled	0	barnacled	
 barnacles	9	barnacles	
-barney	4	barney	
+barney	4	Barney	
 barney's	4	Barney's	
 barneys	4	barneys	
 barns	9	barns	
@@ -6631,8 +6630,8 @@ beatriz's	4	Beatriz's
 beats	9	beats	
 beatty	0	Beatty	
 beatty's	0	Beatty's	
-beau	4	beau	
-beau's	4	beau's	
+beau	4	Beau	
+beau's	4	Beau's	
 beaumont	4	Beaumont	
 beaumont's	4	Beaumont's	
 beaus	4	beaus	
@@ -7258,7 +7257,7 @@ bertie	4	Bertie
 bertie's	4	Bertie's	
 berwick	0	Berwick	
 berwick's	0	Berwick's	
-beryl	4	beryl	
+beryl	4	Beryl	
 beryl's	4	Beryl's	
 beryllium	4	beryllium	
 beryls	4	beryls	
@@ -7484,7 +7483,7 @@ biathlons	4	biathlons
 bib	9	bib	
 bible	9	bible	
 bible's	7	Bible's	
-bibles	7	bibles	
+bibles	7	Bibles	
 biblical	9	biblical	
 biblically	0	biblically	
 bibliographer	4	bibliographer	
@@ -7664,7 +7663,7 @@ billie	4	Billie
 billie's	4	Billie's	
 billies	4	billies	
 billing	9	billing	
-billings	4	billings	
+billings	4	Billings	
 billings's	4	Billings's	
 billingsgate	0	billingsgate	
 billionaire	7	billionaire	
@@ -7676,8 +7675,8 @@ billowing	9	billowing
 billows	9	billows	
 billowy	4	billowy	
 bills	9	bills	
-billy	4	billy	
-billy's	4	billy's	
+billy	4	Billy	
+billy's	4	Billy's	
 billycan	0	billycan	
 billycans	0	billycans	
 bimbo	7	bimbo	
@@ -7923,15 +7922,11 @@ bisque	4	bisque
 bistro	4	bistro	
 bistros	4	bistros	
 bit	9	bit	
-bitch	9	bitch	
-bitch's	9	bitch's	
-bitched	9	bitched	
 bitches	9	bitches	
 bitchier	7	bitchier	
 bitchiest	7	bitchiest	
 bitchily	0	bitchily	
 bitchiness	0	bitchiness	
-bitching	9	bitching	
 bitchy	7	bitchy	
 bitcoin	4	bitcoin	
 bitcoin's	4	bitcoin's	
@@ -8573,6 +8568,7 @@ bluestocking's	4	bluestocking's
 bluestockings	4	bluestockings	
 bluesy	0	bluesy	
 bluet	0	bluet	
+bluetooth	9	Bluetooth	t
 bluets	0	bluets	
 bluff	9	bluff	
 bluff's	9	bluff's	
@@ -8705,8 +8701,8 @@ bobblehead	0	bobblehead
 bobbleheads	0	bobbleheads	
 bobbles	4	bobbles	
 bobbling	4	bobbling	
-bobby	4	bobby	
-bobby's	4	bobby's	
+bobby	4	Bobby	
+bobby's	4	Bobby's	
 bobbysoxer	0	bobbysoxer	
 bobbysoxer's	0	bobbysoxer's	
 bobbysoxers	0	bobbysoxers	
@@ -9463,7 +9459,7 @@ brackish	9	brackish
 brackishness	0	brackishness	
 bract	4	bract	
 bracts	4	bracts	
-brad	4	brad	
+brad	4	Brad	
 brad's	4	Brad's	
 bradawl	0	bradawl	
 bradawls	0	bradawls	
@@ -10417,11 +10413,7 @@ bugbears	4	bugbears
 bugfix	0	bugfix	
 bugfixes	0	bugfixes	
 bugged	9	bugged	
-bugger	9	bugger	
-bugger's	0	bugger's	
 buggered	0	buggered	
-buggering	0	buggering	
-buggers	9	buggers	
 buggery	0	buggery	
 buggier	9	buggier	
 buggies	9	buggies	
@@ -10545,12 +10537,6 @@ bullring	4	bullring
 bullrings	4	bullrings	
 bulls	9	bulls	
 bullseye	0	bullseye	
-bullshit	7	bullshit	
-bullshits	7	bullshits	
-bullshitted	7	bullshitted	
-bullshitter	0	bullshitter	
-bullshitters	0	bullshitters	
-bullshitting	7	bullshitting	
 bullwhip	0	bullwhip	
 bullwhips	0	bullwhips	
 bully	9	bully	
@@ -10560,8 +10546,6 @@ bulrush	4	bulrush
 bulrushes	4	bulrushes	
 bulwark	4	bulwark	
 bulwarks	4	bulwarks	
-bum	9	bum	
-bum's	9	bum's	
 bumbag	0	bumbag	
 bumbags	0	bumbags	
 bumble	4	bumble	
@@ -10575,12 +10559,10 @@ bumblers	4	bumblers
 bumbles	4	bumbles	
 bumbling	7	bumbling	
 bumf	0	bumf	
-bummed	9	bummed	
 bummer	9	bummer	
 bummer's	7	bummer's	
 bummers	7	bummers	
 bummest	9	bummest	
-bumming	9	bumming	
 bump	9	bump	
 bumped	9	bumped	
 bumper	9	bumper	
@@ -10598,7 +10580,6 @@ bumptious	4	bumptious
 bumptiously	0	bumptiously	
 bumptiousness	0	bumptiousness	
 bumpy	9	bumpy	
-bums	9	bums	
 bun	9	bun	
 bun's	9	bun's	
 bunch	9	bunch	
@@ -10942,11 +10923,8 @@ butler	9	butler
 butler's	9	butler's	
 butlers	9	butlers	
 buts	0	buts	
-butt	9	butt	
-butt's	9	butt's	
 butte	9	butte	
 butte's	9	butte's	
-butted	9	butted	
 butter	9	butter	
 butter's	9	butter's	
 butterball	0	butterball	
@@ -10978,7 +10956,6 @@ butterscotch	9	butterscotch
 buttery	9	buttery	
 buttes	9	buttes	
 butties	0	butties	
-butting	9	butting	
 buttock	7	buttock	
 buttocks	9	buttocks	
 button	9	button	
@@ -10996,7 +10973,6 @@ buttress	9	buttress
 buttressed	9	buttressed	
 buttresses	9	buttresses	
 buttressing	9	buttressing	
-butts	9	butts	
 butty	0	butty	
 buxom	9	buxom	
 buy	9	buy	
@@ -11242,7 +11218,7 @@ cakes	9	cakes
 cakewalk	0	cakewalk	
 cakewalks	0	cakewalks	
 caking	9	caking	
-cal	4	cal	
+cal	4	Cal	
 calabash	4	calabash	
 calabashes	4	calabashes	
 calaboose	0	calaboose	
@@ -11717,7 +11693,7 @@ cantina	0	cantina
 cantinas	0	cantinas	
 canting	4	canting	
 canto	4	canto	
-canton	4	canton	
+canton	4	Canton	
 canton's	4	Canton's	
 cantonal	0	cantonal	
 cantonese	7	Cantonese	
@@ -11799,8 +11775,8 @@ capitally	0	capitally
 capitals	9	capitals	
 capitation	0	capitation	
 capitations	0	capitations	
-capitol	7	capitol	
-capitol's	7	capitol's	
+capitol	7	Capitol	
+capitol's	7	Capitol's	
 capitols	7	capitols	
 capitulate	9	capitulate	
 capitulated	9	capitulated	
@@ -12104,7 +12080,7 @@ carmelo	4	Carmelo
 carmelo's	4	Carmelo's	
 carmen	4	Carmen	
 carmen's	4	Carmen's	
-carmine	4	carmine	
+carmine	4	Carmine	
 carmine's	4	Carmine's	
 carmines	4	carmines	
 carnage	9	carnage	
@@ -12588,7 +12564,7 @@ cathleen's	4	Cathleen's
 cathode	4	cathode	
 cathodes	4	cathodes	
 cathodic	0	cathodic	
-catholic	9	catholic	
+catholic	9	Catholic	
 catholic's	9	Catholic's	
 catholicism	9	Catholicism	
 catholicism's	9	Catholicism's	
@@ -12745,7 +12721,7 @@ caws	9	caws
 cay	0	cay	
 cayenne	4	cayenne	
 cays	0	cays	
-cayuse	0	cayuse	
+cayuse	0	Cayuse	
 cayuse's	0	cayuse's	
 cayuses	0	cayuses	
 cc	9	cc	
@@ -12974,6 +12950,7 @@ centurion's	4	centurion's
 centurions	4	centurions	
 century	9	century	
 century's	9	century's	
+ceo	9	CEO	t
 cephalic	4	cephalic	
 cephalopod	0	cephalopod	
 cephalopods	0	cephalopods	
@@ -13060,9 +13037,10 @@ cetaceans	4	cetaceans
 ceteris	0	ceteris	
 ceviche	0	ceviche	
 cf	4	cf	
+cfo	9	CFO	t
 cg	0	cg	
 ch	4	ch	
-chad	4	chad	
+chad	4	Chad	
 chad's	4	Chad's	
 chadian	0	Chadian	
 chadian's	0	Chadian's	
@@ -13746,8 +13724,6 @@ chickenhearted	4	chickenhearted
 chickening	9	chickening	
 chickenpox	7	chickenpox	
 chickens	9	chickens	
-chickenshit	0	chickenshit	
-chickenshits	0	chickenshits	
 chickpea	4	chickpea	
 chickpeas	4	chickpeas	
 chicks	9	chicks	
@@ -13871,11 +13847,6 @@ chine's	0	chine's
 chines	0	chines	
 chinese	7	Chinese	
 chinese's	7	Chinese's	
-chink	9	chink	
-chink's	9	chink's	
-chinked	9	chinked	
-chinking	9	chinking	
-chinks	9	chinks	
 chinless	0	chinless	
 chinned	9	chinned	
 chinning	9	chinning	
@@ -14166,7 +14137,7 @@ chromatic	4	chromatic
 chromatically	0	chromatically	
 chromatin	0	chromatin	
 chromatography	0	chromatography	
-chrome	9	chrome	
+chrome	9	Chrome	p
 chromed	9	chromed	
 chromes	9	chromes	
 chroming	9	chroming	
@@ -14300,6 +14271,7 @@ chyme	0	chyme
 chyron	4	chyron	
 chyron's	4	chyron's	
 chyrons	4	chyrons	
+ci	9	CI	t
 ciabatta	4	ciabatta	
 ciabattas	4	ciabattas	
 ciao	0	ciao	
@@ -14700,7 +14672,7 @@ clatter	9	clatter
 clattered	9	clattered	
 clattering	9	clattering	
 clatters	9	clatters	
-claude	4	Claude	
+claude	9	Claude	p
 claude's	4	Claude's	
 claudette	4	Claudette	
 claudette's	4	Claudette's	
@@ -14793,7 +14765,7 @@ clefts	9	clefts
 clematis	4	clematis	
 clematises	4	clematises	
 clemency	9	clemency	
-clement	4	clement	
+clement	4	Clement	
 clement's	4	Clement's	
 clementine	0	clementine	
 clementines	0	clementines	
@@ -15307,8 +15279,6 @@ cochineal's	0	cochineal's
 cochlea	4	cochlea	
 cochleae	4	cochleae	
 cochlear	0	cochlear	
-cock	9	cock	
-cock's	9	cock's	
 cockade	4	cockade	
 cockades	4	cockades	
 cockamamie	4	cockamamie	
@@ -15326,7 +15296,6 @@ cockchafer's	0	cockchafer's
 cockchafers	0	cockchafers	
 cockcrow	0	cockcrow	
 cockcrows	0	cockcrows	
-cocked	9	cocked	
 cocker	0	cocker	
 cocker's	0	cocker's	
 cockerel	4	cockerel	
@@ -15341,7 +15310,6 @@ cockier	9	cockier
 cockiest	9	cockiest	
 cockily	4	cockily	
 cockiness	7	cockiness	
-cocking	9	cocking	
 cockle	4	cockle	
 cockle's	4	cockle's	
 cockles	4	cockles	
@@ -15355,13 +15323,9 @@ cockpits	9	cockpits
 cockroach	9	cockroach	
 cockroach's	9	cockroach's	
 cockroaches	9	cockroaches	
-cocks	9	cocks	
 cockscomb	4	cockscomb	
 cockscomb's	4	cockscomb's	
 cockscombs	4	cockscombs	
-cocksucker	4	cocksucker	
-cocksucker's	4	cocksucker's	
-cocksuckers	4	cocksuckers	
 cocksure	4	cocksure	
 cocktail	9	cocktail	
 cocktail's	9	cocktail's	
@@ -15726,8 +15690,8 @@ collector	9	collector
 collector's	9	collector's	
 collectors	9	collectors	
 collects	9	collects	
-colleen	4	colleen	
-colleen's	4	colleen's	
+colleen	4	Colleen	
+colleen's	4	Colleen's	
 colleens	4	colleens	
 college	9	college	
 college's	9	college's	
@@ -17034,8 +16998,8 @@ congregationalism	0	congregationalism
 congregationalist	0	congregationalist	
 congregationalists	0	congregationalists	
 congregations	9	congregations	
-congress	9	congress	
-congress's	9	congress's	
+congress	9	Congress	
+congress's	9	Congress's	
 congresses	9	congresses	
 congressional	7	congressional	
 congressman	9	congressman	
@@ -17915,9 +17879,6 @@ cooling	9	cooling
 coolly	9	coolly	
 coolness	7	coolness	
 cools	9	cools	
-coon	4	coon	
-coon's	4	coon's	
-coons	4	coons	
 coonskin	0	coonskin	
 coonskins	0	coonskins	
 coop	9	coop	
@@ -18402,6 +18363,7 @@ costar	7	costar
 costarred	7	costarred	
 costarring	7	costarring	
 costars	7	costars	
+costco	9	Costco	p
 costed	9	costed	
 costing	9	costing	
 costings	9	costings	
@@ -18903,8 +18865,9 @@ cozy	9	cozy
 cozy's	9	cozy's	
 cozying	0	cozying	
 cpd	0	cpd	
-cpl	0	cpl	
+cpl	0	Cpl	
 cps	0	cps	
+cpu	9	CPU	t
 crab	9	crab	
 crab's	9	crab's	
 crabbed	9	crabbed	
@@ -19019,20 +18982,14 @@ cranky	9	cranky
 crannied	0	crannied	
 crannies	7	crannies	
 cranny	7	cranny	
-crap	9	crap	
 crape	4	crape	
 crapes	4	crapes	
-crapped	7	crapped	
-crapper	0	crapper	
-crappers	0	crappers	
 crappie	0	crappie	
 crappie's	0	crappie's	
 crappier	7	crappier	
 crappies	0	crappies	
 crappiest	7	crappiest	
-crapping	7	crapping	
 crappy	7	crappy	
-craps	7	craps	
 crapshoot	0	crapshoot	
 crapshooter	0	crapshooter	
 crapshooter's	0	crapshooter's	
@@ -19749,6 +19706,7 @@ crystals	9	crystals
 cs	9	cs	
 ct	4	ct	
 ctn	0	ctn	
+cto	9	CTO	t
 ctr	0	ctr	
 cu	7	cu	
 cub	9	cub	
@@ -19869,7 +19827,6 @@ cultures	9	cultures
 culturing	9	culturing	
 culvert	4	culvert	
 culverts	4	culverts	
-cum	0	cum	
 cumber	0	cumber	
 cumbered	0	cumbered	
 cumbering	0	cumbering	
@@ -19882,8 +19839,6 @@ cumbrous	0	cumbrous
 cumin	4	cumin	
 cummerbund	4	cummerbund	
 cummerbunds	4	cummerbunds	
-cumming	0	cumming	
-cums	0	cums	
 cumulative	9	cumulative	
 cumulatively	4	cumulatively	
 cumuli	4	cumuli	
@@ -19898,9 +19853,6 @@ cunning	9	cunning
 cunninger	9	cunninger	
 cunningest	9	cunningest	
 cunningly	9	cunningly	
-cunt	0	cunt	
-cunt's	0	cunt's	
-cunts	0	cunts	
 cup	9	cup	
 cup's	9	cup's	
 cupboard	9	cupboard	
@@ -20386,8 +20338,8 @@ daises	9	daises
 daisies	9	daisies	
 daisy	9	daisy	
 daisy's	4	Daisy's	
-dale	4	dale	
-dale's	4	dale's	
+dale	4	Dale	
+dale's	4	Dale's	
 dales	4	dales	
 dallas	4	Dallas	
 dallas's	4	Dallas's	
@@ -20428,14 +20380,10 @@ damion's	4	Damion's
 dammed	9	dammed	
 damming	9	damming	
 dammit	0	dammit	
-damn	9	damn	
 damnable	4	damnable	
 damnably	4	damnably	
 damnation	9	damnation	
-damned	9	damned	
 damnedest	9	damnedest	
-damning	9	damning	
-damns	9	damns	
 damon	4	Damon	
 damon's	4	Damon's	
 damp	9	damp	
@@ -20578,8 +20526,6 @@ darkening	9	darkening
 darkens	9	darkens	
 darker	9	darker	
 darkest	9	darkest	
-darkie	0	darkie	
-darkies	0	darkies	
 darkish	0	darkish	
 darkly	9	darkly	
 darkness	9	darkness	
@@ -20695,7 +20641,7 @@ dauphin's	4	dauphin's
 dauphins	4	dauphins	
 dave	4	Dave	
 dave's	4	Dave's	
-davenport	4	davenport	
+davenport	4	Davenport	
 davenport's	4	Davenport's	
 davenports	4	davenports	
 david	4	David	
@@ -23025,19 +22971,11 @@ dichotomy's	7	dichotomy's
 dicier	7	dicier	
 diciest	7	diciest	
 dicing	9	dicing	
-dick	7	dick	
-dick's	7	dick's	
-dickens	0	dickens	
-dicker	4	dicker	
-dickered	4	dickered	
-dickering	4	dickering	
-dickers	4	dickers	
 dickey	4	dickey	
 dickey's	4	dickey's	
 dickeys	4	dickeys	
 dickhead	0	dickhead	
 dickheads	0	dickheads	
-dicks	7	dicks	
 dickybird	0	dickybird	
 dickybirds	0	dickybirds	
 dicotyledon	0	dicotyledon	
@@ -23067,11 +23005,9 @@ dictum	4	dictum
 did	9	did	
 didactic	4	didactic	
 didactically	0	didactically	
-diddle	4	diddle	
 diddled	4	diddled	
 diddler	0	diddler	
 diddlers	0	diddlers	
-diddles	4	diddles	
 diddling	4	diddling	
 diddly	0	diddly	
 diddlysquat	0	diddlysquat	
@@ -23444,7 +23380,7 @@ dirge	9	dirge
 dirges	9	dirges	
 dirigible	4	dirigible	
 dirigibles	4	dirigibles	
-dirk	4	dirk	
+dirk	4	Dirk	
 dirk's	4	Dirk's	
 dirks	4	dirks	
 dirndl	0	dirndl	
@@ -24626,7 +24562,7 @@ docility	4	docility
 dock	9	dock	
 dock's	9	dock's	
 docked	9	docked	
-docker	0	docker	
+docker	9	Docker	t
 docker's	0	docker's	
 dockers	0	dockers	
 docket	7	docket	
@@ -24877,7 +24813,7 @@ dominique's	4	Dominique's
 domino	9	domino	
 dominoes	9	dominoes	
 don	9	don	
-don's	4	don's	
+don's	4	Don's	
 don't	9	don't	
 dona	4	Dona	
 dona's	4	Dona's	
@@ -26086,9 +26022,6 @@ dyers	4	dyers
 dyes	9	dyes	
 dyestuff	4	dyestuff	
 dying	9	dying	
-dyke	9	dyke	
-dyke's	9	dyke's	
-dykes	9	dykes	
 dylan	4	Dylan	
 dylan's	4	Dylan's	
 dynamic	9	dynamic	
@@ -26409,7 +26342,7 @@ ecumenism	0	ecumenism
 ecumenism's	0	ecumenism's	
 ecus	0	ecus	
 eczema	9	eczema	
-ed	4	ed	
+ed	4	Ed	
 ed's	4	Ed's	
 edamame	4	edamame	
 eddie	4	Eddie	
@@ -27243,7 +27176,7 @@ emerita	0	emerita
 emeritus	7	emeritus	
 emerson	4	Emerson	
 emerson's	4	Emerson's	
-emery	4	emery	
+emery	4	Emery	
 emery's	4	Emery's	
 emetic	4	emetic	
 emetics	4	emetics	
@@ -28614,7 +28547,7 @@ estella	4	Estella
 estella's	4	Estella's	
 estelle	4	Estelle	
 estelle's	4	Estelle's	
-ester	4	ester	
+ester	4	Ester	
 ester's	4	Ester's	
 esterhazy	4	Esterhazy	
 esterhazy's	4	Esterhazy's	
@@ -28767,7 +28700,7 @@ eukaryote	0	eukaryote
 eukaryote's	0	eukaryote's	
 eukaryotes	0	eukaryotes	
 eukaryotic	0	eukaryotic	
-eula	4	Eula	
+eula	4	EULA	
 eula's	4	Eula's	
 eulas	4	EULAs	
 eulogies	9	eulogies	
@@ -28798,7 +28731,7 @@ euphony	4	euphony
 euphoria	7	euphoria	
 euphoric	7	euphoric	
 euphorically	0	euphorically	
-eur	0	Eur	
+eur	0	EUR	
 eurasia	4	Eurasia	
 eurasia's	4	Eurasia's	
 eurasian	4	Eurasian	
@@ -29076,7 +29009,7 @@ exceeded	9	exceeded
 exceeding	9	exceeding	
 exceedingly	9	exceedingly	
 exceeds	9	exceeds	
-excel	9	excel	
+excel	9	Excel	p
 excelled	9	excelled	
 excellence	9	excellence	
 excellencies	0	excellencies	
@@ -30014,18 +29947,6 @@ faff	0	faff
 faffed	0	faffed	
 faffing	0	faffing	
 faffs	0	faffs	
-fag	7	fag	
-fag's	7	fag's	
-fagged	7	fagged	
-fagging	7	fagging	
-faggot	9	faggot	
-faggot's	9	faggot's	
-faggots	9	faggots	
-fagot	9	fagot	
-fagot's	9	fagot's	
-fagoting	0	fagoting	
-fagots	9	fagots	
-fags	7	fags	
 fahrenheit	9	Fahrenheit	
 fahrenheit's	9	Fahrenheit's	
 faience	0	faience	
@@ -30325,16 +30246,11 @@ farrows	4	farrows
 farseeing	0	farseeing	
 farsighted	7	farsighted	
 farsightedness	4	farsightedness	
-fart	7	fart	
-fart's	7	fart's	
-farted	7	farted	
 farther	9	farther	
 farthermost	0	farthermost	
 farthest	9	farthest	
 farthing	4	farthing	
 farthings	4	farthings	
-farting	7	farting	
-farts	7	farts	
 fascia	0	fascia	
 fascias	0	fascias	
 fascicle	0	fascicle	
@@ -31049,6 +30965,7 @@ fighter's	9	fighter's
 fighters	9	fighters	
 fighting	9	fighting	
 fights	9	fights	
+figma	9	Figma	p
 figment	9	figment	
 figments	9	figments	
 figs	9	figs	
@@ -31323,6 +31240,7 @@ firefights	0	firefights
 fireflies	9	fireflies	
 firefly	9	firefly	
 firefly's	9	firefly's	
+firefox	9	Firefox	p
 fireguard	0	fireguard	
 fireguards	0	fireguards	
 firehouse	4	firehouse	
@@ -31589,8 +31507,6 @@ flameproof	0	flameproof
 flameproofed	0	flameproofed	
 flameproofing	0	flameproofing	
 flameproofs	0	flameproofs	
-flamer	4	flamer	
-flamers	4	flamers	
 flames	9	flames	
 flamethrower	4	flamethrower	
 flamethrowers	4	flamethrowers	
@@ -32921,7 +32837,7 @@ foyer	9	foyer
 foyer's	9	foyer's	
 foyers	9	foyers	
 fps	0	fps	
-fr	4	fr	
+fr	4	Fr	
 fracas	9	fracas	
 fracases	9	fracases	
 frack	4	frack	
@@ -33525,16 +33441,6 @@ ftping	4	ftping
 ftps	4	ftps	
 fuchsia	4	fuchsia	
 fuchsias	4	fuchsias	
-fuck	7	fuck	
-fuck's	7	fuck's	
-fucked	7	fucked	
-fucker	7	fucker	
-fucker's	7	fucker's	
-fuckers	7	fuckers	
-fuckhead	0	fuckhead	
-fuckheads	0	fuckheads	
-fucking	7	fucking	
-fucks	7	fucks	
 fud	4	FUD	
 fuddle	4	fuddle	
 fuddled	4	fuddled	
@@ -34378,14 +34284,11 @@ gawp	0	gawp
 gawped	0	gawped	
 gawping	0	gawping	
 gawps	0	gawps	
-gay	9	gay	
-gay's	9	gay's	
 gayer	9	gayer	
 gayest	9	gayest	
 gayle	4	Gayle	
 gayle's	4	Gayle's	
 gayness	4	gayness	
-gays	9	gays	
 gaze	9	gaze	
 gazebo	7	gazebo	
 gazebo's	7	gazebo's	
@@ -35046,11 +34949,12 @@ girths	9	girths
 girting	4	girting	
 girts	4	girts	
 gist	9	gist	
-git	0	git	
+git	9	Git	t
 git's	0	git's	
 gite	0	gite	
 gites	0	gites	
 github	9	GitHub	p
+gitlab	9	GitLab	p
 gits	0	gits	
 give	9	give	
 giveaway	7	giveaway	
@@ -35373,6 +35277,7 @@ glycol	0	glycol
 glyph	4	glyph	
 glyphs	0	glyphs	
 gm	4	gm	
+gmail	9	Gmail	p
 gnarl	0	gnarl	
 gnarled	9	gnarled	
 gnarlier	4	gnarlier	
@@ -35402,7 +35307,7 @@ gnu	9	gnu
 gnu's	4	gnu's	
 gnupg	4	GnuPG	
 gnus	9	gnus	
-go	9	go	
+go	9	Go	t
 goad	9	goad	
 goaded	9	goaded	
 goading	9	goading	
@@ -35461,8 +35366,8 @@ gobs	9	gobs
 gobsmacked	0	gobsmacked	
 gobstopper	0	gobstopper	
 gobstoppers	0	gobstoppers	
-god	9	god	
-god's	9	god's	
+god	9	God	
+god's	9	God's	
 godawful	7	godawful	
 godchild	9	godchild	
 godchild's	9	godchild's	
@@ -35630,7 +35535,7 @@ goofiness	0	goofiness
 goofing	9	goofing	
 goofs	9	goofs	
 goofy	9	goofy	
-google	4	google	
+google	9	Google	p
 googled	4	googled	
 googles	4	googles	
 googlies	0	googlies	
@@ -35638,8 +35543,6 @@ googling	4	googling
 googly	0	googly	
 gooier	9	gooier	
 gooiest	9	gooiest	
-gook	4	gook	
-gooks	4	gooks	
 goon	9	goon	
 goon's	9	goon's	
 goons	9	goons	
@@ -35776,7 +35679,8 @@ gown's	9	gown's
 gowned	9	gowned	
 gowning	9	gowning	
 gowns	9	gowns	
-gpu	4	GPU	
+gpt	9	GPT	t
+gpu	9	GPU	t
 gr	4	gr	
 grab	9	grab	
 grabbed	9	grabbed	
@@ -36758,7 +36662,7 @@ guiltless	9	guiltless
 guilts	9	guilts	
 guilty	9	guilty	
 guinea	9	guinea	
-guinea's	4	guinea's	
+guinea's	4	Guinea's	
 guinean	0	Guinean	
 guinean's	0	Guinean's	
 guineans	0	Guineans	
@@ -37489,8 +37393,8 @@ hangover	9	hangover
 hangover's	9	hangover's	
 hangovers	9	hangovers	
 hangs	9	hangs	
-hank	4	hank	
-hank's	4	hank's	
+hank	4	Hank	
+hank's	4	Hank's	
 hanker	9	hanker	
 hankered	9	hankered	
 hankering	9	hankering	
@@ -38172,7 +38076,7 @@ heater	9	heater
 heater's	9	heater's	
 heaters	9	heaters	
 heath	9	heath	
-heath's	4	heath's	
+heath's	4	Heath's	
 heathen	9	heathen	
 heathen's	9	heathen's	
 heathendom	0	heathendom	
@@ -38237,7 +38141,7 @@ hectograms	0	hectograms
 hectometer	0	hectometer	
 hectometer's	0	hectometer's	
 hectometers	0	hectometers	
-hector	4	hector	
+hector	4	Hector	
 hector's	4	Hector's	
 hectored	4	hectored	
 hectoring	4	hectoring	
@@ -39348,11 +39252,8 @@ homophobic	9	homophobic
 homophone	4	homophone	
 homophones	4	homophones	
 homos	0	homos	
-homosexual	9	homosexual	
-homosexual's	9	homosexual's	
 homosexuality	9	homosexuality	
 homosexuality's	7	homosexuality's	
-homosexuals	9	homosexuals	
 hon	4	Hon	
 honcho	7	honcho	
 honcho's	7	honcho's	
@@ -39623,7 +39524,6 @@ horsepower	9	horsepower
 horseradish	9	horseradish	
 horseradishes	9	horseradishes	
 horses	9	horses	
-horseshit	0	horseshit	
 horseshoe	9	horseshoe	
 horseshoed	9	horseshoed	
 horseshoeing	9	horseshoeing	
@@ -39905,7 +39805,7 @@ hoyden's	0	hoyden's
 hoydenish	0	hoydenish	
 hoydens	0	hoydens	
 hp	7	hp	
-hr	7	hr	
+hr	9	HR	t
 hrs	7	hrs	
 ht	4	ht	
 html	9	HTML	t
@@ -40713,6 +40613,7 @@ iguana's	9	iguana's
 iguanas	9	iguanas	
 ii	9	ii	
 iii	9	iii	
+ikea	9	IKEA	p
 ila	4	Ila	
 ila's	4	Ila's	
 ilea	0	ilea	
@@ -40793,6 +40694,7 @@ illustrators	9	illustrators
 illustrious	9	illustrious	
 illustriously	0	illustriously	
 illustriousness	0	illustriousness	
+imac	9	iMac	p
 image	9	image	
 image's	9	image's	
 imaged	9	imaged	
@@ -42801,10 +42703,10 @@ inspirit	0	inspirit
 inspirited	0	inspirited	
 inspiriting	0	inspiriting	
 inspirits	0	inspirits	
-inst	0	inst	
+inst	0	Inst	
 instabilities	9	instabilities	
 instability	9	instability	
-instagram	0	Instagram	
+instagram	9	Instagram	p
 instagrammed	0	Instagrammed	
 instagrammer	0	Instagrammer	
 instagrammer's	0	Instagrammer's	
@@ -43734,6 +43636,7 @@ ionosphere	4	ionosphere
 ionospheres	4	ionospheres	
 ionospheric	0	ionospheric	
 ions	9	ions	
+ios	9	iOS	p
 iota	9	iota	
 iota's	9	iota's	
 iotas	9	iotas	
@@ -43742,7 +43645,8 @@ iowa's	4	Iowa's
 iowan	4	Iowan	
 iowan's	4	Iowan's	
 iowans	0	Iowans	
-ip	4	IP	
+ip	9	IP	t
+ipad	9	iPad	p
 ipecac	4	ipecac	
 ipecacs	4	ipecacs	
 iphone	9	iPhone	p
@@ -44015,7 +43919,7 @@ it	9	it
 it'd	7	it'd	
 it'll	7	it'll	
 it's	9	it's	
-ital	0	ital	
+ital	0	Ital	
 italian	7	Italian	
 italian's	7	Italian's	
 italians	7	Italians	
@@ -44279,7 +44183,7 @@ jannie's	4	Jannie's
 januaries	9	Januaries	
 january	9	January	
 january's	9	January's	
-japan	4	japan	
+japan	4	Japan	
 japan's	4	Japan's	
 japanese	7	Japanese	
 japanese's	7	Japanese's	
@@ -44288,9 +44192,7 @@ japanned	4	japanned
 japanning	4	japanning	
 japans	4	japans	
 jape	4	jape	
-japed	4	japed	
 japes	4	japes	
-japing	4	japing	
 jar	9	jar	
 jar's	9	jar's	
 jardiniere	4	jardiniere	
@@ -44311,12 +44213,12 @@ jarrod's	4	Jarrod's
 jars	9	jars	
 jarvis	4	Jarvis	
 jarvis's	4	Jarvis's	
-jasmine	4	jasmine	
-jasmine's	4	jasmine's	
+jasmine	4	Jasmine	
+jasmine's	4	Jasmine's	
 jasmines	4	jasmines	
 jason	4	Jason	
 jason's	4	Jason's	
-jasper	4	jasper	
+jasper	4	Jasper	
 jasper's	4	Jasper's	
 jato	0	jato	
 jatos	0	jatos	
@@ -44333,7 +44235,8 @@ jauntiness	4	jauntiness
 jaunting	9	jaunting	
 jaunts	9	jaunts	
 jaunty	9	jaunty	
-java	0	java	
+java	9	Java	t
+javascript	9	JavaScript	t
 javelin	9	javelin	
 javelins	9	javelins	
 javier	4	Javier	
@@ -44546,8 +44449,6 @@ jettisoned	9	jettisoned
 jettisoning	9	jettisoning	
 jettisons	9	jettisons	
 jetty	9	jetty	
-jew	9	Jew	
-jew's	9	Jew's	
 jewel	9	jewel	
 jewel's	9	jewel's	
 jeweled	9	jeweled	
@@ -44562,7 +44463,6 @@ jewelry	9	jewelry
 jewelry's	9	jewelry's	
 jewels	9	jewels	
 jewish	9	Jewish	
-jews	9	Jews	
 jg	0	jg	
 jiangsu	0	Jiangsu	
 jiangsu's	0	Jiangsu's	
@@ -44585,11 +44485,6 @@ jiffy	9	jiffy
 jig	9	jig	
 jig's	9	jig's	
 jigged	9	jigged	
-jigger	7	jigger	
-jigger's	7	jigger's	
-jiggered	7	jiggered	
-jiggering	7	jiggering	
-jiggers	7	jiggers	
 jigging	9	jigging	
 jiggle	9	jiggle	
 jiggled	9	jiggled	
@@ -44625,7 +44520,7 @@ jimmie	4	Jimmie
 jimmie's	4	Jimmie's	
 jimmied	4	jimmied	
 jimmies	4	jimmies	
-jimmy	4	jimmy	
+jimmy	4	Jimmy	
 jimmy's	4	Jimmy's	
 jimmying	4	jimmying	
 jimsonweed	0	jimsonweed	
@@ -44858,8 +44753,8 @@ joseph	4	Joseph
 joseph's	4	Joseph's	
 josephine	4	Josephine	
 josephine's	4	Josephine's	
-josh	4	josh	
-josh's	4	josh's	
+josh	4	Josh	
+josh's	4	Josh's	
 joshed	4	joshed	
 josher	0	josher	
 joshers	0	joshers	
@@ -45603,9 +45498,6 @@ kielbasa	4	kielbasa
 kielbasas	4	kielbasas	
 kieth	4	Kieth	
 kieth's	4	Kieth's	
-kike	0	kike	
-kike's	0	kike's	
-kikes	0	kikes	
 kill	9	kill	
 kill's	9	kill's	
 killdeer	4	killdeer	
@@ -45924,12 +45816,10 @@ knitters	4	knitters
 knitting	9	knitting	
 knitwear	4	knitwear	
 knives	9	knives	
-knob	9	knob	
 knobbier	7	knobbier	
 knobbiest	7	knobbiest	
 knobbly	0	knobbly	
 knobby	7	knobby	
-knobs	9	knobs	
 knock	9	knock	
 knockabout	0	knockabout	
 knockdown	0	knockdown	
@@ -46025,10 +45915,9 @@ kowtowed	9	kowtowed
 kowtowing	9	kowtowing	
 kowtows	9	kowtows	
 kph	0	kph	
+kpi	9	KPI	t
 kraal	0	kraal	
 kraals	0	kraals	
-kraut	0	kraut	
-krauts	0	krauts	
 krill	0	krill	
 krill's	0	krill's	
 kris	4	Kris	
@@ -46061,6 +45950,7 @@ krystal	4	Krystal
 krystal's	4	Krystal's	
 ks	4	Ks	
 kt	0	kt	
+kubernetes	9	Kubernetes	t
 kuchen	0	kuchen	
 kudos	9	kudos	
 kudzu	4	kudzu	
@@ -46349,6 +46239,7 @@ lamps	9	lamps
 lampshade	7	lampshade	
 lampshades	7	lampshades	
 lams	4	lams	
+lan	9	LAN	t
 lana	4	Lana	
 lana's	4	Lana's	
 lanai	0	lanai	
@@ -46891,7 +46782,7 @@ lazybones's	4	lazybones's
 lazying	9	lazying	
 lb	7	lb	
 lbw	0	lbw	
-lea	4	lea	
+lea	4	Lea	
 lea's	4	Lea's	
 leach	9	leach	
 leached	4	leached	
@@ -47937,6 +47828,7 @@ link	9	link
 linkage	9	linkage	
 linkages	7	linkages	
 linked	9	linked	
+linkedin	9	LinkedIn	p
 linker	9	linker	
 linking	9	linking	
 linkman	0	linkman	
@@ -47961,6 +47853,7 @@ lintiest	0	lintiest
 linting	4	linting	
 lints	4	lints	
 linty	0	linty	
+linux	9	Linux	t
 linwood	4	Linwood	
 linwood's	4	Linwood's	
 lion	9	lion	
@@ -48208,6 +48101,7 @@ llama's	9	llama's
 llamas	9	llamas	
 llano	4	llano	
 llanos	4	llanos	
+llm	9	LLM	t
 lloyd	4	Lloyd	
 lloyd's	4	Lloyd's	
 ln	7	Ln	
@@ -49224,6 +49118,7 @@ macaroons	4	macaroons
 macaw	4	macaw	
 macaw's	4	macaw's	
 macaws	4	macaws	
+macbook	9	MacBook	p
 mace	9	mace	
 mace's	9	mace's	
 maced	9	maced	
@@ -49808,8 +49703,8 @@ mandala	0	mandala
 mandalas	0	mandalas	
 mandamus	0	mandamus	
 mandamuses	0	mandamuses	
-mandarin	7	mandarin	
-mandarin's	7	mandarin's	
+mandarin	7	Mandarin	
+mandarin's	7	Mandarin's	
 mandarins	7	mandarins	
 mandate	9	mandate	
 mandated	9	mandated	
@@ -50114,13 +50009,13 @@ marcella	4	Marcella
 marcella's	4	Marcella's	
 marcelo	4	Marcelo	
 marcelo's	4	Marcelo's	
-march	9	march	
-march's	9	march's	
+march	9	March	
+march's	9	March's	
 marched	9	marched	
 marcher	9	marcher	
 marcher's	4	marcher's	
 marchers	4	marchers	
-marches	9	marches	
+marches	9	Marches	
 marching	9	marching	
 marchioness	4	marchioness	
 marchioness's	4	marchioness's	
@@ -50284,8 +50179,8 @@ marla	4	Marla
 marla's	4	Marla's	
 marlene	4	Marlene	
 marlene's	4	Marlene's	
-marlin	4	marlin	
-marlin's	4	marlin's	
+marlin	4	Marlin	
+marlin's	4	Marlin's	
 marlinespike	0	marlinespike	
 marlinespike's	0	marlinespike's	
 marlinespikes	0	marlinespikes	
@@ -50313,8 +50208,8 @@ marquess	4	marquess
 marquess's	4	marquess's	
 marquesses	4	marquesses	
 marquetry	4	marquetry	
-marquis	4	marquis	
-marquis's	4	marquis's	
+marquis	4	Marquis	
+marquis's	4	Marquis's	
 marquise	4	marquise	
 marquise's	4	marquise's	
 marquises	4	marquises	
@@ -50375,7 +50270,7 @@ martian	7	Martian
 martian's	7	Martian's	
 martians	7	Martians	
 martin	9	martin	
-martin's	4	martin's	
+martin's	4	Martin's	
 martina	4	Martina	
 martina's	4	Martina's	
 martinet	4	martinet	
@@ -50784,7 +50679,7 @@ maxing	7	maxing
 maxis	0	maxis	
 maxwell	4	Maxwell	
 maxwell's	4	Maxwell's	
-may	9	may	
+may	9	May	
 may's	9	May's	
 mayaguez's	0	Mayaguez's	
 maybe	9	maybe	
@@ -50820,7 +50715,7 @@ mazes	9	mazes
 mazurka	4	mazurka	
 mazurka's	4	mazurka's	
 mazurkas	4	mazurkas	
-mb	4	Mb	
+mb	4	MB	
 mcallen	0	McAllen	
 mcallen's	0	McAllen's	
 mccoy	7	McCoy	
@@ -50919,7 +50814,7 @@ meatloaves	7	meatloaves
 meatpacking	0	meatpacking	
 meats	9	meats	
 meaty	7	meaty	
-mecca	7	mecca	
+mecca	7	Mecca	
 mecca's	7	Mecca's	
 meccas	7	meccas	
 mechanic	9	mechanic	
@@ -51432,8 +51327,8 @@ merrymakers	4	merrymakers
 merrymaking	4	merrymaking	
 mervin	4	Mervin	
 mervin's	4	Mervin's	
-mesa	4	mesa	
-mesa's	4	mesa's	
+mesa	4	Mesa	
+mesa's	4	Mesa's	
 mesas	4	mesas	
 mescal	4	mescal	
 mescalin	0	mescalin	
@@ -51670,7 +51565,7 @@ mfg	4	mfg
 mfr	4	mfr	
 mfrs	0	mfrs	
 mg	7	mg	
-mgr	0	mgr	
+mgr	0	Mgr	
 mi	7	mi	
 mia	4	Mia	
 mia's	4	Mia's	
@@ -51700,7 +51595,7 @@ michigander	0	Michigander
 michigander's	0	Michigander's	
 michiganders	0	Michiganders	
 mick	0	mick	
-mickey	4	mickey	
+mickey	4	Mickey	
 mickey's	4	Mickey's	
 mickeys	4	mickeys	
 micks	0	micks	
@@ -51807,6 +51702,7 @@ microscopically	4	microscopically
 microscopy	4	microscopy	
 microsecond	4	microsecond	
 microseconds	9	microseconds	
+microsoft	9	Microsoft	p
 microsurgery	4	microsurgery	
 microwavable	0	microwavable	
 microwave	9	microwave	
@@ -51853,7 +51749,7 @@ midget's	9	midget's
 midgets	9	midgets	
 midi	0	midi	
 midis	0	midis	
-midland	4	midland	
+midland	4	Midland	
 midland's	4	Midland's	
 midlands	4	midlands	
 midlevel	0	midlevel	
@@ -53259,12 +53155,7 @@ monitors	9	monitors
 monitory	0	monitory	
 monk	9	monk	
 monk's	9	monk's	
-monkey	9	monkey	
-monkey's	9	monkey's	
-monkeyed	9	monkeyed	
-monkeying	9	monkeying	
 monkeypox	0	monkeypox	
-monkeys	9	monkeys	
 monkeyshine	0	monkeyshine	
 monkeyshines	4	monkeyshines	
 monkish	0	monkish	
@@ -53566,7 +53457,7 @@ morns	9	morns
 moroccan	4	Moroccan	
 moroccan's	4	Moroccan's	
 moroccans	4	Moroccans	
-morocco	4	morocco	
+morocco	4	Morocco	
 morocco's	4	Morocco's	
 moron	9	moron	
 moron's	9	moron's	
@@ -53685,10 +53576,6 @@ motherboard	7	motherboard
 motherboard's	7	motherboard's	
 motherboards	7	motherboards	
 mothered	9	mothered	
-motherfucker	7	motherfucker	
-motherfucker's	7	motherfucker's	
-motherfuckers	7	motherfuckers	
-motherfucking	0	motherfucking	
 motherhood	9	motherhood	
 mothering	9	mothering	
 motherland	4	motherland	
@@ -53908,7 +53795,7 @@ mp	0	mp
 mpeg	4	MPEG	
 mpg	7	mpg	
 mph	7	mph	
-mr	9	Mr	
+mr	9	MR	t
 mrs	9	Mrs	
 ms	9	Ms	
 mses	0	Mses	
@@ -53977,10 +53864,7 @@ muesli	4	muesli
 muezzin	4	muezzin	
 muezzin's	4	muezzin's	
 muezzins	4	muezzins	
-muff	9	muff	
-muffed	9	muffed	
 muffin	9	muffin	
-muffing	9	muffing	
 muffins	9	muffins	
 muffle	9	muffle	
 muffled	9	muffled	
@@ -53988,7 +53872,6 @@ muffler	9	muffler
 mufflers	9	mufflers	
 muffles	9	muffles	
 muffling	9	muffling	
-muffs	9	muffs	
 mufti	4	mufti	
 mufti's	4	mufti's	
 muftis	4	muftis	
@@ -54489,10 +54372,11 @@ myrna's	4	Myrna's
 myron	4	Myron	
 myron's	4	Myron's	
 myrrh	4	myrrh	
-myrtle	4	myrtle	
+myrtle	4	Myrtle	
 myrtle's	4	Myrtle's	
 myrtles	4	myrtles	
 myself	9	myself	
+mysql	9	MySQL	t
 mysteries	9	mysteries	
 mysterious	9	mysterious	
 mysteriously	9	mysteriously	
@@ -55032,8 +54916,6 @@ negotiator	9	negotiator
 negotiator's	9	negotiator's	
 negotiators	9	negotiators	
 negritude	0	negritude	
-negro	9	Negro	
-negro's	9	Negro's	
 negroes	9	Negroes	
 negroid	0	negroid	
 neigh	9	neigh	
@@ -55164,6 +55046,7 @@ net's	9	net's
 netball	0	netball	
 netbook	4	netbook	
 netbooks	4	netbooks	
+netflix	9	Netflix	p
 nether	9	nether	
 netherlander	0	Netherlander	
 netherlander's	0	Netherlander's	
@@ -55396,6 +55279,7 @@ next	9	next
 nexus	4	nexus	
 nexus's	4	nexus's	
 nexuses	4	nexuses	
+nginx	9	Nginx	t
 niacin	4	niacin	
 niacin's	4	niacin's	
 nib	4	nib	
@@ -55434,10 +55318,6 @@ nickel's	9	nickel's
 nickelodeon	4	nickelodeon	
 nickelodeons	4	nickelodeons	
 nickels	9	nickels	
-nicker	0	nicker	
-nickered	0	nickered	
-nickering	0	nickering	
-nickers	0	nickers	
 nicking	9	nicking	
 nickle	4	nickle	
 nickles	4	nickles	
@@ -55473,17 +55353,11 @@ nigerians	4	Nigerians
 nigerien	0	Nigerien	
 nigerien's	0	Nigerien's	
 nigeriens	0	Nigeriens	
-nigga	4	nigga	
 niggard	4	niggard	
 niggard's	4	niggard's	
 niggardliness	4	niggardliness	
 niggardly	4	niggardly	
 niggards	4	niggards	
-niggas	4	niggas	
-niggaz	4	niggaz	
-nigger	7	nigger	
-nigger's	7	nigger's	
-niggers	7	niggers	
 niggle	4	niggle	
 niggled	4	niggled	
 niggler	0	niggler	
@@ -55572,6 +55446,7 @@ ninjas	4	ninjas
 ninnies	9	ninnies	
 ninny	9	ninny	
 ninny's	9	ninny's	
+nintendo	9	Nintendo	p
 niobium	0	niobium	
 nip	9	nip	
 nipped	9	nipped	
@@ -55669,7 +55544,7 @@ nodding	9	nodding
 noddle	0	noddle	
 noddles	0	noddles	
 noddy	4	noddy	
-node	9	node	
+node	9	Node	t
 node's	9	node's	
 nodes	9	nodes	
 nods	9	nods	
@@ -55678,7 +55553,7 @@ nodule	4	nodule
 nodules	4	nodules	
 noe	4	Noe	
 noe's	4	Noe's	
-noel	4	noel	
+noel	4	Noel	
 noel's	4	Noel's	
 noelle	4	Noelle	
 noelle's	4	Noelle's	
@@ -56306,7 +56181,7 @@ notifies	9	notifies
 notify	9	notify	
 notifying	9	notifying	
 noting	9	noting	
-notion	9	notion	
+notion	9	Notion	p
 notional	9	notional	
 notionally	4	notionally	
 notions	9	notions	
@@ -56372,6 +56247,7 @@ nowt	0	nowt
 noxious	9	noxious	
 nozzle	9	nozzle	
 nozzles	9	nozzles	
+npm	9	npm	t
 nth	4	nth	
 nu	4	nu	
 nu's	0	nu's	
@@ -57051,7 +56927,7 @@ offhand	9	offhand
 offhanded	0	offhanded	
 offhandedly	4	offhandedly	
 offhandedness	0	offhandedness	
-office	9	office	
+office	9	Office	p
 office's	9	office's	
 officeholder	4	officeholder	
 officeholder's	4	officeholder's	
@@ -57165,7 +57041,7 @@ oinking	7	oinking
 oinks	7	oinks	
 ointment	9	ointment	
 ointments	9	ointments	
-ok	9	OK	
+ok	9	OK	t
 ok's	9	OK's	
 okapi	0	okapi	
 okapi's	0	okapi's	
@@ -57182,6 +57058,7 @@ oklahoma's	4	Oklahoma's
 oklahoman	4	Oklahoman	
 oklahoman's	4	Oklahoman's	
 oklahomans	0	Oklahomans	
+okr	9	OKR	t
 okra	9	okra	
 okras	9	okras	
 oks	9	OKs	
@@ -57383,6 +57260,7 @@ opcodes	0	opcodes
 ope	0	ope	
 oped	0	oped	
 open	9	open	
+openai	9	OpenAI	p
 opencast	0	opencast	
 opened	9	opened	
 opener	9	opener	
@@ -57696,7 +57574,7 @@ oriental	9	oriental
 oriental's	7	Oriental's	
 orientalist	0	orientalist	
 orientalists	0	orientalists	
-orientals	7	orientals	
+orientals	7	Orientals	
 orientate	4	orientate	
 orientated	9	orientated	
 orientates	4	orientates	
@@ -58056,7 +57934,7 @@ outlive	9	outlive
 outlived	9	outlived	
 outlives	9	outlives	
 outliving	9	outliving	
-outlook	9	outlook	
+outlook	9	Outlook	p
 outlooks	9	outlooks	
 outlying	9	outlying	
 outmaneuver	7	outmaneuver	
@@ -58871,7 +58749,7 @@ oxcart	0	oxcart
 oxcarts	0	oxcarts	
 oxen	9	oxen	
 oxen's	9	oxen's	
-oxford	4	oxford	
+oxford	4	Oxford	
 oxford's	4	Oxford's	
 oxfords	4	oxfords	
 oxidant	0	oxidant	
@@ -60141,8 +60019,8 @@ patroon	0	patroon
 patroons	0	patroons	
 pats	9	pats	
 patsies	4	patsies	
-patsy	4	patsy	
-patsy's	4	patsy's	
+patsy	4	Patsy	
+patsy's	4	Patsy's	
 patted	9	patted	
 patter	9	patter	
 pattered	9	pattered	
@@ -60603,8 +60481,6 @@ peninsula	9	peninsula
 peninsula's	9	peninsula's	
 peninsular	4	peninsular	
 peninsulas	9	peninsulas	
-penis	9	penis	
-penis's	9	penis's	
 penises	9	penises	
 penitence	9	penitence	
 penitent	9	penitent	
@@ -61492,8 +61368,8 @@ phobia	9	phobia
 phobias	9	phobias	
 phobic	7	phobic	
 phobics	7	phobics	
-phoebe	4	phoebe	
-phoebe's	4	phoebe's	
+phoebe	4	Phoebe	
+phoebe's	4	Phoebe's	
 phoebes	4	phoebes	
 phoenix	9	phoenix	
 phoenix's	7	phoenix's	
@@ -61810,8 +61686,6 @@ piety	9	piety
 piezoelectric	0	piezoelectric	
 piffle	4	piffle	
 piffling	0	piffling	
-pig	9	pig	
-pig's	9	pig's	
 pigeon	9	pigeon	
 pigeon's	9	pigeon's	
 pigeonhole	9	pigeonhole	
@@ -61819,13 +61693,11 @@ pigeonholed	9	pigeonholed
 pigeonholes	9	pigeonholes	
 pigeonholing	9	pigeonholing	
 pigeons	9	pigeons	
-pigged	9	pigged	
 piggeries	0	piggeries	
 piggery	0	piggery	
 piggier	7	piggier	
 piggies	7	piggies	
 piggiest	7	piggiest	
-pigging	9	pigging	
 piggish	9	piggish	
 piggishly	0	piggishly	
 piggishness	4	piggishness	
@@ -61848,7 +61720,6 @@ pigmented	0	pigmented
 pigments	9	pigments	
 pigpen	9	pigpen	
 pigpens	9	pigpens	
-pigs	9	pigs	
 pigskin	4	pigskin	
 pigskins	4	pigskins	
 pigsties	7	pigsties	
@@ -62117,12 +61988,6 @@ pisces's	7	Pisces's
 pismire	0	pismire	
 pismire's	0	pismire's	
 pismires	0	pismires	
-piss	7	piss	
-pissed	7	pissed	
-pisser	0	pisser	
-pissers	0	pissers	
-pisses	7	pisses	
-pissing	7	pissing	
 pissoir	0	pissoir	
 pissoirs	0	pissoirs	
 pistachio	9	pistachio	
@@ -63771,6 +63636,7 @@ powering	9	powering
 powerless	9	powerless	
 powerlessly	4	powerlessly	
 powerlessness	7	powerlessness	
+powerpoint	9	PowerPoint	p
 powers	9	powers	
 powertrain	0	powertrain	
 powwow	9	powwow	
@@ -63783,7 +63649,8 @@ poxes	4	poxes
 pp	7	pp	
 ppm	0	ppm	
 ppr	0	ppr	
-pr	0	pr	
+ppt	9	PPT	t
+pr	9	PR	t
 practicability	4	practicability	
 practicable	9	practicable	
 practicably	4	practicably	
@@ -64307,7 +64174,7 @@ prerequisite	9	prerequisite
 prerequisites	9	prerequisites	
 prerogative	9	prerogative	
 prerogatives	9	prerogatives	
-pres	4	pres	
+pres	4	Pres	
 presage	7	presage	
 presaged	7	presaged	
 presages	7	presages	
@@ -64897,7 +64764,7 @@ productively	4	productively
 productiveness	4	productiveness	
 productivity	9	productivity	
 products	9	products	
-prof	7	prof	
+prof	7	Prof	
 prof's	7	prof's	
 profanation	4	profanation	
 profanations	4	profanations	
@@ -65423,7 +65290,7 @@ protein	9	protein
 protein's	9	protein's	
 proteins	9	proteins	
 protest	9	protest	
-protestant	9	protestant	
+protestant	9	Protestant	
 protestant's	9	Protestant's	
 protestants	9	Protestants	
 protestation	4	protestation	
@@ -66032,12 +65899,12 @@ purist	7	purist
 purist's	7	purist's	
 puristic	0	puristic	
 purists	7	purists	
-puritan	7	puritan	
-puritan's	7	puritan's	
+puritan	7	Puritan	
+puritan's	7	Puritan's	
 puritanical	9	puritanical	
 puritanically	4	puritanically	
 puritanism	4	puritanism	
-puritans	7	puritans	
+puritans	7	Puritans	
 purity	9	purity	
 purl	4	purl	
 purled	4	purled	
@@ -66140,8 +66007,6 @@ pusses	9	pusses
 pussier	9	pussier	
 pussies	9	pussies	
 pussiest	9	pussiest	
-pussy	9	pussy	
-pussy's	9	pussy's	
 pussycat	7	pussycat	
 pussycat's	7	pussycat's	
 pussycats	7	pussycats	
@@ -66198,7 +66063,7 @@ puzzlers	4	puzzlers
 puzzles	9	puzzles	
 puzzling	9	puzzling	
 puzzlingly	0	puzzlingly	
-pvt	0	pvt	
+pvt	0	Pvt	
 pwn	4	pwn	
 pwned	4	pwned	
 pwning	4	pwning	
@@ -66235,14 +66100,14 @@ pyrotechnic	4	pyrotechnic
 pyrotechnical	0	pyrotechnical	
 pyrotechnics	4	pyrotechnics	
 pyruvate	0	pyruvate	
-python	9	python	
+python	9	Python	t
 python's	9	python's	
 pythons	9	pythons	
 pyx	4	pyx	
 pyxes	4	pyxes	
 pzazz	0	pzazz	
 q	7	q	
-qa	4	QA	
+qa	9	QA	t
 qatar	4	Qatar	
 qatar's	4	Qatar's	
 qatari	0	Qatari	
@@ -66461,15 +66326,10 @@ queenly	9	queenly
 queens	9	queens	
 queensland	4	Queensland	
 queensland's	4	Queensland's	
-queer	9	queer	
-queer's	9	queer's	
-queered	9	queered	
 queerer	9	queerer	
 queerest	9	queerest	
-queering	9	queering	
 queerly	4	queerly	
 queerness	4	queerness	
-queers	9	queers	
 quell	9	quell	
 quelled	9	quelled	
 quelling	9	quelling	
@@ -67015,7 +66875,7 @@ rally's	9	rally's
 rallying	9	rallying	
 ralph	4	Ralph	
 ralph's	4	Ralph's	
-ram	9	ram	
+ram	9	RAM	t
 ram's	9	ram's	
 ramadan	7	Ramadan	
 ramadan's	7	Ramadan's	
@@ -67112,7 +66972,7 @@ randomly	9	randomly
 randomness	9	randomness	
 randomnesses	4	randomnesses	
 randoms	4	randoms	
-randy	4	randy	
+randy	4	Randy	
 randy's	4	Randy's	
 ranee	0	ranee	
 ranee's	0	ranee's	
@@ -67461,7 +67321,7 @@ reacquire	0	reacquire
 reacquired	0	reacquired	
 reacquires	0	reacquires	
 reacquiring	0	reacquiring	
-react	9	react	
+react	9	React	t
 reactant	0	reactant	
 reactants	0	reactants	
 reacted	9	reacted	
@@ -68375,6 +68235,7 @@ redirected	9	redirected
 redirecting	9	redirecting	
 redirection	9	redirection	
 redirects	7	redirects	
+redis	9	Redis	t
 rediscover	4	rediscover	
 rediscovered	9	rediscovered	
 rediscoveries	4	rediscoveries	
@@ -69653,7 +69514,7 @@ reorientation	0	reorientation
 reoriented	0	reoriented	
 reorienting	0	reorienting	
 reorients	0	reorients	
-rep	7	rep	
+rep	7	Rep	
 rep's	7	rep's	
 repack	0	repack	
 repackage	4	repackage	
@@ -70473,17 +70334,11 @@ retaliation	9	retaliation
 retaliations	9	retaliations	
 retaliative	0	retaliative	
 retaliatory	4	retaliatory	
-retard	9	retard	
-retard's	9	retard's	
 retardant	4	retardant	
 retardants	4	retardants	
 retardation	7	retardation	
-retarded	9	retarded	
-retarded's	9	retarded's	
 retarder	0	retarder	
 retarders	0	retarders	
-retarding	9	retarding	
-retards	9	retards	
 retaught	0	retaught	
 retch	9	retch	
 retched	9	retched	
@@ -70943,7 +70798,7 @@ rhapsodized	4	rhapsodized
 rhapsodizes	4	rhapsodizes	
 rhapsodizing	4	rhapsodizing	
 rhapsody	9	rhapsody	
-rhea	4	rhea	
+rhea	4	Rhea	
 rhea's	4	Rhea's	
 rheas	4	rheas	
 rhenium	0	rhenium	
@@ -71056,8 +70911,8 @@ richmond's	4	Richmond's
 richness	9	richness	
 ricin	0	ricin	
 ricing	9	ricing	
-rick	4	rick	
-rick's	4	rick's	
+rick	4	Rick	
+rick's	4	Rick's	
 ricked	4	ricked	
 ricketier	9	ricketier	
 ricketiest	9	ricketiest	
@@ -71559,18 +71414,18 @@ roe's	9	roe's
 roebuck	4	roebuck	
 roebuck's	4	roebuck's	
 roebucks	4	roebucks	
-roentgen	4	roentgen	
+roentgen	4	Roentgen	
 roentgen's	4	Roentgen's	
 roentgens	4	roentgens	
 roes	9	roes	
 rofl	4	ROFL	
 rogelio	4	Rogelio	
 rogelio's	4	Rogelio's	
-roger	4	roger	
+roger	4	Roger	
 roger's	4	Roger's	
 rogered	4	rogered	
 rogering	4	rogering	
-rogers	4	rogers	
+rogers	4	Rogers	
 rogers's	4	Rogers's	
 rogue	9	rogue	
 rogue's	9	rogue's	
@@ -71579,6 +71434,7 @@ rogues	9	rogues
 roguish	9	roguish	
 roguishly	4	roguishly	
 roguishness	0	roguishness	
+roi	9	ROI	t
 roil	4	roil	
 roiled	4	roiled	
 roiling	4	roiling	
@@ -72274,7 +72130,7 @@ russia's	4	Russia's
 russian	7	Russian	
 russian's	7	Russian's	
 russians	7	Russians	
-rust	9	rust	
+rust	9	Rust	t
 rust's	9	rust's	
 rusted	9	rusted	
 rustic	9	rustic	
@@ -72444,7 +72300,7 @@ sadomasochist	0	sadomasochist
 sadomasochist's	0	sadomasochist's	
 sadomasochistic	0	sadomasochistic	
 sadomasochists	0	sadomasochists	
-safari	9	safari	
+safari	9	Safari	p
 safaried	9	safaried	
 safariing	9	safariing	
 safaris	9	safaris	
@@ -73639,7 +73495,7 @@ scorpions	9	scorpions
 scorpios	7	Scorpios	
 scot	4	Scot	
 scot's	4	Scot's	
-scotch	9	scotch	
+scotch	9	Scotch	
 scotch's	9	Scotch's	
 scotched	7	scotched	
 scotches	9	Scotches	
@@ -73992,16 +73848,11 @@ sculpture's	9	sculpture's
 sculptured	9	sculptured	
 sculptures	9	sculptures	
 sculpturing	9	sculpturing	
-scum	9	scum	
-scum's	9	scum's	
 scumbag	0	scumbag	
 scumbags	0	scumbags	
-scummed	9	scummed	
 scummier	4	scummier	
 scummiest	4	scummiest	
-scumming	9	scumming	
 scummy	4	scummy	
-scums	9	scums	
 scupper	4	scupper	
 scuppered	4	scuppered	
 scuppering	4	scuppering	
@@ -75584,19 +75435,6 @@ shirttails	4	shirttails
 shirtwaist	4	shirtwaist	
 shirtwaists	4	shirtwaists	
 shirty	0	shirty	
-shit	7	shit	
-shit's	7	shit's	
-shitfaced	0	shitfaced	
-shithead	0	shithead	
-shithead's	0	shithead's	
-shitheads	0	shitheads	
-shitload	0	shitload	
-shits	7	shits	
-shitted	0	shitted	
-shittier	7	shittier	
-shittiest	7	shittiest	
-shitting	7	shitting	
-shitty	7	shitty	
 shiv	0	shiv	
 shiver	9	shiver	
 shivered	9	shivered	
@@ -76409,8 +76247,8 @@ singled	9	singled
 singleness	0	singleness	
 singles	9	singles	
 singlet	0	singlet	
-singleton	4	singleton	
-singleton's	4	singleton's	
+singleton	4	Singleton	
+singleton's	4	Singleton's	
 singletons	4	singletons	
 singletree	0	singletree	
 singletrees	0	singletrees	
@@ -76787,7 +76625,7 @@ slab's	9	slab's
 slabbed	9	slabbed	
 slabbing	9	slabbing	
 slabs	9	slabs	
-slack	9	slack	
+slack	9	Slack	p
 slack's	9	slack's	
 slacked	9	slacked	
 slacken	9	slacken	
@@ -77549,13 +77387,10 @@ snarling	9	snarling
 snarlingly	0	snarlingly	
 snarls	9	snarls	
 snarly	0	snarly	
-snatch	9	snatch	
-snatched	9	snatched	
 snatcher	0	snatcher	
 snatcher's	0	snatcher's	
 snatchers	0	snatchers	
 snatches	9	snatches	
-snatching	9	snatching	
 snazzier	7	snazzier	
 snazziest	7	snazziest	
 snazzily	0	snazzily	
@@ -77861,7 +77696,7 @@ sobriquet	4	sobriquet
 sobriquet's	4	sobriquet's	
 sobriquets	4	sobriquets	
 sobs	9	sobs	
-soc	0	soc	
+soc	0	Soc	
 socastee	0	Socastee	
 socastee's	0	Socastee's	
 soccer	9	soccer	
@@ -78206,8 +78041,8 @@ sonnet	9	sonnet
 sonnet's	9	sonnet's	
 sonnets	9	sonnets	
 sonnies	4	sonnies	
-sonny	4	sonny	
-sonny's	4	sonny's	
+sonny	4	Sonny	
+sonny's	4	Sonny's	
 sonofabitch	0	sonofabitch	
 sonogram	0	sonogram	
 sonograms	0	sonograms	
@@ -78868,18 +78703,13 @@ sphincters	4	sphincters
 sphinx	9	sphinx	
 sphinx's	9	sphinx's	
 sphinxes	9	sphinxes	
-spic	0	spic	
-spic's	0	spic's	
 spice	9	spice	
 spice's	9	spice's	
-spiced	9	spiced	
 spices	9	spices	
 spicier	9	spicier	
 spiciest	9	spiciest	
 spicily	0	spicily	
 spiciness	4	spiciness	
-spicing	9	spicing	
-spics	0	spics	
 spicule	0	spicule	
 spicules	0	spicules	
 spicy	9	spicy	
@@ -78906,12 +78736,10 @@ spigot	4	spigot
 spigots	4	spigots	
 spike	9	spike	
 spike's	9	spike's	
-spiked	9	spiked	
 spikes	9	spikes	
 spikier	4	spikier	
 spikiest	4	spikiest	
 spikiness	0	spikiness	
-spiking	9	spiking	
 spiky	4	spiky	
 spill	9	spill	
 spill's	9	spill's	
@@ -79168,14 +78996,9 @@ spoof	9	spoof
 spoofed	9	spoofed	
 spoofing	9	spoofing	
 spoofs	9	spoofs	
-spook	9	spook	
-spook's	9	spook's	
-spooked	9	spooked	
 spookier	9	spookier	
 spookiest	9	spookiest	
 spookiness	0	spookiness	
-spooking	9	spooking	
-spooks	9	spooks	
 spooky	9	spooky	
 spool	9	spool	
 spooled	9	spooled	
@@ -79419,8 +79242,8 @@ spying	9	spying
 spymaster	0	spymaster	
 spymasters	0	spymasters	
 spyware	4	spyware	
-sq	7	sq	
-sql	4	SQL	
+sq	7	Sq	
+sql	9	SQL	t
 sqq	0	sqq	
 squab	4	squab	
 squab's	4	squab's	
@@ -79580,6 +79403,7 @@ squishing	4	squishing
 squishy	0	squishy	
 sr	7	Sr	
 sriracha	4	sriracha	
+ssd	9	SSD	t
 ssh	0	ssh	
 st	7	St	
 sta	0	Sta	
@@ -79839,6 +79663,7 @@ stapling	9	stapling
 star	9	star	
 star's	9	star's	
 starboard	9	starboard	
+starbucks	9	Starbucks	p
 starburst	0	starburst	
 starbursts	0	starbursts	
 starch	9	starch	
@@ -80058,7 +79883,7 @@ stealthiest	9	stealthiest
 stealthily	9	stealthily	
 stealthiness	0	stealthiness	
 stealthy	9	stealthy	
-steam	9	steam	
+steam	9	Steam	p
 steamboat	7	steamboat	
 steamboats	7	steamboats	
 steamed	9	steamed	
@@ -82225,7 +82050,7 @@ supremo	0	supremo
 supremo's	0	supremo's	
 supremos	0	supremos	
 sups	4	sups	
-supt	0	supt	
+supt	0	Supt	
 surcease	4	surcease	
 surceased	4	surceased	
 surceases	4	surceases	
@@ -82664,12 +82489,9 @@ swindler's	9	swindler's
 swindlers	9	swindlers	
 swindles	9	swindles	
 swindling	9	swindling	
-swine	9	swine	
-swine's	9	swine's	
 swineherd	0	swineherd	
 swineherd's	0	swineherd's	
 swineherds	0	swineherds	
-swines	9	swines	
 swing	9	swing	
 swing's	9	swing's	
 swingeing	0	swingeing	
@@ -82975,7 +82797,7 @@ systems	9	systems
 systole	0	systole	
 systoles	0	systoles	
 systolic	0	systolic	
-t	7	t	
+t	7	T	
 ta	0	ta	
 tab	9	tab	
 tab's	9	tab's	
@@ -83350,7 +83172,7 @@ tankini	0	tankini
 tanks	9	tanks	
 tanned	9	tanned	
 tanner	9	tanner	
-tanner's	4	tanner's	
+tanner's	4	Tanner's	
 tanneries	4	tanneries	
 tanners	4	tanners	
 tannery	4	tannery	
@@ -83716,7 +83538,7 @@ teaming	9	teaming
 teammate	9	teammate	
 teammate's	9	teammate's	
 teammates	9	teammates	
-teams	9	teams	
+teams	9	Teams	p
 teamster	9	teamster	
 teamster's	9	teamster's	
 teamsters	9	teamsters	
@@ -83883,7 +83705,7 @@ teleconferenced	4	teleconferenced
 teleconferences	4	teleconferences	
 teleconferencing	4	teleconferencing	
 telegenic	0	telegenic	
-telegram	9	telegram	
+telegram	9	Telegram	p
 telegrams	9	telegrams	
 telegraph	9	telegraph	
 telegraphed	9	telegraphed	
@@ -84320,7 +84142,7 @@ terrorized	9	terrorized
 terrorizes	9	terrorizes	
 terrorizing	9	terrorizing	
 terrors	9	terrors	
-terry	4	terry	
+terry	4	Terry	
 terry's	4	Terry's	
 terrycloth	0	terrycloth	
 terse	9	terse	
@@ -84329,6 +84151,7 @@ terseness	9	terseness
 terser	9	terser	
 tersest	9	tersest	
 tertiary	4	tertiary	
+tesla	9	Tesla	p
 tessa	4	Tessa	
 tessa's	4	Tessa's	
 tessellate	0	tessellate	
@@ -85098,7 +84921,7 @@ tigress	4	tigress
 tigress's	4	tigress's	
 tigresses	4	tigresses	
 tikka	0	tikka	
-tiktok	0	TikTok	
+tiktok	9	TikTok	p
 tiktok's	0	TikTok's	
 tiktoked	0	TikToked	
 tiktoker	0	TikToker	
@@ -85383,7 +85206,6 @@ titmice	4	titmice
 titmice's	4	titmice's	
 titmouse	4	titmouse	
 titmouse's	4	titmouse's	
-tits	9	tits	
 titter	9	titter	
 tittered	9	tittered	
 tittering	9	tittering	
@@ -85559,8 +85381,8 @@ tolls	9	tolls
 tollway	0	tollway	
 tollways	0	tollways	
 toluene	0	toluene	
-tom	4	tom	
-tom's	4	tom's	
+tom	4	Tom	
+tom's	4	Tom's	
 tomahawk	9	tomahawk	
 tomahawked	9	tomahawked	
 tomahawking	9	tomahawking	
@@ -85660,7 +85482,7 @@ tonsure	4	tonsure
 tonsured	4	tonsured	
 tonsures	4	tonsures	
 tonsuring	4	tonsuring	
-tony	4	tony	
+tony	4	Tony	
 tony's	4	Tony's	
 tonya	4	Tonya	
 tonya's	4	Tonya's	
@@ -87088,7 +86910,7 @@ troweling	9	troweling
 trowels	9	trowels	
 trowing	0	trowing	
 trows	0	trows	
-troy	4	troy	
+troy	4	Troy	
 troy's	4	Troy's	
 truancy	9	truancy	
 truant	9	truant	
@@ -87651,7 +87473,7 @@ twitching	9	twitching
 twitchy	0	twitchy	
 twits	7	twits	
 twitted	7	twitted	
-twitter	9	twitter	
+twitter	9	Twitter	p
 twittered	9	twittered	
 twittering	9	twittering	
 twitters	9	twitters	
@@ -87667,7 +87489,7 @@ twopenny	0	twopenny
 twosome	4	twosome	
 twosome's	4	twosome's	
 twosomes	4	twosomes	
-twp	0	twp	
+twp	0	Twp	
 ty	4	Ty	
 ty's	4	Ty's	
 tycoon	9	tycoon	
@@ -87695,7 +87517,7 @@ typed	9	typed
 typeface	9	typeface	
 typefaces	7	typefaces	
 types	9	types	
-typescript	9	typescript	
+typescript	9	TypeScript	t
 typescripts	4	typescripts	
 typeset	9	typeset	
 typesets	4	typesets	
@@ -87775,6 +87597,7 @@ u	7	u
 ubiquitous	9	ubiquitous	
 ubiquitously	4	ubiquitously	
 ubiquity	7	ubiquity	
+ubuntu	9	Ubuntu	p
 udder	9	udder	
 udder's	9	udder's	
 udders	9	udders	
@@ -90039,7 +89862,7 @@ usability's	4	usability's
 usable	9	usable	
 usage	9	usage	
 usages	9	usages	
-usb	4	USB	
+usb	9	USB	t
 usd	0	USD	
 use	9	use	
 used	9	used	
@@ -90122,6 +89945,7 @@ uvula	4	uvula
 uvular	4	uvular	
 uvulars	4	uvulars	
 uvulas	4	uvulas	
+ux	9	UX	t
 uxorious	0	uxorious	
 uzbek	4	Uzbek	
 uzbek's	4	Uzbek's	
@@ -91520,6 +91344,7 @@ voyeurs	7	voyeurs
 vpn	9	VPN	t
 vroom	0	vroom	
 vs	7	vs	
+vue	9	Vue	t
 vulcanization	4	vulcanization	
 vulcanization's	4	vulcanization's	
 vulcanize	4	vulcanize	
@@ -91706,7 +91531,7 @@ wakening	9	wakening
 wakens	9	wakens	
 wakes	9	wakes	
 waking	9	waking	
-waldo	4	waldo	
+waldo	4	Waldo	
 waldo's	4	Waldo's	
 waldoes	4	waldoes	
 waldorf	4	Waldorf	
@@ -91714,7 +91539,7 @@ waldorf's	4	Waldorf's
 waldos	4	waldos	
 wale	4	wale	
 waled	4	waled	
-wales	4	wales	
+wales	4	Wales	
 wales's	4	Wales's	
 waling	4	waling	
 walk	9	walk	
@@ -91796,7 +91621,7 @@ waltzers	0	waltzers
 waltzes	9	waltzes	
 waltzing	9	waltzing	
 wampum	4	wampum	
-wan	9	wan	
+wan	9	WAN	t
 wand	9	wand	
 wand's	9	wand's	
 wanda	4	Wanda	
@@ -92529,7 +92354,7 @@ wells	9	wells
 wellspring	4	wellspring	
 wellsprings	4	wellsprings	
 welly	0	welly	
-welsh	7	welsh	
+welsh	7	Welsh	
 welsh's	7	Welsh's	
 welshed	7	welshed	
 welsher	0	welsher	
@@ -92586,9 +92411,9 @@ westerlies	9	westerlies
 westerly	9	westerly	
 western	9	western	
 western's	7	Western's	
-westerner	7	westerner	
+westerner	7	Westerner	
 westerner's	7	westerner's	
-westerners	7	westerners	
+westerners	7	Westerners	
 westernization	0	westernization	
 westernization's	0	westernization's	
 westernize	7	westernize	
@@ -92604,9 +92429,6 @@ weston's	4	Weston's
 westward	9	westward	
 westwards	7	westwards	
 wet	9	wet	
-wetback	7	wetback	
-wetback's	7	wetback's	
-wetbacks	7	wetbacks	
 wetland	4	wetland	
 wetland's	4	wetland's	
 wetlands	4	wetlands	
@@ -92654,6 +92476,7 @@ whatchamacallit	7	whatchamacallit
 whatchamacallits	7	whatchamacallits	
 whatever	9	whatever	
 whatnot	4	whatnot	
+whatsapp	9	WhatsApp	p
 whatshername	0	whatshername	
 whatshisname	0	whatshisname	
 whatsit	0	whatsit	
@@ -92995,12 +92818,9 @@ whopper	9	whopper
 whoppers	9	whoppers	
 whopping	4	whopping	
 whops	0	whops	
-whore	9	whore	
-whore's	9	whore's	
 whorehouse	4	whorehouse	
 whorehouses	4	whorehouses	
 whoreish	0	whoreish	
-whores	9	whores	
 whoring	0	whoring	
 whorish	0	whorish	
 whorl	4	whorl	
@@ -93073,7 +92893,7 @@ wife	9	wife
 wife's	9	wife's	
 wifeless	0	wifeless	
 wifely	4	wifely	
-wifi	4	WiFi	
+wifi	9	WiFi	t
 wig	9	wig	
 wigeon	4	wigeon	
 wigeon's	4	wigeon's	
@@ -93103,6 +92923,7 @@ wigwam	9	wigwam
 wigwams	9	wigwams	
 wiki	4	wiki	
 wiki's	4	wiki's	
+wikipedia	9	Wikipedia	p
 wikis	4	wikis	
 wilbert	4	Wilbert	
 wilbert's	4	Wilbert's	
@@ -93278,7 +93099,7 @@ windowless	0	windowless
 windowpane	9	windowpane	
 windowpane's	9	windowpane's	
 windowpanes	9	windowpanes	
-windows	9	windows	
+windows	9	Windows	p
 windowsill	7	windowsill	
 windowsills	7	windowsills	
 windpipe	9	windpipe	
@@ -93769,12 +93590,9 @@ wooziest	7	wooziest
 woozily	0	woozily	
 wooziness	4	wooziness	
 woozy	7	woozy	
-wop	0	wop	
-wop's	0	wop's	
-wops	0	wops	
 worcester	4	Worcester	
 worcester's	4	Worcester's	
-word	9	word	
+word	9	Word	p
 word's	9	word's	
 wordage	0	wordage	
 wordbook	0	wordbook	
@@ -94143,6 +93961,7 @@ x	9	x
 x's	7	x's	
 xavier	4	Xavier	
 xavier's	4	Xavier's	
+xbox	9	Xbox	p
 xci	9	xci	
 xcii	9	xcii	
 xciv	9	xciv	
@@ -94695,7 +94514,7 @@ zoologist's	9	zoologist's
 zoologists	9	zoologists	
 zoology	9	zoology	
 zoology's	9	zoology's	
-zoom	9	zoom	
+zoom	9	Zoom	p
 zoomed	9	zoomed	
 zooming	9	zooming	
 zooms	9	zooms	

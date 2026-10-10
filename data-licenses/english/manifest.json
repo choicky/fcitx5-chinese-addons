@@ -6,14 +6,15 @@
     "tag": "rel-2026.02.25",
     "commit": "7e99edab8e32f9f9ea2b15f249ca8d4d67237410",
     "license": "SCOWL permissive custom license (see Copyright file; explicitly covers word lists created from SCOWL)",
-    "selection": "American spellings, variant level <= 1, deaccented, sizes 35/40/50/60, excluding SCOWL pos-classes upper/abbr/trademark/number/ordinal/name/surname"
+    "selection": "American spellings, variant level <= 1, deaccented, sizes 35/40/50/60, excluding SCOWL pos-classes upper/abbr/trademark/number/ordinal/name/surname and usage notes offensive-1/2,vulgar-1/2/3"
   },
   "tiering": "tier = 9 - round(9*(size-35)/25) on first-appearance size; curated proper/technical entries ship at tier 9",
   "frequency_source": "none — hermitdave/FrequencyWords content is CC-BY-SA-4.0 and was rejected for relicensing reasons (AUDIT.md §4/§5)",
   "curated": ["data-licenses/english/proper.allow", "data-licenses/english/technical.allow"],
-  "sha256": "defcefe35b4ab00a9f262fd3f0e8bfa62a3aee66a2b26cb3711f5e7de9ec6daf",
-  "bytes": 2090049,
-  "entries": 94713,
+  "offensive_filter": "data-licenses/english/profanity-severe.allow (MIT; canonical severe entries)",
+  "sha256": "ed36694fde1d1420d38d984882cd88951746e647d60b1c5e951298807f59722b",
+  "bytes": 2086811,
+  "entries": 94530,
   "prepared_by": "tools/prepare_english_lexicon.sh",
-  "prepared": "2026-10-06T02:40:23Z"
+  "prepared": "2026-10-08T07:46:49Z"
 }

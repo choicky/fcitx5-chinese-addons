@@ -21,10 +21,15 @@
 #     into this LGPL project's derived TSV. See AUDIT.md §4/§5.
 #   * Curated proper / technical surface forms live in this repository
 #     (data-licenses/english/proper.allow, technical.allow) and ship with
-#     tier 9 and flags p / t. A curated entry whose folded key collides
-#     with a common SCOWL word is skipped (see merge step below).
+#     tier 9 and flags p / t. Their canonical surface replaces the folded
+#     SCOWL display on collision; the runtime emits the lowercase literal
+#     beside it when appropriate.
 #   * Runtime format: TSV as documented in english_lexicon.h.
 #   * No external download at addon runtime, no OTA lexicon update.
+#   * SCOWL usage-note classes offensive-1/2 and vulgar-1/2/3 are excluded
+#     structurally at extraction time. SCOWL does not mark every offensive
+#     homograph (including faggot/fagot), so the pinned MIT-licensed severe
+#     list is also applied by key, not as an eval-word hand list.
 #
 # Usage:
 #   tools/prepare_english_lexicon.sh <work-dir>
@@ -57,7 +62,7 @@ SCOWL_SIZES=(35 40 50 60)
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 ALLOW_DIR="$REPO_ROOT/data-licenses/english"
 
-for f in proper.allow technical.allow; do
+for f in proper.allow technical.allow profanity-severe.allow; do
   [[ -r "$ALLOW_DIR/$f" ]] || { echo "ERROR: missing $ALLOW_DIR/$f" >&2; exit 4; }
 done
 
@@ -87,9 +92,11 @@ fi
 # regular lower-case word classes. Curated brands/acronyms ship via the
 # allow-lists instead.
 POS_CLASSES_TO_EXCLUDE="upper,upper?,abbr,abbr?,trademark,number,ordinal,name,name?,surname"
+USAGE_NOTES_TO_EXCLUDE="offensive-1,offensive-2,vulgar-1,vulgar-2,vulgar-3"
 for s in "${SCOWL_SIZES[@]}"; do
   (cd "$SCOWL_DIR" && ./scowl --db scowl.db word-list "$s" A 1 --deaccent \
-      --wo-pos-classes "$POS_CLASSES_TO_EXCLUDE") \
+      --wo-pos-classes "$POS_CLASSES_TO_EXCLUDE" \
+      --wo-usage-notes "$USAGE_NOTES_TO_EXCLUDE") \
       2>/dev/null | sort -u > "$WORK/list_$s.txt"
 done
 
@@ -125,26 +132,39 @@ for name, flag in (("proper.allow", "p"), ("technical.allow", "t")):
             if not w or not key_re.match(w):
                 continue
             k = w.lower()
-            distinctive = (w == w.upper()) or any(c.isupper() for c in w[1:])
-            # A plain-initial-capital curated form ("Apple") must not
-            # override the common SCOWL word: typing lowercase "apple"
-            # stays "apple"; the casing the user typed is preserved by
-            # the English Core case-preservation arc rule instead.
-            # Curated forms with internal or full uppercase (iPhone,
-            # macOS, PDF) always override — their lowercase spelling in
-            # SCOWL is a spell-check entry, not a display preference.
-            if k in best and best[k][2] == "" and not distinctive:
-                print(f"skip curated {w}: folds to existing SCOWL key {k}",
-                      file=sys.stderr)
-                continue
             # Curated entries ship at tier 9 with their canonical display.
+            # This applies uniformly to title case, internal capitals, and
+            # all-uppercase forms; the English oracle supplies the lowercase
+            # literal as a parallel arc, so canonical data never removes it.
             best[k] = (9, w, flag)
+
+# SCOWL usage notes are authoritative where present, but its catalog leaves
+# some offensive homographs unmarked. Apply the pinned, MIT-licensed severe
+# list after curated entries so no later allow-list collision can reintroduce
+# an excluded key.
+with open(os.path.join(allow_dir, "profanity-severe.allow"), encoding="utf-8") as fh:
+    offensive = {
+        line.split("#", 1)[0].strip().lower()
+        for line in fh
+        if line.split("#", 1)[0].strip()
+    }
+for k in list(best):
+    if k in offensive or any(
+        k in ({base + "s", base + "'s", base + "ed", base + "ing"} |
+              ({base + base[-1] + "ed", base + base[-1] + "ing"}
+               if base[-1].isalpha() and base[-1] not in "aeiou"
+               else set()))
+        for base in offensive
+    ):
+        best.pop(k, None)
 
 with open(out, "w", encoding="utf-8") as fh:
     fh.write("# english_lexicon.tsv — production English system lexicon\n")
     fh.write("# source: SCOWL v2 (github.com/en-wl/wordlist) tag rel-2026.02.25,\n")
     fh.write("#         American spellings, variant level <= 1, deaccented,\n")
     fh.write("#         sizes 35/40/50/60, SCOWL upper/abbr/name classes excluded,\n")
+    fh.write("#         SCOWL usage notes offensive-1/2 and vulgar-1/2/3 excluded,\n")
+    fh.write("#         plus pinned MIT severe profanity list excluded.\n")
     fh.write("#         first-size tiers 35->9 40->7 50->4 60->0\n")
     fh.write("# plus curated proper/technical allow-list entries (tier 9;\n")
     fh.write("#         folded keys colliding with SCOWL words are skipped).\n")
@@ -170,11 +190,12 @@ cat > "$MANIFEST" <<JSON
     "tag": "${UPSTREAM_SCOWL_TAG}",
     "commit": "${ACTUAL_COMMIT}",
     "license": "SCOWL permissive custom license (see Copyright file; explicitly covers word lists created from SCOWL)",
-    "selection": "American spellings, variant level <= 1, deaccented, sizes 35/40/50/60, excluding SCOWL pos-classes upper/abbr/trademark/number/ordinal/name/surname"
+    "selection": "American spellings, variant level <= 1, deaccented, sizes 35/40/50/60, excluding SCOWL pos-classes upper/abbr/trademark/number/ordinal/name/surname and usage notes offensive-1/2,vulgar-1/2/3"
   },
   "tiering": "tier = 9 - round(9*(size-35)/25) on first-appearance size; curated proper/technical entries ship at tier 9",
   "frequency_source": "none — hermitdave/FrequencyWords content is CC-BY-SA-4.0 and was rejected for relicensing reasons (AUDIT.md §4/§5)",
-  "curated": ["data-licenses/english/proper.allow", "data-licenses/english/technical.allow"],
+    "curated": ["data-licenses/english/proper.allow", "data-licenses/english/technical.allow"],
+    "offensive_filter": "data-licenses/english/profanity-severe.allow (MIT; canonical severe entries)",
   "sha256": "${SHA}",
   "bytes": ${SIZE},
   "entries": ${COUNT},
@@ -196,7 +217,9 @@ ${LICENSE}
 The shipped TSV contains only lower-case lookup keys, a coarse SCOWL
 size-derived tier integer, the SCOWL surface spelling, and repository-
 curated proper/technical allow-list entries (LGPL-2.1-or-later, (C) 2026
-Fcitx5 Fusion contributors). No frequency-rank corpus content is included.
+Fcitx5 Fusion contributors). SCOWL offensive-1/2 and vulgar-1/2/3 usage-note
+entries and the pinned MIT severe profanity list are excluded structurally.
+No frequency-rank corpus content is included.
 
 SHA-256: ${SHA}
 Bytes:   ${SIZE}

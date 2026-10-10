@@ -10,8 +10,10 @@ Copyright 2000-2026 by Kevin Atkinson Permission to use, copy, modify, distribut
 The shipped TSV contains only lower-case lookup keys, a coarse SCOWL
 size-derived tier integer, the SCOWL surface spelling, and repository-
 curated proper/technical allow-list entries (LGPL-2.1-or-later, (C) 2026
-Fcitx5 Fusion contributors). No frequency-rank corpus content is included.
+Fcitx5 Fusion contributors). SCOWL offensive-1/2 and vulgar-1/2/3 usage-note
+entries and the pinned MIT severe profanity list are excluded structurally.
+No frequency-rank corpus content is included.
 
-SHA-256: defcefe35b4ab00a9f262fd3f0e8bfa62a3aee66a2b26cb3711f5e7de9ec6daf
-Bytes:   2090049
-Entries: 94713
+SHA-256: ed36694fde1d1420d38d984882cd88951746e647d60b1c5e951298807f59722b
+Bytes:   2086811
+Entries: 94530
