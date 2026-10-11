@@ -3465,6 +3465,102 @@ void testMixedShortLatinExperiment(Instance *instance) {
     });
 }
 
+// C1 FINAL CAUSAL DIAGNOSIS (EXPERIMENTAL — DIAGNOSTIC ONLY, NOT ACCEPTED
+// PRODUCT BEHAVIOR). Recorder vehicle for the B0/D/A/AD differential.
+// Gated on FCITX_MIXED_SHORT_LATIN_CELL (unset -> SKIP, no-op by default).
+// The decision oracle is EXACT whole-candidate identity only: rank is the
+// first index whose complete candidate string equals the intended target.
+// Substring matching is deliberately not used here. This function records
+// Top-5 exact candidates and exact target ranks per case; verdicts come
+// from the cross-cell matrix, not from assertions here.
+void testMixedShortLatinDifferential(Instance *instance) {
+    const char *cellEnv = std::getenv("FCITX_MIXED_SHORT_LATIN_CELL");
+    if (cellEnv == nullptr || *cellEnv == '\0') {
+        std::fprintf(stderr,
+                     "[diff] SKIP (FCITX_MIXED_SHORT_LATIN_CELL unset)\n");
+        return;
+    }
+    const std::string cell = cellEnv;
+    FCITX_ASSERT(cell == "b0" || cell == "d" || cell == "a" || cell == "ad")
+        << "unknown FCITX_MIXED_SHORT_LATIN_CELL value: " << cell;
+    instance->eventDispatcher().schedule([instance, cell]() {
+        auto *tf = instance->addonManager().addon("testfrontend");
+        auto uuid = tf->call<ITestFrontend::createInputContext>("testdiff");
+        auto *ic = instance->inputContextManager().findByUUID(uuid);
+        FCITX_ASSERT(ic);
+
+        auto type = [&](const char *im, std::string_view raw) {
+            instance->setCurrentInputMethod(ic, im, true);
+            ic->reset();
+            for (const char p : raw) {
+                tf->call<ITestFrontend::keyEvent>(uuid,
+                                                  Key(std::string(1, p)),
+                                                  false);
+            }
+        };
+        auto allTexts = [&ic]() {
+            std::vector<std::string> out;
+            auto list = ic->inputPanel().candidateList();
+            if (!list || list->empty()) {
+                return out;
+            }
+            if (auto *bulk = list->toBulk()) {
+                for (int i = 0; i < bulk->totalSize(); ++i) {
+                    out.push_back(bulk->candidateFromAll(i).text().toString());
+                }
+                return out;
+            }
+            for (int i = 0; i < list->size(); ++i) {
+                out.push_back(list->candidate(i).text().toString());
+            }
+            return out;
+        };
+        auto join = [](const std::vector<std::string> &v, size_t limit) {
+            std::string s;
+            for (size_t i = 0; i < v.size() && i < limit; ++i) {
+                if (i) {
+                    s += '|';
+                }
+                s += v[i];
+            }
+            return s;
+        };
+        auto exactRank = [](const std::vector<std::string> &v,
+                            const char *text) {
+            for (size_t i = 0; i < v.size(); ++i) {
+                if (v[i] == text) {
+                    return static_cast<int>(i);
+                }
+            }
+            return -1;
+        };
+
+        struct DiffCase {
+            const char *mode;
+            const char *raw;
+            const char *target;
+        };
+        const DiffCase cases[] = {
+            {"shuangpin", "AImoxy", "AI模型"},
+            {"pinyin", "UIsheji", "UI设计"},
+            {"pinyin", "AImoxing", "AI模型"},
+            {"pinyin", "zuoUIsheji", "做UI设计"},
+        };
+        for (const auto &c : cases) {
+            type(c.mode, c.raw);
+            const auto v = allTexts();
+            const int rank = exactRank(v, c.target);
+            std::fprintf(stderr,
+                         "[diff] cell=%s mode=%s raw=%s target=%s "
+                         "exactRank=%d total=%zu top1=%s top5=%s\n",
+                         cell.c_str(), c.mode, c.raw, c.target, rank, v.size(),
+                         join(v, 1).c_str(), join(v, 5).c_str());
+            ic->reset();
+        }
+        std::fprintf(stderr, "[diff] cell=%s done\n", cell.c_str());
+    });
+}
+
 } // namespace
 
 int main() {
@@ -3487,6 +3583,9 @@ int main() {
     // positive-case evidence are recorded even if a later uppercase-sensitive
     // test diverges under an experimental arm env. SKIPs (no-op) by default.
     testMixedShortLatinExperiment(&instance);
+    // C1 differential vehicle: SKIPs (no-op) unless
+    // FCITX_MIXED_SHORT_LATIN_CELL is set; exact-candidate recorder only.
+    testMixedShortLatinDifferential(&instance);
     testBasic(&instance);
     testSelectByChar(&instance);
     testUppercase(&instance);

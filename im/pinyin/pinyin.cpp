@@ -366,6 +366,120 @@ matchCloudPinyin(const libime::PinyinContext &context,
         .fullPinyin = stringutils::join(pinyinsIter, pinyinsEnd, "\'")};
 }
 
+// C1 FINAL CAUSAL DIAGNOSIS (EXPERIMENTAL — NOT ACCEPTED PRODUCT BEHAVIOR):
+// read-only name/tag helpers and OFF-by-default stderr prints for the
+// provenance trace at the real placement decision points in updateUI
+// (FCITX_MIXED_PROVENANCE_TRACE=1). They observe the existing product path;
+// they do not change scores, slots, order, or any behavior.
+const char *segmentSourceName(pinyin::SegmentSource s) {
+    switch (s) {
+    case pinyin::SegmentSource::Chinese:
+        return "Chinese";
+    case pinyin::SegmentSource::English:
+        return "English";
+    }
+    return "Unknown";
+}
+
+const char *candidateProvenanceName(pinyin::CandidateProvenance p) {
+    switch (p) {
+    case pinyin::CandidateProvenance::Unknown:
+        return "Unknown";
+    case pinyin::CandidateProvenance::Exact:
+        return "Exact";
+    case pinyin::CandidateProvenance::Canonical:
+        return "Canonical";
+    case pinyin::CandidateProvenance::Completion:
+        return "Completion";
+    case pinyin::CandidateProvenance::Correction:
+        return "Correction";
+    case pinyin::CandidateProvenance::CustomPhrase:
+        return "CustomPhrase";
+    }
+    return "Unknown";
+}
+
+void traceMixedPlacement(const std::string &raw,
+                         const pinyin::UnifiedCandidate &cand,
+                         bool strongChinese, bool lead, const char *leadReason,
+                         std::size_t leadSeg, bool row1, bool classLead,
+                         std::size_t slot) {
+    if (!pinyin::shortLatinExperiment().provenanceTrace) {
+        return;
+    }
+    std::string segs;
+    for (const auto &s : cand.segments) {
+        char head[96];
+        std::snprintf(head, sizeof(head), "%zu-%zu|", s.rawBegin, s.rawEnd);
+        segs += head;
+        segs += raw.substr(s.rawBegin, s.rawEnd - s.rawBegin);
+        segs += "|";
+        segs += s.output;
+        segs += "|";
+        segs += segmentSourceName(s.source);
+        segs += "|";
+        segs += candidateProvenanceName(s.provenance);
+        std::snprintf(head, sizeof(head), "|lr%d|c%.3f;", s.sourceLocalRank,
+                      static_cast<double>(s.confidence));
+        segs += head;
+    }
+    std::string align;
+    for (const auto &a : cand.alignment) {
+        char head[96];
+        std::snprintf(head, sizeof(head), "%zu-%zu->%zu-%zu;", a.rawBegin,
+                      a.rawEnd, a.outputBegin, a.outputEnd);
+        align += head;
+    }
+    std::fprintf(stderr,
+                 "[prov] raw=%s origin=Mixed text=%s segCost=%.4f arcs=%zu "
+                 "strongChinese=%d lead=%d lead_reason=%s lead_seg=%zu "
+                 "row1=%d classLead=%d slot=%zu segs=%s align=%s\n",
+                 raw.c_str(), cand.composedText.c_str(),
+                 cand.segmentationCost, cand.arcCount,
+                 static_cast<int>(strongChinese), static_cast<int>(lead),
+                 leadReason, leadSeg, static_cast<int>(row1),
+                 static_cast<int>(classLead), slot, segs.c_str(),
+                 align.c_str());
+}
+
+void traceClassicalPlacement(const std::string &raw, std::size_t idx,
+                             const std::string &text, double score,
+                             std::size_t orderFirst, std::size_t orderSecond,
+                             std::size_t selectLength, bool matchedCustom,
+                             bool skipped) {
+    if (!pinyin::shortLatinExperiment().provenanceTrace) {
+        return;
+    }
+    std::fprintf(stderr,
+                 "[prov] raw=%s origin=Classical idx=%zu text=%s score=%.4f "
+                 "order=%zu/%zu selectLen=%zu matchedCustom=%d skipped=%d\n",
+                 raw.c_str(), idx, text.c_str(), score, orderFirst,
+                 orderSecond, selectLength, static_cast<int>(matchedCustom),
+                 static_cast<int>(skipped));
+}
+
+void traceFinalOrder(const std::string &raw,
+                     const std::vector<std::unique_ptr<
+                         PinyinAbstractCandidateWord>> &candidates) {
+    if (!pinyin::shortLatinExperiment().provenanceTrace) {
+        return;
+    }
+    for (std::size_t i = 0; i < candidates.size(); ++i) {
+        const auto *c = candidates[i].get();
+        const char *origin = "Other";
+        if (dynamic_cast<const MixedCandidateWord *>(c)) {
+            origin = "Mixed";
+        } else if (dynamic_cast<const CustomPhraseCandidateWord *>(c)) {
+            origin = "CustomPhrase";
+        } else if (dynamic_cast<const PinyinCandidateWord *>(c)) {
+            origin = "Classical";
+        }
+        const std::string text = c->text().toString();
+        std::fprintf(stderr, "[prov] raw=%s FINAL rank=%zu origin=%s text=%s\n",
+                     raw.c_str(), i, origin, text.c_str());
+    }
+}
+
 } // namespace
 
 PinyinState::PinyinState(PinyinEngine *engine) : context_(engine->ime()) {
@@ -841,14 +955,18 @@ void PinyinEngine::updateUI(InputContext *inputContext) {
                 bool candidateEnglishLead = false;
                 const auto alignmentCount =
                     std::min(cand.alignment.size(), cand.sources.size());
-                // PoC-C1 (EXPERIMENTAL — NOT ACCEPTED PRODUCT BEHAVIOR;
-                // default OFF via mixed/experiment.h): an explicitly admitted
-                // [A-Z]{1,2} span is lead evidence exactly like a >=3-byte
-                // span, so Gate D does not re-reject on <3 bytes alone what
-                // the arm admitted at Gate A. With the switch off this rule
-                // is byte-identical to the accepted baseline.
-                const bool shortLatinArm =
-                    pinyin::shortLatinExperiment().caseGatedShortAdmission;
+                // PoC-C1 differential (EXPERIMENTAL — NOT ACCEPTED PRODUCT
+                // BEHAVIOR; default OFF via mixed/experiment.h): the
+                // short-uppercase lead extension is driven by leadEnabled()
+                // alone (FCITX_MIXED_SHORT_LATIN_CELL=d|ad or legacy ARM=a/b),
+                // independent of the Gate A admission mechanism, and the
+                // exact rule that fired is recorded here at the real
+                // decision point. With the switches off this rule is
+                // byte-identical to the accepted baseline.
+                const bool shortLatinLead =
+                    pinyin::shortLatinExperiment().leadEnabled();
+                const char *leadReason = "none";
+                std::size_t leadSegIndex = 0;
                 for (std::size_t i = 0; i < alignmentCount; ++i) {
                     if (cand.sources[i] != pinyin::SegmentSource::English ||
                         cand.alignment[i].rawEnd <
@@ -857,12 +975,19 @@ void PinyinEngine::updateUI(InputContext *inputContext) {
                     }
                     const std::size_t spanLen =
                         cand.alignment[i].rawEnd - cand.alignment[i].rawBegin;
-                    if (spanLen >= 3 ||
-                        (shortLatinArm &&
-                         pinyin::isShortUppercaseSpan(
-                             pyBeforeCursor, cand.alignment[i].rawBegin,
-                             spanLen))) {
+                    if (spanLen >= 3) {
                         candidateEnglishLead = true;
+                        leadReason = "existing_english_span_ge_3";
+                        leadSegIndex = i;
+                        break;
+                    }
+                    if (shortLatinLead &&
+                        pinyin::isShortUppercaseSpan(
+                            pyBeforeCursor, cand.alignment[i].rawBegin,
+                            spanLen)) {
+                        candidateEnglishLead = true;
+                        leadReason = "experimental_short_uppercase";
+                        leadSegIndex = i;
                         break;
                     }
                 }
@@ -878,6 +1003,9 @@ void PinyinEngine::updateUI(InputContext *inputContext) {
                 } else if (classLead) {
                     slot = insertionPosition++;
                 }
+                traceMixedPlacement(pyBeforeCursor, cand, strongChinese,
+                                    candidateEnglishLead, leadReason,
+                                    leadSegIndex, row1, classLead, slot);
                 auto clone = std::make_unique<pinyin::UnifiedCandidate>(cand);
                 std::string text = clone->composedText;
                 customCandidateMap.emplace(
@@ -945,16 +1073,26 @@ void PinyinEngine::updateUI(InputContext *inputContext) {
             auto iter = customCandidateMap.find(candidateString);
             CandidateOrder order{candidates.size() - customCandidateMap.size(),
                                  customCandidateMap.size()};
-            if (iter != customCandidateMap.end()) {
-                if (iter->second->selectLength() !=
-                    candidate.sentence().back()->to()->index()) {
-                    continue;
-                }
+            const bool matchedCustom = iter != customCandidateMap.end();
+            const size_t candidateSelectLength =
+                candidate.sentence().back()->to()->index();
+            const bool skippedBySelectLength =
+                matchedCustom && iter->second->selectLength() !=
+                                     candidateSelectLength;
+            if (matchedCustom && !skippedBySelectLength) {
                 order = iter->second->sortOrder();
+            }
+            traceClassicalPlacement(pyBeforeCursor, idx, candidateString,
+                                    static_cast<double>(candidate.score()),
+                                    order.first, order.second,
+                                    candidateSelectLength, matchedCustom,
+                                    skippedBySelectLength);
+            if (skippedBySelectLength) {
+                continue;
             }
             auto pinyinCandidate = std::make_unique<PinyinCandidateWord>(
                 this, inputContext, Text(std::move(candidateString)),
-                candidate.sentence().back()->to()->index(), idx, order);
+                candidateSelectLength, idx, order);
             candidateSet[pinyinCandidate->text().toString()].push_back(
                 pinyinCandidate.get());
             if (iter != customCandidateMap.end()) {
@@ -1007,6 +1145,7 @@ void PinyinEngine::updateUI(InputContext *inputContext) {
         std::ranges::inplace_merge(
             candidates, std::ranges::next(candidates.begin(), middle),
             candidateCompare);
+        traceFinalOrder(pyBeforeCursor, candidates);
 
         // Apply the candidate to candidate generation.
         for (auto &candidatePtr : candidates) {

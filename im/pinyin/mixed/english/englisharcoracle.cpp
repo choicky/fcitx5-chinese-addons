@@ -38,20 +38,23 @@ std::vector<SegmentationArc> EnglishArcOracle::arcsAt(std::string_view raw,
     // Spans shorter than minSpanLength never participate as English evidence
     // (single-letter SCOWL "words" are pinyin-initial noise; see header).
     // PoC-C1 (EXPERIMENTAL — NOT ACCEPTED PRODUCT BEHAVIOR; default OFF via
-    // experiment.h): when the case-gated arm is enabled, contiguous
+    // experiment.h): when short-uppercase admission is enabled, contiguous
     // [A-Z]{1,2} spans run through the identical existing tier logic below
     // even though they sit under Gate A's minSpanLength. Lowercase,
     // mixed-case, digit/punctuation and longer spans keep the baseline gate
     // exactly; with the switch off this loop is byte-identical to the
-    // accepted product path.
+    // accepted product path. The C1 differential cell env drives this
+    // mechanism (Admission) independently of the Gate D lead extension; the
+    // ARM_B raw/OOV block below additionally requires uppercaseShortRawOov,
+    // which only FCITX_MIXED_SHORT_LATIN_ARM=b sets, so cells never reach
+    // Arm B sourcing.
     const auto &exp = shortLatinExperiment();
+    const bool admission = exp.admissionEnabled();
     const size_t gateAMinEnd =
         begin + std::max<std::size_t>(1, config_.minSpanLength);
-    const size_t minEnd =
-        exp.caseGatedShortAdmission ? begin + 1 : gateAMinEnd;
+    const size_t minEnd = admission ? begin + 1 : gateAMinEnd;
     for (size_t e = minEnd; e <= endLimit; ++e) {
-        const bool shortUppercase =
-            exp.caseGatedShortAdmission && e < gateAMinEnd;
+        const bool shortUppercase = admission && e < gateAMinEnd;
         if (shortUppercase &&
             !isShortUppercaseSpan(raw, begin, e - begin)) {
             // Gate A stays intact for every non-[A-Z]{1,2} short span.

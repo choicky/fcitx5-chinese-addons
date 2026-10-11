@@ -31,6 +31,29 @@
 // extra switch): additionally emits ONE raw/OOV literal hypothesis per
 // admitted [A-Z]{1,2} span: the user's surface verbatim, no lexicon hit
 // required, deduplicated against an identical already-emitted arc.
+//
+// C1 FINAL CAUSAL DIAGNOSIS (EXPERIMENTAL — NOT ACCEPTED PRODUCT BEHAVIOR):
+// ARM_A couples two independent mechanisms — Admission (Gate A short-span
+// exemption in the English arc oracle) and Lead (Gate D short-uppercase lead
+// placement in the engine). The CELL variables below drive those mechanisms
+// separately so a B0/D/A/AD differential can attribute each observed change:
+//
+//   FCITX_MIXED_SHORT_LATIN_CELL = unset|"b0"  -> Admission OFF, Lead OFF
+//                                    "d"       -> Admission OFF, Lead ON
+//                                    "a"       -> Admission ON,  Lead OFF
+//                                    "ad"      -> Admission ON,  Lead ON
+//                                              (== ARM_A behavior)
+//   FCITX_MIXED_PROVENANCE_TRACE = "1"         -> OFF-by-default,
+//       behavior-neutral provenance trace of the real placement decision
+//       point (pinyin.cpp updateUI): per-candidate segment/source/provenance
+//       detail, lead reason, strongChinese/row1/classLead/slot, classical
+//       counterpart info and the final merged order, printed to stderr.
+//
+// The cell switches OR into the ARM switches (admissionEnabled() /
+// leadEnabled()); with both unset every gate is byte-identical to the
+// accepted product path. ARM_B's raw/OOV source is never reachable through
+// a cell: it additionally requires uppercaseShortRawOov, which only
+// FCITX_MIXED_SHORT_LATIN_ARM=b sets.
 
 #include <atomic>
 #include <cstdio>
@@ -43,6 +66,17 @@ struct ShortLatinExperiment {
     bool caseGatedShortAdmission = false;
     bool uppercaseShortRawOov = false;
     bool diagnostics = false;
+    // Independent differential controls (see CELL block above).
+    bool cellAdmission = false;
+    bool cellLead = false;
+    bool provenanceTrace = false;
+
+    // Gate A: short-uppercase admission into the existing English source.
+    bool admissionEnabled() const {
+        return caseGatedShortAdmission || cellAdmission;
+    }
+    // Gate D: short-uppercase span counts as lead evidence.
+    bool leadEnabled() const { return caseGatedShortAdmission || cellLead; }
 };
 
 inline const ShortLatinExperiment &shortLatinExperiment() {
@@ -57,8 +91,22 @@ inline const ShortLatinExperiment &shortLatinExperiment() {
             out.caseGatedShortAdmission = true;
             out.uppercaseShortRawOov = true;
         }
+        const char *cell = std::getenv("FCITX_MIXED_SHORT_LATIN_CELL");
+        const std::string_view c =
+            cell ? std::string_view(cell) : std::string_view();
+        if (c == "a") {
+            out.cellAdmission = true;
+        } else if (c == "d") {
+            out.cellLead = true;
+        } else if (c == "ad") {
+            out.cellAdmission = true;
+            out.cellLead = true;
+        }
         const char *diag = std::getenv("FCITX_MIXED_SHORT_LATIN_DIAG");
         out.diagnostics = diag != nullptr && std::string_view(diag) == "1";
+        const char *trace = std::getenv("FCITX_MIXED_PROVENANCE_TRACE");
+        out.provenanceTrace =
+            trace != nullptr && std::string_view(trace) == "1";
         return out;
     }();
     return exp;
@@ -97,8 +145,11 @@ inline void dump() {
         return;
     }
     const auto &exp = shortLatinExperiment();
+    const char *cell = exp.cellAdmission
+                           ? (exp.cellLead ? "ad" : "a")
+                           : (exp.cellLead ? "d" : "b0");
     std::fprintf(stderr,
-                 "[shortlatin-diag] arm=%s shortArcsAdmitted=%llu "
+                 "[shortlatin-diag] arm=%s cell=%s shortArcsAdmitted=%llu "
                  "englishEdges=%llu totalEdges=%llu retentionKept=%llu "
                  "retentionDropped=%llu poolInsertAttempted=%llu "
                  "poolInsertAccepted=%llu poolEvicted=%llu "
@@ -106,6 +157,7 @@ inline void dump() {
                  exp.uppercaseShortRawOov
                      ? "b"
                      : (exp.caseGatedShortAdmission ? "a" : "baseline"),
+                 cell,
                  shortArcsAdmitted.load(), englishEdges.load(),
                  totalEdges.load(), retentionKept.load(),
                  retentionDropped.load(), poolInsertAttempted.load(),
