@@ -48,6 +48,12 @@ namespace pinyin {
 // itself keeps these entries (dictionary-level `isExact`/completion APIs are
 // unaffected); only arc emission is gated. Completion fan-out remains
 // evidence-driven beyond that floor (§13).
+//
+// PoC-C1 (EXPERIMENTAL — NOT ACCEPTED PRODUCT BEHAVIOR; default OFF, see
+// mixed/experiment.h): a case-gated exemption admits contiguous [A-Z]{1,2}
+// spans through the identical tier logic below this floor, and ARM_B adds one
+// raw/OOV literal hypothesis per such span. With the switches off the floor is
+// absolute and behavior is byte-identical to the accepted product path.
 class EnglishArcOracle final : public IEnglishArcOracle {
 public:
     struct Config {

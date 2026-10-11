@@ -10,6 +10,8 @@
 #include <tuple>
 #include <utility>
 
+#include "experiment.h"
+
 namespace pinyin {
 
 SegmentComposer::SegmentComposer() = default;
@@ -120,6 +122,8 @@ CandidatePool::CandidatePool() : CandidatePool(Config{}) {}
 CandidatePool::CandidatePool(Config config) : config_(config) {}
 
 bool CandidatePool::insert(UnifiedCandidate c) {
+    // PoC-C1 diagnostics (OFF by default, behavior-neutral).
+    shortlatindiag::count(shortlatindiag::poolInsertAttempted);
     // Dedup by exact composedText.
     for (const auto &existing : items_) {
         if (existing.composedText == c.composedText) {
@@ -127,6 +131,7 @@ bool CandidatePool::insert(UnifiedCandidate c) {
         }
     }
     items_.push_back(std::move(c));
+    shortlatindiag::count(shortlatindiag::poolInsertAccepted);
     return true;
 }
 
@@ -136,6 +141,21 @@ void CandidatePool::evictToCap() {
         return;
     }
     if (items_.size() > config_.maxSize) {
+        // PoC-C1 diagnostics (OFF by default, behavior-neutral): Chinese
+        // displacement = evicted tail composition.
+        if (shortLatinExperiment().diagnostics) {
+            for (std::size_t i = config_.maxSize; i < items_.size(); ++i) {
+                const bool chineseOnly = std::all_of(
+                    items_[i].sources.begin(), items_[i].sources.end(),
+                    [](SegmentSource s) { return s == SegmentSource::Chinese; });
+                if (chineseOnly) {
+                    shortlatindiag::count(
+                        shortlatindiag::poolEvictedChineseOnly);
+                }
+            }
+        }
+        shortlatindiag::count(shortlatindiag::poolEvicted,
+                              items_.size() - config_.maxSize);
         items_.resize(config_.maxSize);
     }
 }

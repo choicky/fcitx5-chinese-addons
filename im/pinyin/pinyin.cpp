@@ -17,6 +17,7 @@
 #include "mixed/english/englishcorrectionoracle.h"
 #include "mixed/english/englishlexicon.h"
 #include "mixed/english/englishuserlexicon.h"
+#include "mixed/experiment.h"
 #include "mixed/hanwordresolver.h"
 #include "mixed/m2psearch.h"
 #include "mixed/mixedengine.h"
@@ -840,12 +841,27 @@ void PinyinEngine::updateUI(InputContext *inputContext) {
                 bool candidateEnglishLead = false;
                 const auto alignmentCount =
                     std::min(cand.alignment.size(), cand.sources.size());
+                // PoC-C1 (EXPERIMENTAL — NOT ACCEPTED PRODUCT BEHAVIOR;
+                // default OFF via mixed/experiment.h): an explicitly admitted
+                // [A-Z]{1,2} span is lead evidence exactly like a >=3-byte
+                // span, so Gate D does not re-reject on <3 bytes alone what
+                // the arm admitted at Gate A. With the switch off this rule
+                // is byte-identical to the accepted baseline.
+                const bool shortLatinArm =
+                    pinyin::shortLatinExperiment().caseGatedShortAdmission;
                 for (std::size_t i = 0; i < alignmentCount; ++i) {
-                    if (cand.sources[i] == pinyin::SegmentSource::English &&
-                        cand.alignment[i].rawEnd >=
-                            cand.alignment[i].rawBegin &&
-                        cand.alignment[i].rawEnd - cand.alignment[i].rawBegin >=
-                            3) {
+                    if (cand.sources[i] != pinyin::SegmentSource::English ||
+                        cand.alignment[i].rawEnd <
+                            cand.alignment[i].rawBegin) {
+                        continue;
+                    }
+                    const std::size_t spanLen =
+                        cand.alignment[i].rawEnd - cand.alignment[i].rawBegin;
+                    if (spanLen >= 3 ||
+                        (shortLatinArm &&
+                         pinyin::isShortUppercaseSpan(
+                             pyBeforeCursor, cand.alignment[i].rawBegin,
+                             spanLen))) {
                         candidateEnglishLead = true;
                         break;
                     }

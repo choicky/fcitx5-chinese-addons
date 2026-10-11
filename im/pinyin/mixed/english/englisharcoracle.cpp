@@ -8,6 +8,8 @@
 #include <algorithm>
 #include <cctype>
 
+#include "../experiment.h"
+
 namespace pinyin {
 
 EnglishArcOracle::EnglishArcOracle(const EnglishLexicon *lex)
@@ -35,9 +37,26 @@ std::vector<SegmentationArc> EnglishArcOracle::arcsAt(std::string_view raw,
     int localRank = 0;
     // Spans shorter than minSpanLength never participate as English evidence
     // (single-letter SCOWL "words" are pinyin-initial noise; see header).
-    const size_t minEnd =
+    // PoC-C1 (EXPERIMENTAL — NOT ACCEPTED PRODUCT BEHAVIOR; default OFF via
+    // experiment.h): when the case-gated arm is enabled, contiguous
+    // [A-Z]{1,2} spans run through the identical existing tier logic below
+    // even though they sit under Gate A's minSpanLength. Lowercase,
+    // mixed-case, digit/punctuation and longer spans keep the baseline gate
+    // exactly; with the switch off this loop is byte-identical to the
+    // accepted product path.
+    const auto &exp = shortLatinExperiment();
+    const size_t gateAMinEnd =
         begin + std::max<std::size_t>(1, config_.minSpanLength);
+    const size_t minEnd =
+        exp.caseGatedShortAdmission ? begin + 1 : gateAMinEnd;
     for (size_t e = minEnd; e <= endLimit; ++e) {
+        const bool shortUppercase =
+            exp.caseGatedShortAdmission && e < gateAMinEnd;
+        if (shortUppercase &&
+            !isShortUppercaseSpan(raw, begin, e - begin)) {
+            // Gate A stays intact for every non-[A-Z]{1,2} short span.
+            continue;
+        }
         const std::string_view span = raw.substr(begin, e - begin);
         auto folded = EnglishLexicon::foldKey(span);
         if (!folded) {
@@ -46,6 +65,7 @@ std::vector<SegmentationArc> EnglishArcOracle::arcsAt(std::string_view raw,
             // also fail. Stop scanning.
             break;
         }
+        const size_t outBefore = out.size();
         const auto *exact = lex_->lookup(*folded);
         if (exact != nullptr) {
             // Three-case surface resolution (replaces the retired ISpell
@@ -102,6 +122,33 @@ std::vector<SegmentationArc> EnglishArcOracle::arcsAt(std::string_view raw,
                 out.push_back(literal);
             }
         }
+        // ARM_B (PoC-C1, EXPERIMENTAL — default OFF): uppercase raw/OOV
+        // literal. The user's explicit case makes the typed surface itself a
+        // hypothesis; no lexicon hit is required. Dedup: skip when an
+        // already-emitted arc for this exact span carries the same output
+        // (the userTypedCase exact path always yields output == span for an
+        // [A-Z]{1,2} hit). Exact provenance keeps the user surface
+        // authoritative and leaves isBoundedInsertionClass (Canonical |
+        // CustomPhrase) untouched.
+        if (shortUppercase && exp.uppercaseShortRawOov) {
+            const bool alreadyEmitted = std::any_of(
+                out.begin() + static_cast<std::ptrdiff_t>(outBefore),
+                out.end(), [&](const SegmentationArc &a) {
+                    return a.rawEnd == e && a.resolvedOutput == span;
+                });
+            if (!alreadyEmitted) {
+                SegmentationArc oov;
+                oov.rawBegin = begin;
+                oov.rawEnd = e;
+                oov.source = SegmentSource::English;
+                oov.provenance = CandidateProvenance::Exact;
+                oov.confidence = 0.65F;
+                oov.boundaryConfidence = 1.0F;
+                oov.sourceLocalRank = localRank++;
+                oov.resolvedOutput = std::string(span);
+                out.push_back(std::move(oov));
+            }
+        }
         // Emit completion arcs at any prefix that has at least one non-literal
         // hit. No fixed minimum prefix (§13). Bounded fan-out per span.
         const auto completions =
@@ -151,6 +198,10 @@ std::vector<SegmentationArc> EnglishArcOracle::arcsAt(std::string_view raw,
                     ++emitted;
                 }
             }
+        }
+        if (shortUppercase) {
+            shortlatindiag::count(shortlatindiag::shortArcsAdmitted,
+                                  out.size() - outBefore);
         }
     }
     return out;

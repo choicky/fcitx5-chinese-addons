@@ -21,6 +21,7 @@
 #include <libime/pinyin/shuangpinprofile.h>
 
 #include "chinesearcoracle.h"
+#include "experiment.h"
 
 namespace pinyin {
 namespace {
@@ -371,6 +372,8 @@ std::vector<SegmentationPath> MixedLmStateSearch::search(
             edge.arc = arc;
             byFrom[i].push_back(static_cast<int>(edges.size()));
             edges.push_back(std::move(edge));
+            // PoC-C1 diagnostics (OFF by default, behavior-neutral).
+            shortlatindiag::count(shortlatindiag::englishEdges);
         }
     }
 
@@ -431,6 +434,10 @@ std::vector<SegmentationPath> MixedLmStateSearch::search(
             appendTable(b, n);
         }
     }
+
+    // PoC-C1 diagnostics (OFF by default, behavior-neutral): whole-graph edge
+    // count after Chinese + English + r3 suffix tables are admitted.
+    shortlatindiag::count(shortlatindiag::totalEdges, edges.size());
 
     const double runBase = MixedSegmentationSearch::arcCostOf(
         chineseRunProbe(false), config_.weakBoundaryWeight);
@@ -653,6 +660,14 @@ std::vector<SegmentationPath> MixedLmStateSearch::search(
             states[i].insert(states[i].end(),
                              std::make_move_iterator(added.begin()),
                              std::make_move_iterator(added.end()));
+            // PoC-C1 diagnostics (OFF by default, behavior-neutral):
+            // retention-window kept vs dropped for this class at this
+            // position.
+            const std::size_t retained = kept.size() + added.size();
+            shortlatindiag::count(shortlatindiag::retentionKept, retained);
+            shortlatindiag::count(shortlatindiag::retentionDropped,
+                                  cls.size() > retained ? cls.size() - retained
+                                                        : 0);
         }
 
         for (const int edgeIndex : byFrom[i]) {

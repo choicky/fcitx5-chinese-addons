@@ -11,6 +11,7 @@
 #include <cctype>
 #include <cstdint>
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
 #include <fcitx-config/rawconfig.h>
 #include <fcitx-utils/event.h>
@@ -3214,6 +3215,256 @@ void testMixedPlacementWindow(Instance *instance) {
     });
 }
 
+// PoC-C1 (EXPERIMENTAL — NOT ACCEPTED PRODUCT BEHAVIOR): measurement vehicle
+// for the case-gated short Latin admission arms. Inert unless
+// FCITX_MIXED_SHORT_LATIN_ARM is set, so the committed ctest default run
+// stays at baseline behavior (prints SKIP). When set:
+//   "baseline" — prints the frozen §9B/9C equivalence dumps and checks the
+//                §9A NO-TARGET premise (uppercase literal absent without the
+//                arm);
+//   "a" / "b"  — prints the same dumps (byte-comparable across arms), records
+//                §9A positive-case visibility and exact ranks, and re-asserts
+//                the §9D single-syllable-guard equivalent (chang/qinghai).
+// Failures are deferred (deferredTestFailures), so every evidence line prints
+// and the rest of the suite still runs.
+void testMixedShortLatinExperiment(Instance *instance) {
+    const char *armEnv = std::getenv("FCITX_MIXED_SHORT_LATIN_ARM");
+    if (armEnv == nullptr || *armEnv == '\0') {
+        std::fprintf(stderr,
+                     "[shortlatin] SKIP (FCITX_MIXED_SHORT_LATIN_ARM unset)\n");
+        return;
+    }
+    const std::string arm = armEnv;
+    FCITX_ASSERT(arm == "baseline" || arm == "a" || arm == "b")
+        << "unknown FCITX_MIXED_SHORT_LATIN_ARM value: " << arm;
+    const bool isArm = (arm == "a" || arm == "b");
+    instance->eventDispatcher().schedule([instance, arm, isArm]() {
+        auto *tf = instance->addonManager().addon("testfrontend");
+        auto uuid = tf->call<ITestFrontend::createInputContext>("testc1");
+        auto *ic = instance->inputContextManager().findByUUID(uuid);
+        FCITX_ASSERT(ic);
+        int failures = 0;
+
+        auto type = [&](const char *im, std::string_view raw) {
+            instance->setCurrentInputMethod(ic, im, true);
+            ic->reset();
+            for (const char p : raw) {
+                tf->call<ITestFrontend::keyEvent>(uuid,
+                                                  Key(std::string(1, p)),
+                                                  false);
+            }
+        };
+        auto allTexts = [&ic]() {
+            std::vector<std::string> out;
+            auto list = ic->inputPanel().candidateList();
+            if (!list || list->empty()) {
+                return out;
+            }
+            if (auto *bulk = list->toBulk()) {
+                for (int i = 0; i < bulk->totalSize(); ++i) {
+                    out.push_back(bulk->candidateFromAll(i).text().toString());
+                }
+                return out;
+            }
+            for (int i = 0; i < list->size(); ++i) {
+                out.push_back(list->candidate(i).text().toString());
+            }
+            return out;
+        };
+        auto join = [](const std::vector<std::string> &v, size_t limit) {
+            std::string s;
+            for (size_t i = 0; i < v.size() && i < limit; ++i) {
+                if (i) {
+                    s += '|';
+                }
+                s += v[i];
+            }
+            return s;
+        };
+        auto containsRank = [](const std::vector<std::string> &v,
+                               const char *needle) {
+            for (size_t i = 0; i < v.size(); ++i) {
+                if (v[i].find(needle) != std::string::npos) {
+                    return static_cast<int>(i);
+                }
+            }
+            return -1;
+        };
+        auto exactRank = [](const std::vector<std::string> &v,
+                            const char *text) {
+            for (size_t i = 0; i < v.size(); ++i) {
+                if (v[i] == text) {
+                    return static_cast<int>(i);
+                }
+            }
+            return -1;
+        };
+
+        // ---- §9B/§9C equivalence dumps (byte-comparable across arms) ----
+        auto dump = [&](const char *mode, const char *raw) {
+            type(mode, raw);
+            std::fprintf(stderr, "[equiv] arm=%s mode=%s raw=%s cands=%s\n",
+                         arm.c_str(), mode, raw, join(allTexts(), 30).c_str());
+            ic->reset();
+        };
+        // §9B lowercase DEV: product-corpus raws + guard raws + a fixed
+        // lowercase mixed set (no explicit uppercase intent anywhere).
+        for (const char *raw :
+             {"nihao", "pingan", "zhongguo", "woxiangmaiiphonepeijian",
+              "wodakaigithub", "iphone", "chatgpt", "macos", "iphon", "vpn",
+              "chang", "qinghai", "apple", "app", "he", "us", "an", "nihaoma",
+              "womenyiqichifan", "dakaigithub", "woyongmacoskaifa", "nike"}) {
+            dump("pinyin", raw);
+        }
+        // §9C Chinese-only, pinyin.
+        for (const char *raw : {"nihao", "zenmeyang", "woxiangqubeijing",
+                                "jintianqixiao", "beijingdaxue",
+                                "zhonghuaminzufugongheguo", "changanheshi"}) {
+            dump("pinyin", raw);
+        }
+        // §9C Chinese-only + lowercase mixed DEV, shuangpin (Ziranma in the
+        // test environment; every code below is verified in
+        // phase0-raw/phase0b-output.txt: gu ti mo+xy ue+ji ie+yt qi+fo).
+        for (const char *raw : {"gu", "ti", "moxy", "ueji", "ieyt", "qifo",
+                                "moxyueji", "hsiphone"}) {
+            dump("shuangpin", raw);
+        }
+
+        // ---- §9A positive cases: admission -> graph -> visible rank ----
+        struct PosCase {
+            const char *mode;
+            const char *raw;
+            const char *expect;
+            bool armBOnly;
+        };
+        const PosCase positives[] = {
+            // Pinyin, ARM_A (existing sourcing: lexicon + userTypedCase).
+            {"pinyin", "A", "A", false},
+            {"pinyin", "AI", "AI", false},
+            {"pinyin", "UI", "UI", false},
+            {"pinyin", "PR", "PR", false},
+            {"pinyin", "OK", "OK", false},
+            {"pinyin", "IF", "IF", false},
+            {"pinyin", "Agu", "A", false},
+            {"pinyin", "daA", "A", false},
+            {"pinyin", "AImoxing", "AI", false},
+            {"pinyin", "zuoUIsheji", "UI", false},
+            {"pinyin", "UIsheji", "UI", false},
+            {"pinyin", "tiPR", "PR", false},
+            {"pinyin", "IFqihuo", "IF", false},
+            // Pinyin, ARM_B only (uppercase raw/OOV literal).
+            {"pinyin", "IC", "IC", true},
+            {"pinyin", "IH", "IH", true},
+            {"pinyin", "IM", "IM", true},
+            {"pinyin", "B", "B", true},
+            {"pinyin", "C", "C", true},
+            {"pinyin", "ICheyue", "IC", true},
+            {"pinyin", "IHzhuli", "IH", true},
+            {"pinyin", "IMzoushi", "IM", true},
+            {"pinyin", "Bzhan", "B", true},
+            {"pinyin", "Cpan", "C", true},
+            {"pinyin", "Xzhou", "X", true},
+            {"pinyin", "Yzhou", "Y", true},
+            // Shuangpin (Ziranma), ARM_A.
+            {"shuangpin", "A", "A", false},
+            {"shuangpin", "AI", "AI", false},
+            {"shuangpin", "Agu", "A", false},
+            {"shuangpin", "AImoxy", "AI", false},
+            {"shuangpin", "UIueji", "UI", false},
+            {"shuangpin", "tiPR", "PR", false},
+            {"shuangpin", "IFqifo", "IF", false},
+            // Shuangpin (Ziranma), ARM_B only.
+            {"shuangpin", "IC", "IC", true},
+            {"shuangpin", "ICieyt", "IC", true},
+        };
+        for (const auto &pc : positives) {
+            type(pc.mode, pc.raw);
+            const auto v = allTexts();
+            const int rank = containsRank(v, pc.expect);
+            std::fprintf(stderr,
+                         "[pos] arm=%s mode=%s raw=%s expect=%s rank=%d "
+                         "total=%zu top1=%s top3=%s top5=%s\n",
+                         arm.c_str(), pc.mode, pc.raw, pc.expect, rank,
+                         v.size(), join(v, 1).c_str(), join(v, 3).c_str(),
+                         join(v, 5).c_str());
+            ic->reset();
+            if (arm == "baseline") {
+                // §9A NO-TARGET premise: without the arm the uppercase
+                // literal must not be source-producible.
+                if (rank >= 0) {
+                    std::fprintf(stderr,
+                                 "[notarget-violation] arm=baseline mode=%s "
+                                 "raw=%s expect=%s rank=%d\n",
+                                 pc.mode, pc.raw, pc.expect, rank);
+                    ++failures;
+                }
+            } else {
+                // ARM_A: armBOnly cases are N/A (record only, no verdict).
+                const bool applicable = !pc.armBOnly || arm == "b";
+                if (applicable && rank < 0) {
+                    std::fprintf(stderr,
+                                 "[pos-FAIL] arm=%s mode=%s raw=%s expect=%s "
+                                 "absent from the whole bulk list\n",
+                                 arm.c_str(), pc.mode, pc.raw, pc.expect);
+                    ++failures;
+                }
+            }
+        }
+
+        // ---- §9D guard equivalent under arm envs (exact current
+        // testMixedSingleSyllableGuard semantics) ----
+        if (isArm) {
+            type("pinyin", "chang");
+            {
+                const auto v = allTexts();
+                const int changIdx = exactRank(v, "Chang");
+                const bool topHan = !v.empty() && !v[0].empty() &&
+                                    (static_cast<unsigned char>(v[0][0]) &
+                                     0x80);
+                if (!topHan || changIdx < 0) {
+                    std::fprintf(stderr,
+                                 "[guard-FAIL] arm=%s raw=chang top1=%s "
+                                 "changRank=%d\n",
+                                 arm.c_str(),
+                                 v.empty() ? "" : v[0].c_str(), changIdx);
+                    ++failures;
+                }
+                ic->reset();
+            }
+            type("pinyin", "qinghai");
+            {
+                const auto v = allTexts();
+                const int q = exactRank(v, "Qinghai");
+                int h = -1;
+                for (size_t i = 0; i < v.size(); ++i) {
+                    const auto &t = v[i];
+                    const bool han =
+                        std::any_of(t.begin(), t.end(),
+                                    [](char c) { return c & 0x80; }) &&
+                        std::none_of(t.begin(), t.end(),
+                                     [](char c) { return !(c & 0x80); });
+                    if (han) {
+                        h = static_cast<int>(i);
+                        break;
+                    }
+                }
+                if (!(q >= 0 && h == 0 && q == 1)) {
+                    std::fprintf(stderr,
+                                 "[guard-FAIL] arm=%s raw=qinghai hanIdx=%d "
+                                 "qinghaiIdx=%d\n",
+                                 arm.c_str(), h, q);
+                    ++failures;
+                }
+                ic->reset();
+            }
+        }
+
+        std::fprintf(stderr, "[shortlatin] arm=%s done failures=%d\n",
+                     arm.c_str(), failures);
+        deferredTestFailures += failures;
+    });
+}
+
 } // namespace
 
 int main() {
@@ -3232,6 +3483,10 @@ int main() {
     Instance instance(FCITX_ARRAY_SIZE(argv), argv);
     instance.addonManager().registerDefaultLoader(nullptr);
     setup(&instance);
+    // PoC-C1 measurement vehicle runs first so its equivalence dumps and
+    // positive-case evidence are recorded even if a later uppercase-sensitive
+    // test diverges under an experimental arm env. SKIPs (no-op) by default.
+    testMixedShortLatinExperiment(&instance);
     testBasic(&instance);
     testSelectByChar(&instance);
     testUppercase(&instance);
