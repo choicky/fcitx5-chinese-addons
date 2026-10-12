@@ -35,9 +35,19 @@ std::vector<SegmentationArc> EnglishArcOracle::arcsAt(std::string_view raw,
     int localRank = 0;
     // Spans shorter than minSpanLength never participate as English evidence
     // (single-letter words are pinyin-initial noise; see header).
-    const size_t minEnd =
-        begin + std::max<std::size_t>(1, config_.minSpanLength);
-    for (size_t e = minEnd; e <= endLimit; ++e) {
+    //
+    // One bounded exception (fusion.7 device blocker A): a two-letter span is
+    // admitted when its dictionary surface is an all-uppercase abbreviation
+    // ("ai" -> "AI", "ui" -> "UI", "ic" -> "IC"). That surface class cannot
+    // describe a Chinese respelling of the typed bytes, so the floor — whose
+    // whole purpose is to keep short letter-runs out of the way of pinyin —
+    // does not apply to it. Only the exact dictionary hit is admitted below
+    // the floor; completions and literal siblings keep minSpanLength, and
+    // single-byte spans stay excluded.
+    const size_t floor = std::max<std::size_t>(1, config_.minSpanLength);
+    const size_t scanFloor = std::min(floor, std::size_t(2));
+    for (size_t e = begin + scanFloor; e <= endLimit; ++e) {
+        const bool belowFloor = (e - begin) < floor;
         const std::string_view span = raw.substr(begin, e - begin);
         auto folded = EnglishLexicon::foldKey(span);
         if (!folded) {
@@ -47,7 +57,8 @@ std::vector<SegmentationArc> EnglishArcOracle::arcsAt(std::string_view raw,
             break;
         }
         const auto *exact = lex_->lookup(*folded);
-        if (exact != nullptr) {
+        if (exact != nullptr &&
+            (!belowFloor || isUppercaseLatinSurface(exact->display))) {
             // Three-case surface resolution (replaces the retired ISpell
             // upper-raw path, see design §10 / SpellEnabled repoint):
             //  * span already equals the canonical display  -> Exact.
@@ -104,6 +115,13 @@ std::vector<SegmentationArc> EnglishArcOracle::arcsAt(std::string_view raw,
         }
         // Emit completion arcs at any prefix that has at least one non-literal
         // hit. No fixed minimum prefix (§13). Bounded fan-out per span.
+        // Below the span floor the admission exception covers the exact
+        // abbreviation hit only: a two-letter prefix completion ("ai" ->
+        // "aid", "air"…) is exactly the short-letter noise the floor protects
+        // against.
+        if (belowFloor) {
+            continue;
+        }
         const auto completions =
             lex_->completions(*folded, config_.maxCompletionsPerSpan);
         if (!completions.empty()) {

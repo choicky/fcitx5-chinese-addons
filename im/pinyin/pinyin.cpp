@@ -841,11 +841,31 @@ void PinyinEngine::updateUI(InputContext *inputContext) {
                 const auto alignmentCount =
                     std::min(cand.alignment.size(), cand.sources.size());
                 for (std::size_t i = 0; i < alignmentCount; ++i) {
-                    if (cand.sources[i] == pinyin::SegmentSource::English &&
-                        cand.alignment[i].rawEnd >=
-                            cand.alignment[i].rawBegin &&
-                        cand.alignment[i].rawEnd - cand.alignment[i].rawBegin >=
-                            3) {
+                    if (cand.sources[i] != pinyin::SegmentSource::English) {
+                        continue;
+                    }
+                    if (cand.alignment[i].rawEnd < cand.alignment[i].rawBegin) {
+                        continue;
+                    }
+                    if (cand.alignment[i].rawEnd - cand.alignment[i].rawBegin >=
+                        3) {
+                        candidateEnglishLead = true;
+                        break;
+                    }
+                    // A two-letter arc is lead evidence only in the
+                    // abbreviation class: a dictionary-exact all-uppercase
+                    // surface ("AI", "UI", "IC"). Below the arc oracle's span
+                    // floor that surface class is the only English evidence
+                    // admitted, and it cannot describe a Chinese respelling,
+                    // so §9(b) applies to it as it does to a longer word.
+                    const bool dictionaryHit =
+                        cand.provenances[i] ==
+                            pinyin::CandidateProvenance::Exact ||
+                        cand.provenances[i] ==
+                            pinyin::CandidateProvenance::Canonical;
+                    if (dictionaryHit && i < cand.segments.size() &&
+                        pinyin::isUppercaseLatinSurface(
+                            cand.segments[i].output)) {
                         candidateEnglishLead = true;
                         break;
                     }

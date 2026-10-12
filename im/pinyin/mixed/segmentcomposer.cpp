@@ -28,6 +28,19 @@ bool SegmentComposer::compose(const SegmentationPath &path,
     std::string acc;
     std::size_t outCursor = 0;
     std::size_t rawCursor = 0;
+    // A Latin reading that the raw does not spell out in full is a whole
+    // token read, not the start of a letter run:
+    //   * a completion arc renders letters the user has not typed yet (its
+    //     surface is longer than the raw bytes it consumes), so the shadowed
+    //     bytes are still on the raw stream and a second English arc may tile
+    //     them and print the word twice ("kuber" -> "Kubernetes" followed by
+    //     the exact word "nets" -> "Kubernetesnets…");
+    //   * a two-byte English arc exists only as an all-uppercase abbreviation
+    //     (arc oracle span floor), and continuing Latin after it re-reads
+    //     pinyin letters as English ("UI" + "she" + "及").
+    // Fusion.7 device blockers A/C: after either reading the remaining raw
+    // may only be read as Chinese.
+    bool englishTerminal = false;
     out.segments.reserve(path.arcs.size());
     out.alignment.reserve(path.arcs.size());
     out.provenances.reserve(path.arcs.size());
@@ -45,6 +58,16 @@ bool SegmentComposer::compose(const SegmentationPath &path,
             // Non-contiguous path; composition must be over a valid tiling.
             out = UnifiedCandidate{};
             return false;
+        }
+        if (arc.source == SegmentSource::English && englishTerminal) {
+            out = UnifiedCandidate{};
+            return false;
+        }
+        if (arc.source == SegmentSource::English &&
+            (arc.rawEnd - arc.rawBegin < 3 ||
+             (arc.provenance == CandidateProvenance::Completion &&
+              output.size() > arc.rawEnd - arc.rawBegin))) {
+            englishTerminal = true;
         }
         MixedSegment seg;
         seg.rawBegin = arc.rawBegin;
