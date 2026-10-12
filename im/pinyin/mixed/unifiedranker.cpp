@@ -112,8 +112,9 @@ UnifiedRanker::UnifiedRanker(Weights weights) : weights_(weights) {}
 
 bool UnifiedRanker::isBoundedInsertionClass(const UnifiedCandidate &c,
                                             std::size_t rawSize) {
-    if (c.arcCount != 1 || c.sources.size() != 1 || c.provenances.size() != 1 ||
-        c.alignment.size() != 1 || rawSize == 0) {
+    if (c.arcCount == 0 || rawSize == 0 ||
+        c.sources.size() != c.arcCount || c.provenances.size() != c.arcCount ||
+        c.alignment.size() != c.arcCount) {
         return false;
     }
     if (c.sources[0] != SegmentSource::English) {
@@ -123,7 +124,29 @@ bool UnifiedRanker::isBoundedInsertionClass(const UnifiedCandidate &c,
         c.provenances[0] != CandidateProvenance::CustomPhrase) {
         return false;
     }
-    return c.alignment[0].rawBegin == 0 && c.alignment[0].rawEnd == rawSize;
+    if (c.alignment[0].rawBegin != 0) {
+        return false;
+    }
+    if (c.arcCount == 1) {
+        return c.alignment[0].rawEnd == rawSize;
+    }
+    // fusion.7 device blocker B: the same provenance argument holds when the
+    // canonical English word is only the leading part of the raw and the rest
+    // reads as Chinese ("openaimoxing" -> [OpenAI][模型]). The class stays
+    // bounded by structure, not by a length: one leading canonical English
+    // arc, every remaining arc Chinese, and the tilings consume the raw
+    // exactly once with no gap and no overlap.
+    std::size_t cursor = c.alignment[0].rawEnd;
+    for (std::size_t i = 1; i < c.arcCount; ++i) {
+        if (c.sources[i] != SegmentSource::Chinese) {
+            return false;
+        }
+        if (c.alignment[i].rawBegin != cursor || c.alignment[i].rawEnd <= cursor) {
+            return false;
+        }
+        cursor = c.alignment[i].rawEnd;
+    }
+    return cursor == rawSize;
 }
 
 float UnifiedRanker::score(const RankFeatures &f) const {

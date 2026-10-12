@@ -367,6 +367,10 @@ void testMixedProductCorpus(Instance *instance) {
             {"macos", "macOS", false},
             {"iphon", "iPhone", false},
             {"vpn", "VPN", false},
+            {"aimoxing", "AI模型", false},
+            {"uisheji", "UI设计", false},
+            {"openaimoxing", "OpenAI模型", false},
+            {"kubernetesjiqun", "Kubernetes集群", false},
         };
 
         size_t scored = 0, top1 = 0, recall = 0;
@@ -451,6 +455,116 @@ void testMixedProductCorpus(Instance *instance) {
         FCITX_ASSERT(recall == scored)
             << "Product corpus: English needle not reachable on every "
                "English-bearing case";
+
+        // Fusion.7 device-blocker regression (physical-device closure): the
+        // four reported blocker classes and their passing controls must hold
+        // under BOTH correction layouts — the desktop default "None" and the
+        // device default "QWERTY". The blocker needles were unreachable or
+        // buried under a Chinese respelling before the fix; the controls must
+        // not regress. This drives the full production path (dictionary +
+        // language model + mixed engine + placement policy) exactly as the
+        // keyboard does.
+        {
+            struct BlockerCase {
+                const char *raw;
+                const char *needle;
+            };
+            const BlockerCase blockers[] = {
+                {"aimoxing", "AI模型"},
+                {"uisheji", "UI设计"},
+                {"openaimoxing", "OpenAI模型"},
+                {"kubernetesjiqun", "Kubernetes集群"},
+            };
+            const BlockerCase controls[] = {
+                {"githubxiangmu", "GitHub项目"},
+                {"chatgpthaoyong", "ChatGPT好用"},
+            };
+            const auto rankOf = [&](const char *raw,
+                                    const char *needle) -> int {
+                ic->reset();
+                for (const char *p = raw; *p; ++p) {
+                    testfrontend->call<ITestFrontend::keyEvent>(
+                        uuid, Key(std::string(1, *p)), false);
+                }
+                auto *list = ic->inputPanel().candidateList().get();
+                auto *bk = list ? list->toBulk() : nullptr;
+                if (!bk) {
+                    return -1;
+                }
+                for (int i = 0; i < bk->totalSize(); ++i) {
+                    if (std::string(bk->candidateFromAll(i).text().toString())
+                            .find(needle) != std::string::npos) {
+                        return i;
+                    }
+                }
+                return -1;
+            };
+            // The candidate window for one raw, so the malformed-output gate
+            // can inspect every reachable composition.
+            const auto windowOf = [&](const char *raw) -> std::vector<std::string> {
+                ic->reset();
+                for (const char *p = raw; *p; ++p) {
+                    testfrontend->call<ITestFrontend::keyEvent>(
+                        uuid, Key(std::string(1, *p)), false);
+                }
+                std::vector<std::string> out;
+                auto *list = ic->inputPanel().candidateList().get();
+                auto *bk = list ? list->toBulk() : nullptr;
+                if (bk) {
+                    for (int i = 0; i < bk->totalSize(); ++i) {
+                        out.push_back(std::string(
+                            bk->candidateFromAll(i).text().toString()));
+                    }
+                }
+                return out;
+            };
+
+            for (const char *layout : {"None", "QWERTY"}) {
+                RawConfig lcfg;
+                lcfg.setValueByPath("Fuzzy/Correction", layout);
+                pinyin->setConfig(lcfg);
+
+                for (const auto &c : blockers) {
+                    const int r = rankOf(c.raw, c.needle);
+                    std::fprintf(stderr, "FUSION7 layout=%s blocker raw=%s "
+                                         "needle=%s rank=%d\n",
+                                 layout, c.raw, c.needle, r);
+                    FCITX_ASSERT(r >= 0)
+                        << "Fusion.7 blocker " << layout << ": '" << c.needle
+                        << "' unreachable for raw=" << c.raw;
+                    FCITX_ASSERT(r <= 2)
+                        << "Fusion.7 blocker " << layout << ": '" << c.needle
+                        << "' not placed near the top for raw=" << c.raw
+                        << " (rank=" << r << ")";
+                }
+                for (const auto &c : controls) {
+                    const int r = rankOf(c.raw, c.needle);
+                    FCITX_ASSERT(r >= 0)
+                        << "Fusion.7 control " << layout << ": '" << c.needle
+                        << "' regressed for raw=" << c.raw;
+                }
+                // Blocker C / malformed-output gate: the composer terminal rule
+                // must prevent a duplicated or overlapping English surface
+                // (the device produced "Kubernetesnets集群" and "UIshe及").
+                // These exact symptom strings must not appear in any
+                // reachable composition under either layout.
+                for (const auto &t : windowOf("kubernetesjiqun")) {
+                    FCITX_ASSERT(t.find("Kubernetesnets") == std::string::npos)
+                        << "Fusion.7 blocker C " << layout
+                        << ": duplicated English surface: " << t;
+                }
+                for (const auto &t : windowOf("uisheji")) {
+                    FCITX_ASSERT(t.find("UIshe") == std::string::npos)
+                        << "Fusion.7 blocker A/C " << layout
+                        << ": English+Latin overlap surface: " << t;
+                }
+            }
+
+            RawConfig lcfg;
+            lcfg.setValueByPath("Fuzzy/Correction", "None");
+            pinyin->setConfig(lcfg);
+        }
+
         FCITX_ASSERT(pollution == 0)
             << "Product corpus: English text polluted a classical-led pure "
                "Chinese composition";
@@ -2924,10 +3038,11 @@ void testMixedR13ChineseQuality(Instance *instance) {
 }
 
 // Phase 3C placement regression: the conservative single-syllable guard must
-// remain active for chang, while a multi-syllable whole-remainder English word
-// takes the frozen Row-2 slot after the classical head. This preserves the
-// Phase 3A-1 guard without reviving the earlier assumption that a mixed
-// candidate precedes the classical head.
+// remain active for a single-syllable canonical witness (Ming), while a
+// multi-syllable whole-remainder English word (Beijing) takes the frozen
+// Row-2 slot after the classical head. This preserves the Phase 3A-1 guard
+// without reviving the earlier assumption that a mixed candidate precedes the
+// classical head.
 void testMixedSingleSyllableGuard(Instance *instance) {
     instance->eventDispatcher().schedule([instance]() {
         auto *tf = instance->addonManager().addon("testfrontend");
@@ -2972,28 +3087,32 @@ void testMixedSingleSyllableGuard(Instance *instance) {
             }
             return -1;
         };
-        // (1) Conservative invariant: "chang" is one syllable; the
-        // classical reading keeps top-1 and Chang stays in the list.
-        type("chang");
+        // (1) Conservative invariant: "ming" is one syllable; the
+        // classical reading keeps top-1 and Ming stays in the list.
+        // (Witness re-pinned for the Ice/Frost inventory: the SCOWL-era
+        // Chang/Qinghai witnesses are no longer shipped. Ming/Beijing carry
+        // the identical guard semantics using canonical displays that exist
+        // in the production lexicon.)
+        type("ming");
         {
             auto *bulk = bulkNow();
             const auto top = bulk->candidateFromAll(0).text().toString();
             FCITX_ASSERT(!top.empty() && (top[0] & 0x80))
-                << "GUARD FAIL: Chang displaced the single-syllable "
-                   "classical reading for raw=chang";
-            FCITX_ASSERT(idxOf(bulk, "Chang") >= 0)
-                << "GUARD FAIL: Chang missing for raw=chang";
+                << "GUARD FAIL: Ming displaced the single-syllable "
+                   "classical reading for raw=ming";
+            FCITX_ASSERT(idxOf(bulk, "Ming") >= 0)
+                << "GUARD FAIL: Ming missing for raw=ming";
         }
         // (2) A whole-remainder multi-syllable English word is Row 2: the
-        // classical head remains slot 0 and Qinghai is the bounded insertion
+        // classical head remains slot 0 and Beijing is the bounded insertion
         // candidate at slot 1.
-        type("qinghai");
+        type("beijing");
         {
             auto *bulk = bulkNow();
-            const int q = idxOf(bulk, "Qinghai");
+            const int q = idxOf(bulk, "Beijing");
             const int h = firstHanIdx(bulk);
             FCITX_ASSERT(q >= 0)
-                << "GUARD FAIL: Qinghai class member missing for raw=qinghai";
+                << "GUARD FAIL: Beijing class member missing for raw=beijing";
             FCITX_ASSERT(h == 0 && q == 1)
                 << "ROW2 FAIL: whole-remainder insertion placement changed "
                    "(qIdx="

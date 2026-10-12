@@ -35,6 +35,14 @@ struct EnglishLexiconEntry {
     bool literalOnly = false;
 };
 
+// An all-ASCII, all-uppercase letter surface ("AI", "UI", "IC", "OK"…).
+// This shape is structural evidence on its own: no Chinese decoder can
+// respell those bytes into that surface, so both the bounded two-letter
+// admission exception in the English arc oracle and the placement lead rule
+// key on it (architecture A §9, fusion.7 device closure). A surface with any
+// lowercase byte, any non-ASCII byte or fewer than two letters is not one.
+bool isUppercaseLatinSurface(std::string_view surface);
+
 // Self-contained English system lexicon used by Architecture A.
 //
 // Design notes (§13, §14):

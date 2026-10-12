@@ -341,6 +341,208 @@ int main() {
         check(once.composedText == twice.composedText, "rewriter: idempotent");
     }
 
+    // 11. SegmentComposer englishTerminal (fusion.7 device blockers A/C):
+    //     a shadowing English completion or a two-byte abbreviation may not be
+    //     followed by another English arc, but may still be followed by Chinese.
+    {
+        SegmentComposer composer;
+
+        // [Completion "Kubernetes" over 0..5][Exact English "nets" 5..9] was
+        // the device malformed "Kubernetesnets…": the completion prints more
+        // bytes than it consumes, so a second English arc re-tiles shadowed
+        // raw. Must be rejected.
+        {
+            SegmentationPath p;
+            SegmentationArc a;
+            a.rawBegin = 0;
+            a.rawEnd = 5;
+            a.source = SegmentSource::English;
+            a.provenance = CandidateProvenance::Completion;
+            a.resolvedOutput = "Kubernetes"; // longer than the 5 raw bytes
+            SegmentationArc b;
+            b.rawBegin = 5;
+            b.rawEnd = 9;
+            b.source = SegmentSource::English;
+            b.provenance = CandidateProvenance::Exact;
+            b.resolvedOutput = "nets";
+            p.arcs = {a, b};
+            UnifiedCandidate c;
+            check(!composer.compose(p, c),
+                  "composer: shadowing completion + second English rejected (C)");
+        }
+        // [Canonical abbreviation "UI" 0..2][English "she" 2..5] was the
+        // malformed "UIshe…": a two-byte Latin read is a whole token, not the
+        // start of a letter run. Must be rejected.
+        {
+            SegmentationPath p;
+            SegmentationArc a;
+            a.rawBegin = 0;
+            a.rawEnd = 2;
+            a.source = SegmentSource::English;
+            a.provenance = CandidateProvenance::Canonical;
+            a.resolvedOutput = "UI";
+            SegmentationArc b;
+            b.rawBegin = 2;
+            b.rawEnd = 5;
+            b.source = SegmentSource::English;
+            b.provenance = CandidateProvenance::Exact;
+            b.resolvedOutput = "she";
+            p.arcs = {a, b};
+            UnifiedCandidate c;
+            check(!composer.compose(p, c),
+                  "composer: two-byte abbreviation + English rejected (A)");
+        }
+        // Legitimate mixed result preserved: [Completion "Kubernetes" 0..5]
+        // followed by Chinese 5..11 composes to "Kubernetes集群".
+        {
+            SegmentationPath p;
+            SegmentationArc a;
+            a.rawBegin = 0;
+            a.rawEnd = 5;
+            a.source = SegmentSource::English;
+            a.provenance = CandidateProvenance::Completion;
+            a.resolvedOutput = "Kubernetes";
+            SegmentationArc b;
+            b.rawBegin = 5;
+            b.rawEnd = 11;
+            b.source = SegmentSource::Chinese;
+            b.provenance = CandidateProvenance::Exact;
+            b.resolvedOutput = "集群";
+            p.arcs = {a, b};
+            UnifiedCandidate c;
+            check(composer.compose(p, c),
+                  "composer: shadowing completion + Chinese accepted");
+            check(c.composedText == "Kubernetes集群",
+                  "composer: completion + Chinese text");
+        }
+        // Control: two non-shadowing >=3-byte exact English arcs still tile
+        // (the terminal rule must not over-block ordinary letter runs).
+        {
+            SegmentationPath p;
+            SegmentationArc a;
+            a.rawBegin = 0;
+            a.rawEnd = 5;
+            a.source = SegmentSource::English;
+            a.provenance = CandidateProvenance::Exact;
+            a.resolvedOutput = "hello";
+            SegmentationArc b;
+            b.rawBegin = 5;
+            b.rawEnd = 10;
+            b.source = SegmentSource::English;
+            b.provenance = CandidateProvenance::Exact;
+            b.resolvedOutput = "world";
+            p.arcs = {a, b};
+            UnifiedCandidate c;
+            check(composer.compose(p, c),
+                  "composer: plain exact English letter run still accepted");
+        }
+    }
+
+    // 12. UnifiedRanker::isBoundedInsertionClass (fusion.7 device blocker B):
+    //     a leading canonical English word plus a Chinese remainder that
+    //     exactly consumes the raw is now a bounded insertion; non-Chinese or
+    //     gapped remainders are not.
+    {
+        SegmentComposer composer;
+        // [Canonical "OpenAI" 0..6][Chinese "模型" 6..12], rawSize 12.
+        UnifiedCandidate leadChinese;
+        {
+            SegmentationPath p;
+            SegmentationArc a;
+            a.rawBegin = 0;
+            a.rawEnd = 6;
+            a.source = SegmentSource::English;
+            a.provenance = CandidateProvenance::Canonical;
+            a.resolvedOutput = "OpenAI";
+            SegmentationArc b;
+            b.rawBegin = 6;
+            b.rawEnd = 12;
+            b.source = SegmentSource::Chinese;
+            b.provenance = CandidateProvenance::Exact;
+            b.resolvedOutput = "模型";
+            p.arcs = {a, b};
+            check(composer.compose(p, leadChinese),
+                  "ranker-B: lead English + Chinese composes");
+        }
+        check(UnifiedRanker::isBoundedInsertionClass(leadChinese, 12),
+              "ranker-B: [canonical English][Chinese] is a bounded insertion");
+        // Single whole-raw canonical arc (pre-existing member of the class).
+        UnifiedCandidate single;
+        {
+            SegmentationPath p;
+            SegmentationArc a;
+            a.rawBegin = 0;
+            a.rawEnd = 6;
+            a.source = SegmentSource::English;
+            a.provenance = CandidateProvenance::Canonical;
+            a.resolvedOutput = "OpenAI";
+            p.arcs = {a};
+            composer.compose(p, single);
+        }
+        check(UnifiedRanker::isBoundedInsertionClass(single, 6),
+              "ranker-B: whole-raw single canonical arc stays a member");
+        // English remainder (not Chinese) is rejected by structure.
+        {
+            UnifiedCandidate bad = leadChinese;
+            bad.sources[1] = SegmentSource::English;
+            check(!UnifiedRanker::isBoundedInsertionClass(bad, 12),
+                  "ranker-B: non-Chinese remainder rejected");
+        }
+        // Gapped tiling is rejected (must consume the raw contiguously).
+        {
+            UnifiedCandidate bad = leadChinese;
+            bad.alignment[1].rawBegin = 7;
+            check(!UnifiedRanker::isBoundedInsertionClass(bad, 12),
+                  "ranker-B: gapped remainder rejected");
+        }
+    }
+
+    // 13. EnglishArcOracle two-byte abbreviation admission (fusion.7 device
+    //     blocker A): the span floor keeps two-byte English out EXCEPT an exact
+    //     dictionary hit whose surface is all-uppercase; below-floor
+    //     completions stay suppressed.
+    {
+        EnglishLexicon shortLex;
+        shortLex.loadFromEntries({
+            {"ai", "AI", 9, true, false, false},
+            {"air", "air", 7, false, false, false},
+            {"us", "us", 6, false, false, false},
+            {"hello", "hello", 8, false, false, false},
+        });
+        EnglishArcOracle oracle(&shortLex);
+        const auto hasOutput = [](const std::vector<SegmentationArc> &arcs,
+                                  const char *needle) {
+            for (const auto &a : arcs) {
+                if (a.resolvedOutput == needle) {
+                    return true;
+                }
+            }
+            return false;
+        };
+        const auto hasCompletion = [](const std::vector<SegmentationArc> &arcs) {
+            for (const auto &a : arcs) {
+                if (a.provenance == CandidateProvenance::Completion) {
+                    return true;
+                }
+            }
+            return false;
+        };
+        // "ai" -> all-uppercase abbreviation admitted as canonical "AI".
+        auto aiArcs = oracle.arcsAt("ai", 0, 2);
+        check(hasOutput(aiArcs, "AI"),
+              "oracle-A: two-byte uppercase abbreviation admitted");
+        check(!hasCompletion(aiArcs),
+              "oracle-A: two-byte prefix completion suppressed");
+        // "us" -> lowercase two-byte word stays gated by the floor.
+        auto usArcs = oracle.arcsAt("us", 0, 2);
+        check(!hasOutput(usArcs, "us"),
+              "oracle-A: lowercase two-byte word not admitted");
+        // Control: at/above the floor, completions still emit.
+        auto helArcs = oracle.arcsAt("hello", 0, 3);
+        check(hasCompletion(helArcs),
+              "oracle-A: completion emission intact above the floor");
+    }
+
     if (failures == 0) {
         std::printf(
             "Pipeline (composer/pool/ranker/rewriter): ALL TESTS PASSED\n");

@@ -61,6 +61,19 @@ std::optional<std::string> EnglishLexicon::foldKey(std::string_view raw) {
     return out;
 }
 
+bool isUppercaseLatinSurface(std::string_view surface) {
+    if (surface.size() < 2) {
+        return false;
+    }
+    for (char c : surface) {
+        const unsigned char u = static_cast<unsigned char>(c);
+        if (u < 'A' || u > 'Z') {
+            return false;
+        }
+    }
+    return true;
+}
+
 void EnglishLexicon::loadFromEntries(std::vector<EnglishLexiconEntry> entries) {
     entries_.clear();
     entries_.reserve(entries.size());
