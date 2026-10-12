@@ -5,7 +5,7 @@
 # One surface form per line; lines starting with '#' are comments.
 # The lookup key is the ASCII case-folded form; the surface form here is the
 # shipped canonical display. A curated entry always ships canonically: on a
-# collision it replaces the folded SCOWL display at tier 9, regardless of
+# collision it replaces the folded source display at tier 9, regardless of
 # which letters are capitalized (Apple, GitHub, PDF alike). Nothing is lost:
 # the English Core emits the lowercase literal as a parallel arc (D071), and
 # user-typed capitalization is authoritative over the dictionary display.

@@ -4,8 +4,10 @@
 # Curated technical/acronym allow-list for the production English system
 # lexicon. One surface form per line; lines starting with '#' are comments.
 # Entries are curated technical terms and acronyms shipped with canonical
-# display casing (a colliding SCOWL common word is replaced on the canonical
-# display; the lowercase literal remains a parallel arc, D071). See AUDIT.md §6.
+# display casing (a colliding source word is replaced on the canonical
+# display; the lowercase literal remains a parallel arc, D071). Keys must be
+# reachable through the Pinyin composition path: letters with optional
+# internal apostrophes only. See AUDIT.md §6.
 API
 APK
 DNS
@@ -71,4 +73,6 @@ LAN
 # in data-licenses/english/AUDIT.md §6 maintenance log):
 CSS
 ASR
-K8s
+# K8s was reviewed the same day and dropped: digit-bearing keys are not
+# reachable through PinyinEngine::keyEvent and no engine change is
+# authorized to admit them (AUDIT.md §3/§6).

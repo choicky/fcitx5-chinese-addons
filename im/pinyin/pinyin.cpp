@@ -761,7 +761,7 @@ void PinyinEngine::updateUI(InputContext *inputContext) {
             //       product path (testUppercase) relies on.
             //       Production-scale finding (closure §6): coverage must be
             //       read from the classical decoder, not from the mixed pool.
-            //       With the full SCOWL lexicon the pool is a bounded,
+            //       With the full production lexicon the pool is a bounded,
             //       cost-ranked top-K whose Chinese-only readings can be
             //       crowded out by English tiles of the same raw (e.g.
             //       "ping"+"an" for "pingan"), so pool-derived coverage
@@ -771,7 +771,7 @@ void PinyinEngine::updateUI(InputContext *inputContext) {
             //   (b) Lead evidence: with no Chinese coverage, English still
             //       may only lead when the ranked-best reading contains a
             //       *complete* English surface form spanning at least 3 raw
-            //       bytes. Single/double-letter SCOWL words ("a", "b",
+            //       bytes. Single/double-letter lexicon words ("a", "b",
             //       "us") and pure prefix completions overlap legitimate
             //       pinyin abbreviation streams and must never displace the
             //       classical candidates; un-Chinese-able spans like the

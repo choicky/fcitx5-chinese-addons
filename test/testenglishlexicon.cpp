@@ -168,7 +168,7 @@ int main() {
     // boundaries. Test each span independently.
     // Production-scale contract (closure §6): spans shorter than
     // minSpanLength (default 2) never become English arcs. Single-letter
-    // SCOWL "words" are pinyin-initial noise that only fragments the beam,
+    // "words" are pinyin-initial noise that only fragments the beam,
     // so begin=0 here must yield nothing even though "i" is a lexicon key.
     {
         auto arcs = oracle.arcsAt(raw, 0, raw.size());
