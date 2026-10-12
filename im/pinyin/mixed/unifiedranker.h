@@ -75,7 +75,7 @@ public:
         float wBoundary = 0.10F;
         float wCost = 0.20F;
         // Bonus for candidates whose whole raw suffix is explained by a
-        // single arc. Production corpus evidence: with the full SCOWL-backed
+        // single arc. Production corpus evidence: with the full production
         // lexicon, a fragmented tiling can outscore the whole-span reading
         // on source-local evidence alone (e.g. "iphon" → Completion
         // "iPhone" + Exact "on" = 0.4916 beats Completion "iPhone" over the

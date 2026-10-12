@@ -560,11 +560,13 @@ int main() {
     // ---- Production-lexicon section (fusion closure §6) ----------------
     //
     // This section validates the SHIPPED resource itself: the production
-    // `english_lexicon.tsv` (94k+ entries) loaded through the exact same
-    // English Core oracles the addon runs. It is deliberately arc-level, not
-    // pool-level: at production scale the hand-authored Chinese test double
-    // above cannot faithfully model what the real LibIME dictionary decodes
-    // (e.g. 1-2 letter SCOWL words tile raws whose Chinese reading the double
+    // `english_lexicon.tsv` (22k+ entries, Rime Ice primary + Rime Frost
+    // supplement + curated allow-lists, fusion D079) loaded through the
+    // exact same English Core oracles the addon runs. It is deliberately
+    // arc-level, not pool-level: at production scale the hand-authored
+    // Chinese test double above cannot faithfully model what the real
+    // LibIME dictionary decodes
+    // (e.g. 1-2 letter words tile raws whose Chinese reading the double
     // never emits). End-to-end ranking against the real dictionary + the
     // placement policy is measured at the product surface instead, by
     // testpinyin's mixed corpus harness, which reports Top-1 / Top-K / MRR
@@ -594,8 +596,8 @@ int main() {
                   "production lexicon: shipped english_lexicon.tsv readable");
             realLex.load(in);
         }
-        check(realLex.size() >= 50000,
-              "production lexicon: shipped resource has >= 50k entries");
+        check(realLex.size() >= 20000,
+              "production lexicon: shipped resource has >= 20k entries");
 
         EnglishArcOracle sysEn(&realLex);
         EnglishCorrectionOracle corrEn(&realLex);

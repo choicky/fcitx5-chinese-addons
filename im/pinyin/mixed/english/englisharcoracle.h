@@ -35,8 +35,10 @@ namespace pinyin {
 // Confidence values are source-local (§19); UnifiedRanker re-normalizes
 // across sources.
 //
-// Production-scale finding (closure §6): the shipped SCOWL-derived lexicon
-// contains ~200 one- and two-letter "words" (a, i, an, us, ma, ii, cos, ...).
+// Production-scale finding (closure §6): production lexicons carry one- and
+// two-letter "words" (a, i, an, us, ma, ii, cos, ...; ~200 in the
+// SCOWL-era inventory, 74 two-letter entries in the current Ice/Frost
+// inventory).
 // At the product surface those letters and short interjections double as
 // pinyin initials and two-letter syllables, so short English arcs let the
 // beam tile almost any raw as letter soup ("wodakaIGitHub"), starve real

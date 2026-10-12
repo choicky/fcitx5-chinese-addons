@@ -1,0 +1,52 @@
+item	category	key	present_in_baseline	baseline_tier	baseline_display	baseline_flags	correct_in_baseline	action	provenance/evidence
+ChatGPT	AI product	chatgpt	yes	9	ChatGPT	p	yes	none — baseline already shipped curated	official OpenAI product name (openai.com/chatgpt)
+OpenAI	AI vendor	openai	yes	9	OpenAI	p	yes	none — baseline already shipped curated	official vendor name (openai.com)
+Claude	AI product	claude	yes	9	Claude	p	yes	none — shipped curated Claude [p]	Anthropic assistant product name
+Gemini	AI product	gemini	yes	7	Gemini		yes	none — SCOWL tier 7 Gemini matches official casing	Google model family name (gemini.google.com)
+Copilot	AI product	copilot	yes	7	copilot		mistiered (SCOWL common noun, tier 7 lowercase)	curated override	Microsoft/GitHub Copilot product line; replaces copilot/t7 with Copilot/t9[p]
+GitHub	dev platform	github	yes	9	GitHub	p	yes	none — shipped curated GitHub [p]	official vendor casing (github.com)
+GitLab	dev platform	gitlab	yes	9	GitLab	p	yes	none — shipped curated GitLab [p]	official vendor casing (gitlab.com)
+Python	language	python	yes	9	Python	t	yes	none — shipped curated Python [t]	official name (python.org); animal noun keeps literal via D071
+Docker	devops	docker	yes	9	Docker	t	yes	none — shipped curated Docker [t]	official vendor casing (docker.com)
+Kubernetes	devops	kubernetes	yes	9	Kubernetes	t	yes	none — shipped curated Kubernetes [t]	official name (kubernetes.io)
+K8s	devops	k8s	no				gap: absent	curated add	community abbreviation used by kubernetes.io itself; digit key per documented surface alphabet
+Figma	design	figma	yes	9	Figma	p	yes	none — shipped curated Figma [p]	official vendor casing (figma.com)
+Vercel	cloud/devops	vercel	no				gap: absent	curated add	official vendor casing (vercel.com)
+Android	OS/platform	android	yes	9	Android	p	yes	none — shipped curated Android [p]	official name (android.com)
+Windows	OS	windows	yes	9	Windows	p	yes	none — shipped curated Windows [p]	official name (microsoft.com)
+iPhone	consumer device	iphone	yes	9	iPhone	p	yes	none — shipped curated iPhone [p]	official casing (apple.com/iphone)
+macOS	OS	macos	yes	9	macOS	p	yes	none — shipped curated macOS [p]	official casing (apple.com/macos)
+API	abbrev	api	yes	9	API	t	yes	none — shipped curated API [t]	standard acronym
+UI	abbrev	ui	yes	9	UI	t	yes	none — shipped curated UI [t]	standard acronym
+AI	abbrev	ai	yes	9	AI	t	generic-word collision handled by override rule	none — shipped curated AI [t]	standard acronym
+LLM	abbrev	llm	yes	9	LLM	t	yes	none — shipped curated LLM [t]	standard acronym
+ASR	abbrev	asr	no				gap: absent	curated add	automatic speech recognition; term this project's own Voice/ASR work uses
+DeepSeek	AI vendor	deepseek	no				gap: absent	curated add	official vendor name (deepseek.com)
+Qwen	AI model family	qwen	no				gap: absent	curated add	official English name (qwen.ai)
+Sora	AI product	sora	no				gap: absent	curated add	OpenAI video product name (openai.com/sora)
+Midjourney	AI product	midjourney	no				gap: absent	curated add	official vendor casing (midjourney.com)
+Huawei	consumer brand	huawei	no				gap: absent	curated add	official English name (huawei.com)
+Xiaomi	consumer brand	xiaomi	no				gap: absent	curated add	official English name (xiaomi.com)
+CSS	computing abbrev	css	no				gap: absent	curated add	W3C abbreviation (w3.org/Style/CSS)
+TypeScript	language	typescript	yes	9	TypeScript	t	yes	none — shipped curated	official casing (typescriptlang.org)
+React	framework	react	yes	9	React	t	yes	none — shipped curated React [t]	official casing (react.dev)
+Vue	framework	vue	yes	9	Vue	t	yes	none — shipped curated Vue [t]	official casing (vuejs.org)
+Node.js runtime	framework	node	yes	9	Node	t	yes	none — shipped curated Node [t]	official short name
+npm	tooling	npm	yes	9	npm	t	yes	none — shipped curated npm [t]	official lowercase name (npmjs.com)
+Java	language	java	yes	9	Java	t	yes	none — shipped curated Java [t]	official casing; island noun keeps literal via override+D071
+Rust	language	rust	yes	9	Rust	t	yes	none — shipped curated Rust [t]	official casing; material noun via D071 literal
+Go	language	go	yes	9	Go	t	yes	none — shipped curated Go [t]	official name
+AWS	cloud	aws	yes	9	AWS	t	yes	none — shipped curated AWS [t]	standard acronym
+Azure	cloud	azure	yes	9	Azure	p	yes	none — SCOWL Azure matches official casing	official name (azure.microsoft.com)
+Nginx	devops	nginx	yes	9	Nginx	t	yes	none — shipped curated Nginx [t]	official casing (nginx.org)
+Redis	devops	redis	yes	9	Redis	t	yes	none — shipped curated Redis [t]	official casing (redis.io)
+MySQL	devops	mysql	yes	9	MySQL	t	yes	none — shipped curated MySQL [t]	official casing
+iOS	OS	ios	yes	9	iOS	p	yes	none — shipped curated iOS [p]	official casing
+iPad	device	ipad	yes	9	iPad	p	yes	none — shipped curated iPad [p]	official casing
+Apple	consumer brand	apple	yes	9	Apple	p	yes	none — shipped curated Apple [p] (override precedent)	official name
+Google	consumer brand	google	yes	9	Google	p	yes	none — shipped curated Google [p] (override precedent)	official name
+Linux	OS	linux	yes	9	Linux	t	yes	none — shipped curated Linux [t]	official casing
+Ubuntu	OS	ubuntu	yes	9	Ubuntu	p	yes	none — shipped curated Ubuntu [p]	official name
+WiFi	consumer term	wifi	yes	9	WiFi	t	yes	none — shipped curated WiFi [t]	Wi-Fi Alliance common surface
+bug	ordinary word	bug	yes	9	bug		yes	none — ordinary SCOWL word correct	—
+server	ordinary word	server	yes	9	server		yes	none — ordinary SCOWL word correct	—
