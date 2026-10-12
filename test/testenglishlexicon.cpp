@@ -199,6 +199,33 @@ int main() {
         const auto *canon = findArc(arcs, 0, 6, CandidateProvenance::Canonical);
         check(canon != nullptr,
               "oracle: 'iphone' typed lowercase is canonical");
+        // D071 product contract: the canonical re-spelling must not erase
+        // the typed literal — both arcs ride the same dictionary hit.
+        const SegmentationArc *displayArc = nullptr;
+        const SegmentationArc *literalArc = nullptr;
+        for (const auto &a : arcs) {
+            if (a.rawBegin != 0 || a.rawEnd != 6 ||
+                a.provenance != CandidateProvenance::Canonical) {
+                continue;
+            }
+            if (a.resolvedOutput == "iPhone") {
+                displayArc = &a;
+            } else if (a.resolvedOutput == "iphone") {
+                literalArc = &a;
+            }
+        }
+        check(displayArc != nullptr && literalArc != nullptr,
+              "oracle: D071 parallel canonical + literal arcs coexist");
+        check(
+            displayArc && literalArc &&
+                literalArc->confidence == displayArc->confidence,
+            "oracle: literal arc carries the same evidence as the display arc");
+        check(displayArc && displayArc->boundaryConfidence == 0.95F &&
+                  literalArc && literalArc->boundaryConfidence == 0.90F,
+              "oracle: boundary tie-break keeps the display ahead of literal");
+        check(displayArc && literalArc &&
+                  literalArc->sourceLocalRank != displayArc->sourceLocalRank,
+              "oracle: parallel arcs carry distinct sourceLocalRank");
     }
     {
         std::string s = "iPho"; // prefix of iPhone

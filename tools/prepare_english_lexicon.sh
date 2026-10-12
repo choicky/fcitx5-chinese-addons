@@ -41,6 +41,11 @@
 
 set -euo pipefail
 
+# Deterministic generation: the `sort -u` collation below resolves SCOWL
+# same-tier case collisions ("Afghan" vs "afghan") by line order; a UTF-8
+# collation flips 121 display rows and breaks the manifest SHA-256 gate.
+export LC_ALL=C
+
 if [[ $# -ne 1 ]]; then
   echo "usage: $0 <work-dir>" >&2
   exit 2

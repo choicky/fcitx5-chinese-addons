@@ -48,8 +48,9 @@ struct EnglishLexiconEntry {
 //     without a hard gate.
 //   * The lexicon is loaded once at addon init from a versioned resource file
 //     installed under ${FCITX_INSTALL_PKGDATADIR}/pinyin. The production
-//     resource preparation step is documented under data-licenses/ENGLISH.md;
-//     the shipped resource must be pinned by source version and SHA-256.
+//     resource preparation step is documented under
+//     data-licenses/english/AUDIT.md; the shipped resource must be pinned
+//     by source version and SHA-256.
 //   * English Core never depends on the runtime ISpell sidecar (Spell module).
 class EnglishLexicon {
 public:
