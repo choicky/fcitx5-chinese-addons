@@ -118,6 +118,10 @@ def tier_for(size):
     return 9 - int(round(9 * (size - 35) / 25.0))
 
 key_re = re.compile(r"^[a-zA-Z'-]+$")
+# Curated keys follow the documented runtime surface alphabet (AUDIT.md §1;
+# EnglishLexicon::foldKey): ASCII letters, digits, apostrophe, hyphen.
+# SCOWL extraction keeps the letters-only filter above.
+curated_key_re = re.compile(r"^[a-zA-Z0-9'-]+$")
 best = {}  # folded key -> (tier, display, flags)
 
 for s in sizes:
@@ -135,7 +139,7 @@ for name, flag in (("proper.allow", "p"), ("technical.allow", "t")):
     with open(os.path.join(allow_dir, name), encoding="utf-8") as fh:
         for line in fh:
             w = line.split("#", 1)[0].strip()
-            if not w or not key_re.match(w):
+            if not w or not curated_key_re.match(w):
                 continue
             k = w.lower()
             # Curated entries ship at tier 9 with their canonical display.
@@ -173,7 +177,8 @@ with open(out, "w", encoding="utf-8") as fh:
     fh.write("#         plus pinned MIT severe profanity list excluded.\n")
     fh.write("#         first-size tiers 35->9 40->7 50->4 60->0\n")
     fh.write("# plus curated proper/technical allow-list entries (tier 9;\n")
-    fh.write("#         folded keys colliding with SCOWL words are skipped).\n")
+    fh.write("#         a colliding folded key replaces the SCOWL display; the\n")
+    fh.write("#         lowercase literal stays a parallel arc at runtime, D071).\n")
     fh.write("# format: key<TAB>tier<TAB>display<TAB>flags{p,t,l}\n")
     for k in sorted(best):
         t, display, flags = best[k]
@@ -200,8 +205,8 @@ cat > "$MANIFEST" <<JSON
   },
   "tiering": "tier = 9 - round(9*(size-35)/25) on first-appearance size; curated proper/technical entries ship at tier 9",
   "frequency_source": "none — hermitdave/FrequencyWords content is CC-BY-SA-4.0 and was rejected for relicensing reasons (AUDIT.md §4/§5)",
-    "curated": ["data-licenses/english/proper.allow", "data-licenses/english/technical.allow"],
-    "offensive_filter": "data-licenses/english/profanity-severe.allow (MIT; canonical severe entries)",
+  "curated": ["data-licenses/english/proper.allow", "data-licenses/english/technical.allow"],
+  "offensive_filter": "data-licenses/english/profanity-severe.allow (MIT; canonical severe entries)",
   "sha256": "${SHA}",
   "bytes": ${SIZE},
   "entries": ${COUNT},

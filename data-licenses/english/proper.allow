@@ -4,11 +4,14 @@
 # Curated proper-noun allow-list for the production English system lexicon.
 # One surface form per line; lines starting with '#' are comments.
 # The lookup key is the ASCII case-folded form; the surface form here is the
-# shipped canonical display. A curated form whose canonical differs from its
-# fold only by a leading capital (Apple, Google) never overrides an existing
-# SCOWL word — lowercase typing keeps the generic display, and the casing
-# the user typed is preserved by the English Core arc rule. Curated forms
-# with internal or full uppercase (iPhone, macOS, PDF) always win.
+# shipped canonical display. A curated entry always ships canonically: on a
+# collision it replaces the folded SCOWL display at tier 9, regardless of
+# which letters are capitalized (Apple, GitHub, PDF alike). Nothing is lost:
+# the English Core emits the lowercase literal as a parallel arc (D071), and
+# user-typed capitalization is authoritative over the dictionary display.
+# (Clarified 2026-10-12: the previous sentence of this header described a
+# leading-capital non-override rule that was never implemented and never
+# shipped; the shipped data and the generator's merge step are the record.)
 # Maintainers add entries only after review; see data-licenses/english/AUDIT.md §6.
 Apple
 Android
@@ -64,3 +67,13 @@ LinkedIn
 Wikipedia
 iPhone
 macOS
+# P1 coverage audit additions (2026-10-12, fusion D079; per-entry provenance
+# in data-licenses/english/AUDIT.md §6 maintenance log):
+Vercel
+DeepSeek
+Qwen
+Sora
+Midjourney
+Huawei
+Xiaomi
+Copilot

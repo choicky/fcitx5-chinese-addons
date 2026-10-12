@@ -64,11 +64,23 @@ APK pipeline). That script:
      curated allow-lists. Tiers are assigned from the first size at which
      a word appears via the documented linear map
      `tier = 9 - round(9*(size-35)/25)` (35→9, 40→7, 50→4, 60→0).
-  3. Appends this repository's curated `proper.allow` / `technical.allow`
-     entries at tier 9, with a deterministic collision rule: a curated
-     surface form that differs from its fold only by a leading capital
-     never overrides a common SCOWL word; forms with internal or full
-     uppercase (iPhone, macOS, GitHub, PDF) always ship canonically.
+  3. Merge this repository's curated `proper.allow` / `technical.allow`
+     entries at tier 9 with a deterministic collision rule: a curated entry
+     always ships with its canonical display — on a collision with a SCOWL
+     word it replaces the folded display and takes tier 9, regardless of
+     which letters are capitalized (Apple, GitHub, PDF alike). Nothing is
+     lost: the English Core emits the lowercase literal as a parallel arc
+     (D071), and the capitalization the user typed is authoritative over the
+     dictionary display.
+     (Clarified 2026-10-12, English Lexicon P1 closure: the previous text of
+     this bullet — "a curated surface form that differs from its fold only
+     by a leading capital never overrides a common SCOWL word" — described a
+     rule that was never implemented and never shipped; the generator's
+     merge step and the committed `english_lexicon.tsv` rows for
+     `apple→Apple`, `google→Google`, `java→Java` are the record. The
+     P1 audit adds `copilot`, which makes the implemented rule visible:
+     SCOWL tier 7 lowercase `copilot` is replaced by curated tier 9
+     `Copilot [p]`.)
   4. Emits the final TSV together with its SHA-256, byte size and entry
      count in a JSON manifest at `data-licenses/english/manifest.json`.
 
@@ -139,6 +151,43 @@ Alternative considered and rejected:
     always reproducible from the recorded pin.
   * No runtime download, no OTA lexicon updates. Any future update channel
     is a separate Architecture-A change and is out of scope for V1.
+
+### 6.1 Maintenance log
+
+  * **2026-10-12 — English Lexicon P1 coverage audit (fusion Decision
+    D079).** Audited the shipped lexicon against current AI/developer/
+    consumer/technical vocabulary (per-item table:
+    `data-licenses/english/coverage-audit-2026-10.tsv`). Ten keys absent
+    and one mistiered; each
+    gap closed with the smallest curated supplement. Provenance per entry
+    (official vendor/product naming or established acronym convention; no
+    third-party list imports):
+      - `Vercel` (proper) — frontend cloud vendor, vercel.com brand casing.
+      - `DeepSeek` (proper) — DeepSeek AI model/service brand.
+      - `Qwen` (proper) — Alibaba "Tongyi Qianwen" model family, official
+        English name qwen.ai.
+      - `Sora` (proper) — OpenAI video-generation product name.
+      - `Midjourney` (proper) — Midjourney image-generation service brand.
+      - `Huawei` (proper) — Huawei device/equipment maker, official English
+        name.
+      - `Xiaomi` (proper) — Xiaomi device/equipment maker, official English
+        name.
+      - `Copilot` (proper) — Microsoft/GitHub AI-assistant product line
+        (Copilot branding). Replaces the SCOWL common-noun row
+        `copilot`/tier 7 with curated `Copilot`/tier 9 `[p]`, per the
+        collision rule in §3 step 3.
+      - `CSS` (technical) — W3C abbreviation for Cascading Style Sheets.
+      - `ASR` (technical) — abbreviation for automatic speech recognition,
+        the term this project's own Voice/ASR work uses.
+      - `K8s` (technical) — community abbreviation for Kubernetes, used by
+        kubernetes.io and the project itself.
+    Entry count moves 94,530 → 94,540 (eleven curated keys ship;
+    `copilot` replaces its existing row in place); every other row is
+    unchanged (regeneration verified byte-identical twice). The §3 step-3
+    text was clarified the same day to match the implemented curated-merge
+    rule, and the curated-merge key filter now accepts the documented
+    runtime surface alphabet (AUDIT.md §1; digits included) so `K8s` can
+    ship; the SCOWL extraction filter stays letters-only.
 
 ## 7. Package size and performance (targets, not measured)
 

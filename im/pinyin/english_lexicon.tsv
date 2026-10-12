@@ -6,7 +6,8 @@
 #         plus pinned MIT severe profanity list excluded.
 #         first-size tiers 35->9 40->7 50->4 60->0
 # plus curated proper/technical allow-list entries (tier 9;
-#         folded keys colliding with SCOWL words are skipped).
+#         a colliding folded key replaces the SCOWL display; the
+#         lowercase literal stays a parallel arc at runtime, D071).
 # format: key<TAB>tier<TAB>display<TAB>flags{p,t,l}
 a	9	a	
 aah	0	aah	
@@ -4390,6 +4391,7 @@ aspirin's	9	aspirin's
 aspiring	9	aspiring	
 aspirins	9	aspirins	
 asps	4	asps	
+asr	9	ASR	t
 assail	9	assail	
 assailable	4	assailable	
 assailant	9	assailant	
@@ -17936,7 +17938,7 @@ copied	9	copied
 copier	9	copier	
 copiers	9	copiers	
 copies	9	copies	
-copilot	7	copilot	
+copilot	9	Copilot	p
 copilot's	7	copilot's	
 copilots	7	copilots	
 coping	9	coping	
@@ -19704,6 +19706,7 @@ crystallographic	4	crystallographic
 crystallography	4	crystallography	
 crystals	9	crystals	
 cs	9	cs	
+css	9	CSS	t
 ct	4	ct	
 ctn	0	ctn	
 cto	9	CTO	t
@@ -21293,6 +21296,7 @@ deepfakes	4	deepfakes
 deeply	9	deeply	
 deepness	4	deepness	
 deeps	9	deeps	
+deepseek	9	DeepSeek	p
 deer	9	deer	
 deer's	9	deer's	
 deerskin	4	deerskin	
@@ -39814,6 +39818,7 @@ http	9	HTTP	t
 https	9	HTTPS	t
 huarache	0	huarache	
 huaraches	0	huaraches	
+huawei	9	Huawei	p
 hub	9	hub	
 hub's	9	hub's	
 hubbies	0	hubbies	
@@ -45106,6 +45111,7 @@ juxtaposing	9	juxtaposing
 juxtaposition	9	juxtaposition	
 juxtapositions	9	juxtapositions	
 k	7	k	
+k8s	9	K8s	t
 kabbalah	0	kabbalah	
 kaboom	4	kaboom	
 kabuki	0	kabuki	
@@ -51749,6 +51755,7 @@ midget's	9	midget's
 midgets	9	midgets	
 midi	0	midi	
 midis	0	midis	
+midjourney	9	Midjourney	p
 midland	4	Midland	
 midland's	4	Midland's	
 midlands	4	midlands	
@@ -66552,6 +66559,7 @@ quoting	9	quoting
 quran	9	Quran	
 quran's	9	Quran's	
 quranic	0	Quranic	
+qwen	9	Qwen	p
 qwerty	0	qwerty	
 r	7	r	
 rabbet	0	rabbet	
@@ -78109,6 +78117,7 @@ soprano	9	soprano
 soprano's	9	soprano's	
 sopranos	9	sopranos	
 sops	9	sops	
+sora	9	Sora	p
 sorbet	7	sorbet	
 sorbets	7	sorbets	
 sorcerer	9	sorcerer	
@@ -90489,6 +90498,7 @@ verbosely	0	verbosely
 verbosity	9	verbosity	
 verboten	0	verboten	
 verbs	9	verbs	
+vercel	9	Vercel	p
 verdant	4	verdant	
 verdantly	0	verdantly	
 verdict	9	verdict	
@@ -93981,6 +93991,7 @@ xeroxes	0	xeroxes
 xeroxing	0	xeroxing	
 xi	9	xi	
 xi's	0	xi's	
+xiaomi	9	Xiaomi	p
 xii	9	xii	
 xiii	9	xiii	
 xinjiang	0	Xinjiang	

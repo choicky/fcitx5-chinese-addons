@@ -12,9 +12,9 @@
   "frequency_source": "none — hermitdave/FrequencyWords content is CC-BY-SA-4.0 and was rejected for relicensing reasons (AUDIT.md §4/§5)",
   "curated": ["data-licenses/english/proper.allow", "data-licenses/english/technical.allow"],
   "offensive_filter": "data-licenses/english/profanity-severe.allow (MIT; canonical severe entries)",
-  "sha256": "ed36694fde1d1420d38d984882cd88951746e647d60b1c5e951298807f59722b",
-  "bytes": 2086811,
-  "entries": 94530,
+  "sha256": "a835896af11dcc0d3f5c02e84acdb6d914a87e7b79087435c0e7cd909c58a83b",
+  "bytes": 2087048,
+  "entries": 94540,
   "prepared_by": "tools/prepare_english_lexicon.sh",
-  "prepared": "2026-10-08T07:46:49Z"
+  "prepared": "2026-10-12T06:46:24Z"
 }

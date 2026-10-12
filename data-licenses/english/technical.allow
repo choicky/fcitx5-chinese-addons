@@ -3,8 +3,9 @@
 #
 # Curated technical/acronym allow-list for the production English system
 # lexicon. One surface form per line; lines starting with '#' are comments.
-# Entries are ASCII uppercase acronyms that SCOWL (a spelling corpus) does
-# not carry. Display casing is canonical; see AUDIT.md §6.
+# Entries are curated technical terms and acronyms shipped with canonical
+# display casing (a colliding SCOWL common word is replaced on the canonical
+# display; the lowercase literal remains a parallel arc, D071). See AUDIT.md §6.
 API
 APK
 DNS
@@ -66,3 +67,8 @@ OKR
 ROI
 WAN
 LAN
+# P1 coverage audit additions (2026-10-12, fusion D079; per-entry provenance
+# in data-licenses/english/AUDIT.md §6 maintenance log):
+CSS
+ASR
+K8s
