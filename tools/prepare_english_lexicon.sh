@@ -41,6 +41,11 @@
 
 set -euo pipefail
 
+# Deterministic generation: the `sort -u` collation below resolves SCOWL
+# same-tier case collisions ("Afghan" vs "afghan") by line order; a UTF-8
+# collation flips 121 display rows and breaks the manifest SHA-256 gate.
+export LC_ALL=C
+
 if [[ $# -ne 1 ]]; then
   echo "usage: $0 <work-dir>" >&2
   exit 2
@@ -73,10 +78,11 @@ if [[ ! -d "$SCOWL_DIR/.git" ]]; then
       "$UPSTREAM_SCOWL_REPO" "$SCOWL_DIR"
 fi
 ACTUAL_COMMIT=$(git -C "$SCOWL_DIR" rev-parse HEAD)
-if [[ "$ACTUAL_COMMIT" != "$UPSTREAM_SCOWL_COMMIT"* && \
-      "$UPSTREAM_SCOWL_COMMIT" != "$ACTUAL_COMMIT"* ]]; then
-  echo "WARNING: checked-out commit $ACTUAL_COMMIT differs from recorded" \
-       "$UPSTREAM_SCOWL_COMMIT; trusting the tag but update the pin." >&2
+if [[ "$ACTUAL_COMMIT" != "$UPSTREAM_SCOWL_COMMIT" ]]; then
+  echo "ERROR: checked-out SCOWL commit $ACTUAL_COMMIT does not match the" \
+       "pinned UPSTREAM_SCOWL_COMMIT $UPSTREAM_SCOWL_COMMIT; refusing to" \
+       "generate from an unpinned source snapshot." >&2
+  exit 5
 fi
 
 # --- build the SCOWL database (deterministic from the pinned tree) ---------
