@@ -2673,28 +2673,31 @@ void testPunctuation(Instance *instance) {
         FCITX_ASSERT(!testfrontend->call<ITestFrontend::sendKeyEvent>(
             uuid, Key("BackSpace"), false));
 
-        // Paired punctuation on the real engine path: a single-mapping key
-        // with a closing value commits the open mark first and the close
-        // mark on the next press of the same key.
+        // Regression for the open/close state handoff. ( ) and < > are
+        // produced by two different keys, and the closing key does not
+        // consume the state left by the opening key, so both groups stay
+        // unpaired. Sequence ()() and <><> must commit exactly what was
+        // typed: a stale open state would make the second opener key repeat
+        // the closer instead of opening a new pair.
         testfrontend->call<ITestFrontend::pushCommitExpectation>("（");
         FCITX_ASSERT(testfrontend->call<ITestFrontend::sendKeyEvent>(
             uuid, Key("("), false));
-        testfrontend->call<ITestFrontend::pushCommitExpectation>("）");
-        FCITX_ASSERT(testfrontend->call<ITestFrontend::sendKeyEvent>(
-            uuid, Key("("), false));
-        testfrontend->call<ITestFrontend::pushCommitExpectation>("（");
-        FCITX_ASSERT(testfrontend->call<ITestFrontend::sendKeyEvent>(
-            uuid, Key("("), false));
-        // The dedicated closing key keeps its plain single mapping.
         testfrontend->call<ITestFrontend::pushCommitExpectation>("）");
         FCITX_ASSERT(testfrontend->call<ITestFrontend::sendKeyEvent>(
             uuid, Key(")"), false));
-        // A pending open state must not leak into the next pair session.
-        ic->reset();
+        testfrontend->call<ITestFrontend::pushCommitExpectation>("（");
+        FCITX_ASSERT(testfrontend->call<ITestFrontend::sendKeyEvent>(
+            uuid, Key("("), false));
+        testfrontend->call<ITestFrontend::pushCommitExpectation>("）");
+        FCITX_ASSERT(testfrontend->call<ITestFrontend::sendKeyEvent>(
+            uuid, Key(")"), false));
         testfrontend->call<ITestFrontend::pushCommitExpectation>("《");
         FCITX_ASSERT(testfrontend->call<ITestFrontend::sendKeyEvent>(
             uuid, Key("<"), false));
         testfrontend->call<ITestFrontend::pushCommitExpectation>("》");
+        FCITX_ASSERT(testfrontend->call<ITestFrontend::sendKeyEvent>(
+            uuid, Key(">"), false));
+        testfrontend->call<ITestFrontend::pushCommitExpectation>("《");
         FCITX_ASSERT(testfrontend->call<ITestFrontend::sendKeyEvent>(
             uuid, Key("<"), false));
         testfrontend->call<ITestFrontend::pushCommitExpectation>("》");

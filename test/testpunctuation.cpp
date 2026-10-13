@@ -32,20 +32,11 @@ int main() {
     FCITX_ASSERT(
         punctuation->call<fcitx::IPunctuation::getPunctuationCandidates>(
             "zh_CN", '#') == std::vector<std::string>{"#", "＃"});
-    // Paired entries: single-mapping keys carry a closing value in the
-    // third column (AltMapping) so the engine pairing path is used.
-    FCITX_ASSERT(
-        punctuation->call<fcitx::IPunctuation::getPunctuation>("zh_CN", '(')
-            .first == "（");
-    FCITX_ASSERT(
-        punctuation->call<fcitx::IPunctuation::getPunctuation>("zh_CN", '(')
-            .second == "）");
-    FCITX_ASSERT(
-        punctuation->call<fcitx::IPunctuation::getPunctuation>("zh_CN", '<')
-            .first == "《");
-    FCITX_ASSERT(
-        punctuation->call<fcitx::IPunctuation::getPunctuation>("zh_CN", '<')
-            .second == "》");
+    // A paired entry may only be added for a key whose closing mark is not
+    // also produced by another key: pushPunctuationV2 keys its pending open
+    // mark by the typed unicode, so a dedicated closing key cannot consume
+    // it and the next opener press would repeat the closer instead of opening
+    // a new pair. « and ‹ have no dedicated closing key, so they pair.
     FCITX_ASSERT(
         punctuation->call<fcitx::IPunctuation::getPunctuation>("zh_CN", U'«')
             .first == "«");
@@ -58,6 +49,32 @@ int main() {
     FCITX_ASSERT(
         punctuation->call<fcitx::IPunctuation::getPunctuation>("zh_CN", U'‹')
             .second == "›");
+    FCITX_ASSERT(
+        punctuation->call<fcitx::IPunctuation::getPunctuationCandidates>(
+            "zh_CN", U'»') == std::vector<std::string>{});
+    FCITX_ASSERT(
+        punctuation->call<fcitx::IPunctuation::getPunctuationCandidates>(
+            "zh_CN", U'›') == std::vector<std::string>{});
+    // ( ) and < > do have a dedicated closing key, so they stay unpaired and
+    // every press of () and <> maps to its own mark.
+    FCITX_ASSERT(
+        punctuation->call<fcitx::IPunctuation::getPunctuation>("zh_CN", '(')
+            .first == "（");
+    FCITX_ASSERT(
+        punctuation->call<fcitx::IPunctuation::getPunctuation>("zh_CN", '(')
+            .second.empty());
+    FCITX_ASSERT(
+        punctuation->call<fcitx::IPunctuation::getPunctuation>("zh_CN", '<')
+            .first == "《");
+    FCITX_ASSERT(
+        punctuation->call<fcitx::IPunctuation::getPunctuation>("zh_CN", '<')
+            .second.empty());
+    FCITX_ASSERT(
+        punctuation->call<fcitx::IPunctuation::getPunctuation>("zh_CN", ')')
+            .second.empty());
+    FCITX_ASSERT(
+        punctuation->call<fcitx::IPunctuation::getPunctuation>("zh_CN", '>')
+            .second.empty());
     // A single-mapping paired key must not expose its closing mark as an
     // extra candidate, and multi-mapping keys must keep the exact legacy
     // lists (paired marks deliberately deferred there).
