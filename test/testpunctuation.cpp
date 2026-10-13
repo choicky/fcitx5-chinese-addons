@@ -32,6 +32,46 @@ int main() {
     FCITX_ASSERT(
         punctuation->call<fcitx::IPunctuation::getPunctuationCandidates>(
             "zh_CN", '#') == std::vector<std::string>{"#", "＃"});
+    // Paired entries: single-mapping keys carry a closing value in the
+    // third column (AltMapping) so the engine pairing path is used.
+    FCITX_ASSERT(
+        punctuation->call<fcitx::IPunctuation::getPunctuation>("zh_CN", '(')
+            .first == "（");
+    FCITX_ASSERT(
+        punctuation->call<fcitx::IPunctuation::getPunctuation>("zh_CN", '(')
+            .second == "）");
+    FCITX_ASSERT(
+        punctuation->call<fcitx::IPunctuation::getPunctuation>("zh_CN", '<')
+            .first == "《");
+    FCITX_ASSERT(
+        punctuation->call<fcitx::IPunctuation::getPunctuation>("zh_CN", '<')
+            .second == "》");
+    FCITX_ASSERT(
+        punctuation->call<fcitx::IPunctuation::getPunctuation>("zh_CN", U'«')
+            .first == "«");
+    FCITX_ASSERT(
+        punctuation->call<fcitx::IPunctuation::getPunctuation>("zh_CN", U'«')
+            .second == "»");
+    FCITX_ASSERT(
+        punctuation->call<fcitx::IPunctuation::getPunctuation>("zh_CN", U'‹')
+            .first == "‹");
+    FCITX_ASSERT(
+        punctuation->call<fcitx::IPunctuation::getPunctuation>("zh_CN", U'‹')
+            .second == "›");
+    // A single-mapping paired key must not expose its closing mark as an
+    // extra candidate, and multi-mapping keys must keep the exact legacy
+    // lists (paired marks deliberately deferred there).
+    FCITX_ASSERT(
+        punctuation->call<fcitx::IPunctuation::getPunctuationCandidates>(
+            "zh_CN", '(') == std::vector<std::string>{"（"});
+    FCITX_ASSERT(
+        punctuation->call<fcitx::IPunctuation::getPunctuationCandidates>(
+            "zh_CN", '[') ==
+        std::vector<std::string>{"【", "「", "『", "❲", "［", "["});
+    FCITX_ASSERT(
+        punctuation->call<fcitx::IPunctuation::getPunctuationCandidates>(
+            "zh_CN", ']') ==
+        std::vector<std::string>{"】", "」", "』", "❳", "］", "]"});
     fcitx::RawConfig config;
     config["Entries"]["0"]["Key"] = "*";
     config["Entries"]["0"]["Mapping"] = "X";
