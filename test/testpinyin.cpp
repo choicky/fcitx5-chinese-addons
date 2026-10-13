@@ -2673,6 +2673,57 @@ void testPunctuation(Instance *instance) {
         FCITX_ASSERT(!testfrontend->call<ITestFrontend::sendKeyEvent>(
             uuid, Key("BackSpace"), false));
 
+        // Regression for the open/close state handoff. ( ) and < > are
+        // produced by two different keys, and the closing key does not
+        // consume the state left by the opening key, so both groups stay
+        // unpaired. Sequence ()() and <><> must commit exactly what was
+        // typed: a stale open state would make the second opener key repeat
+        // the closer instead of opening a new pair.
+        testfrontend->call<ITestFrontend::pushCommitExpectation>("（");
+        FCITX_ASSERT(testfrontend->call<ITestFrontend::sendKeyEvent>(
+            uuid, Key("("), false));
+        testfrontend->call<ITestFrontend::pushCommitExpectation>("）");
+        FCITX_ASSERT(testfrontend->call<ITestFrontend::sendKeyEvent>(
+            uuid, Key(")"), false));
+        testfrontend->call<ITestFrontend::pushCommitExpectation>("（");
+        FCITX_ASSERT(testfrontend->call<ITestFrontend::sendKeyEvent>(
+            uuid, Key("("), false));
+        testfrontend->call<ITestFrontend::pushCommitExpectation>("）");
+        FCITX_ASSERT(testfrontend->call<ITestFrontend::sendKeyEvent>(
+            uuid, Key(")"), false));
+        testfrontend->call<ITestFrontend::pushCommitExpectation>("《");
+        FCITX_ASSERT(testfrontend->call<ITestFrontend::sendKeyEvent>(
+            uuid, Key("<"), false));
+        testfrontend->call<ITestFrontend::pushCommitExpectation>("》");
+        FCITX_ASSERT(testfrontend->call<ITestFrontend::sendKeyEvent>(
+            uuid, Key(">"), false));
+        testfrontend->call<ITestFrontend::pushCommitExpectation>("《");
+        FCITX_ASSERT(testfrontend->call<ITestFrontend::sendKeyEvent>(
+            uuid, Key("<"), false));
+        testfrontend->call<ITestFrontend::pushCommitExpectation>("》");
+        FCITX_ASSERT(testfrontend->call<ITestFrontend::sendKeyEvent>(
+            uuid, Key(">"), false));
+        // Multi-mapping keys stay an unpaired candidate list: pressing them
+        // opens candidates instead of committing, and no closing mark of the
+        // deferred groups leaks into that list.
+        FCITX_ASSERT(testfrontend->call<ITestFrontend::sendKeyEvent>(
+            uuid, Key("["), false));
+        {
+            auto puncList = ic->inputPanel().candidateList();
+            FCITX_ASSERT(puncList);
+            // The list is paged by the user's page size, so assert on the
+            // visible page rather than hard-coding a page length. The exact
+            // full legacy list is pinned by testpunctuation.
+            static constexpr std::string_view closingMarks{"】」』❳］]"};
+            FCITX_ASSERT(puncList->size() > 0);
+            FCITX_ASSERT(puncList->candidate(0).text().toString() == "【");
+            for (int i = 0; i < puncList->size(); i++) {
+                const auto text = puncList->candidate(i).text().toString();
+                FCITX_ASSERT(closingMarks.find(text) == std::string_view::npos);
+            }
+        }
+        ic->reset();
+
         auto event = instance->eventLoop().addTimeEvent(
             CLOCK_MONOTONIC, now(CLOCK_MONOTONIC) + 2000000, 0,
             [instance](EventSourceTime *event, uint64_t) {
