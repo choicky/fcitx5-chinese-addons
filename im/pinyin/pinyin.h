@@ -423,6 +423,13 @@ public:
 
     PinyinMode mode_ = PinyinMode::Normal;
 
+    // A MoQi auxiliary filtering session lasts until the whole input is
+    // committed, so it survives the partial selections that rebuild the
+    // candidate list. The mode itself lives on PinyinTabbedCandidateList;
+    // this only records that the session is open. Kept as a bool to avoid a
+    // header dependency on AuxiliaryFilterMode.
+    bool moqiFilterSession_ = false;
+
     // Forget candidate
     std::shared_ptr<CandidateList> forgetCandidateList_;
 

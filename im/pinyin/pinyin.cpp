@@ -569,6 +569,10 @@ void PinyinEngine::updateUI(InputContext *inputContext) {
     const auto &context = state->context_;
     if (context.selected()) {
         auto sentence = context.sentence();
+        // The whole input is committed here, which ends the filtering session.
+        // This path does not go through doReset, so the flag is cleared
+        // directly and before the commit.
+        state->moqiFilterSession_ = false;
         if (shouldLearn(inputContext)) {
             state->context_.learn();
         }
@@ -582,6 +586,11 @@ void PinyinEngine::updateUI(InputContext *inputContext) {
 
     do {
         if (context.userInput().empty()) {
+            // Nothing is left to compose: the string has been committed or
+            // discarded, so the filtering session is over. A commit that
+            // empties the buffer does not go through doReset, and this is
+            // where updateUI notices the buffer is gone.
+            state->moqiFilterSession_ = false;
             break;
         }
         // Update Preedit.
@@ -1072,6 +1081,24 @@ void PinyinEngine::updateUI(InputContext *inputContext) {
             std::make_unique<PinyinTabbedCandidateList>(this, inputContext,
                                                         candidateList.get()));
         inputPanel.setCandidateList(std::move(candidateList));
+        // A partial selection rebuilt the list above, and the fresh list starts
+        // in no filter mode. Reopen the MoQi session on it so the letters typed
+        // next are codes of the next segment rather than ordinary pinyin. This
+        // must happen after setCandidateList: updateFilter reads the list back
+        // from the input panel. The empty buffer of the new list means the mode
+        // is armed but does not filter yet, and the call repaints the
+        // "[MoQi Filtering]" auxiliary band.
+        if (state->moqiFilterSession_) {
+            if (*config_.auxiliaryFilter == AuxiliaryFilter::MoQi) {
+                if (auto *tabbed = currentPinyinTabbed(inputContext)) {
+                    tabbed->setAuxiliaryFilterMode(AuxiliaryFilterMode::MoQi);
+                } else {
+                    state->moqiFilterSession_ = false;
+                }
+            } else {
+                state->moqiFilterSession_ = false;
+            }
+        }
     } while (0);
     inputContext->updatePreedit();
     inputContext->updateUserInterface(UserInterfaceComponent::InputPanel);
@@ -2864,6 +2891,7 @@ void PinyinEngine::doReset(InputContext *inputContext) const {
     auto *state = inputContext->propertyFor(&factory_);
     resetForgetCandidate(inputContext);
     state->mode_ = PinyinMode::Normal;
+    state->moqiFilterSession_ = false;
     state->context_.clear();
     state->context_.clearContextWords();
     state->predictWords_.reset();
