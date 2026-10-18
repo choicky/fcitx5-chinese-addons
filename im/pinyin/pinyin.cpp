@@ -786,6 +786,19 @@ void PinyinEngine::updateUI(InputContext *inputContext) {
             //       classical candidates; un-Chinese-able spans like the
             //       "iphone" in "woxiangmaiiphone" or a typed capitalisation
             //       like "Apple" pass this bar naturally.
+            //       Lead rows are capped (fusion.12): at most
+            //       kRow1FrontMax of these candidates take the front rows,
+            //       in mixed pool order. The evidence is per-reading, not
+            //       per-raw, so a raw like Ziranma "caddy" used to promote
+            //       six readings (Caddy, caddy, cad定, Caddy一, caddy一,
+            //       Caddy定) ahead of every Chinese candidate; the best
+            //       kRow1FrontMax keep the head rows and the rest go behind
+            //       the classical list, still reachable by paging. The bound
+            //       is three, not two: at two, the measured §4 census showed
+            //       full-pinyin readings whose ranked needle sits at panel
+            //       index 2 ("githbu" -> GitHub, "heiphonexiuxian" -> phone)
+            //       demoted behind the entire classical list, and those
+            //       readings are exactly what rule (b) is for.
             //   (c) Bounded insertion class (final ranking closure): rule
             //       (a) as a BLANKET bury rule failed the product corpus —
             //       a whole-raw Han tiling exists for nearly every lowercase
@@ -807,11 +820,39 @@ void PinyinEngine::updateUI(InputContext *inputContext) {
             //       the text previously here described a suppression that
             //       never shipped. What keeps the class off Chinese input is
             //       that its slots start after the classical head, plus the
-            //       single-slot rule below: at most ONE class member takes a
-            //       front-row slot per input, and every remaining member of
-            //       the class goes behind the whole classical list, still
-            //       reachable by paging.
+            //       single-slot rule below: at most ONE member of the front
+            //       insertion class (rule (c), and since fusion.12 also
+            //       rule (d)) takes a front-row slot per input, and every
+            //       remaining member of either takes its place behind the
+            //       whole classical list, still reachable by paging.
             //       See UnifiedRanker::isBoundedInsertionClass.
+            //   (d) Whole-word Exact lead (fusion.12): the class in (c) is
+            //       keyed on Canonical/CustomPhrase, so a dictionary word
+            //       whose surface equals the typed span stays behind the
+            //       classical list even when the word is the only sensible
+            //       reading (Ziranma "merge", "server", "deploy" — forced
+            //       Chinese readings 么仍恶 / 色瑞尔 bury the English word at
+            //       panel index 12 / 59). Exactness is evidence of the same
+            //       strength as (c): the whole raw is one English arc whose
+            //       dictionary surface is byte-identical to what the user
+            //       typed, so it competes for the same single front slot,
+            //       in mixed pool order. Three guards keep the blast radius
+            //       small: the rule is Shuangpin-only (fusion.12 owner
+            //       decision — in full-pinyin mode a >= 5-byte raw that is
+            //       one English word is very often also the intended Chinese
+            //       phrase: "women" -> 我们, "change" -> 嫦娥), the arc must
+            //       span the whole raw (no fragment) and
+            //       the raw must be at least kExactWholeWordMinRaw bytes,
+            //       because a 1-4 letter stream is a plausible abbreviation
+            //       or a short pinyin syllable sequence and the exposure
+            //       audit (§2 scan) shows nearly half of the >= 5 byte
+            //       lexicon keys are also force-decodable Chinese — without
+            //       the length floor the slot would be handed out on noise.
+            //       Accepted trade-off: a Shuangpin raw that is both a word
+            //       and a good Chinese respelling ("merge" -> 么仍恶) now
+            //       shows the English word in the front insertion row; that
+            //       is the same bargain (c) already makes for macOS / Docker,
+            //       and the Chinese head candidate keeps row 0.
             const bool strongChinese =
                 isStrongChinese(pyBeforeCursor, context.useShuangpin(),
                                 ime_->shuangpinProfile());
@@ -819,6 +860,9 @@ void PinyinEngine::updateUI(InputContext *inputContext) {
             // candidate after the custom-candidate normalisation below.
             constexpr std::size_t kBehindClassicalSlot =
                 std::numeric_limits<std::size_t>::max() / 4;
+            // Rule (b)/(d) thresholds — see the placement policy above.
+            constexpr std::size_t kExactWholeWordMinRaw = 5;
+            constexpr std::size_t kRow1FrontMax = 3;
             std::size_t position = 0;
             std::size_t row1Position = 0;
             std::size_t insertionPosition = strongChinese ? 1 : 0;
@@ -885,11 +929,41 @@ void PinyinEngine::updateUI(InputContext *inputContext) {
                     strongChinese &&
                     pinyin::UnifiedRanker::isBoundedInsertionClass(
                         cand, pyBeforeCursor.size());
+                // Rule (d): one dictionary-exact English word that explains
+                // the whole raw. Shuangpin only (fusion.12 owner decision):
+                // in full-pinyin mode a >= 5-byte raw that is one English
+                // word is very often also the intended Chinese syllable
+                // stream ("women" -> 我们, "change" -> 嫦娥), and the pinned
+                // conservative guards describe that behavior; the forced
+                // respelling defect this rule fixes is a Shuangpin phenomenon.
+                // Every index below is guarded by its own size
+                // check — the pool type does not enforce that `arcCount`
+                // matches the per-segment vectors, and the placement code must
+                // not trust it blindly.
+                bool exactWholeWordLead = false;
+                if (strongChinese && context.useShuangpin() &&
+                    cand.arcCount == 1 &&
+                    pyBeforeCursor.size() >= kExactWholeWordMinRaw &&
+                    cand.sources.size() == 1 && cand.provenances.size() == 1 &&
+                    cand.alignment.size() == 1 &&
+                    cand.sources[0] == pinyin::SegmentSource::English &&
+                    cand.provenances[0] ==
+                        pinyin::CandidateProvenance::Exact &&
+                    cand.alignment[0].rawBegin == 0 &&
+                    cand.alignment[0].rawEnd == pyBeforeCursor.size()) {
+                    exactWholeWordLead = true;
+                }
                 std::size_t slot = kBehindClassicalSlot + position++;
                 if (row1) {
-                    slot = row1Position == 0 ? 0 : row1Position;
-                    ++row1Position;
-                } else if (classLead && !insertionTaken) {
+                    // Capped lead rows (fusion.12): the first
+                    // kRow1FrontMax candidates in pool order keep the front
+                    // rows, the rest stay behind the classical list.
+                    if (row1Position < kRow1FrontMax) {
+                        slot = row1Position;
+                        ++row1Position;
+                    }
+                } else if ((classLead || exactWholeWordLead) &&
+                           !insertionTaken) {
                     slot = insertionPosition;
                     insertionTaken = true;
                 }

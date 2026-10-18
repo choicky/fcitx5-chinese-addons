@@ -259,6 +259,49 @@ Alternative considered and rejected:
     Exact, prefix completion, bounded correction, short-word evidence,
     fan-out bound, digit-raw negatives) is unchanged and passes.
 
+  * **2026-10-18 — English Lexicon software/infrastructure supplement
+    (addons PR #11).** The inventory answered the brands people actually
+    type on a phone (`chatgpt`, `github`, `kubernetes`) but not the
+    self-hosting and tooling names that came up on real devices; typing
+    those raws produced only forced Chinese readings. Forty keys from the
+    owner-reviewed list join the two curated allow-lists. None of them
+    exists in the pinned inventory, so every one adds a key at tier 9
+    rather than overriding an existing display, and the source pins are
+    unchanged (rime-ice @ `da1fbe602e38f26db846fa10120ee64c2b0324c0`,
+    rime-frost @ `f1bc68b308adcca916c51bcaad25a267876e6efe`). Provenance
+    per entry — the display is the casing published by the project itself,
+    or the established acronym; no third-party list was imported:
+      - `proper.allow` — 28 product/vendor names, key = lowercase fold:
+        `Caddy`, `HAProxy`, `Xray`, `OpenVPN`, `ZeroTier`, `Headscale`,
+        `ImmortalWrt`, `Certbot`, `Podman`, `Firebase`, `Conda`, `Jupyter`,
+        `Deno`, `Bun`, `NumPy`, `Pandas`, `Coze`, `FunASR`, `SenseVoice`,
+        `Proxmox`, `ESXi`, `Unraid`, `TrueNAS`, `Synology`, `Magisk`,
+        `KernelSU`, `Jellyfin`, `Plex`.
+      - `technical.allow` — 12 acronym-shaped terms: `frp`, `iptables`,
+        `nftables`, `DDNS`, `pnpm`, `pip`, `TPU`, `NPU`, `ADB`, `OBS`,
+        `VLC`, `TTS`; `frp`/`iptables`/`nftables`/`pnpm`/`pip` ship in
+        their published all-lowercase form, the rest in uppercase-acronym
+        form.
+      - Reviewed and deliberately not added: `sing-box`, `Node.js`,
+        `Next.js`, `llama.cpp`, `Pi-hole`, `fine-tune` — their display
+        forms need a hyphen or a dot, which the generator's documented
+        reachable-surface filter skips, and admitting them would break
+        `key == lowercase(display)`, an invariant that holds for every
+        shipped row. Spaced multi-word names (`Android Studio`, `Stable
+        Diffusion`, …), `IPv6`, `Qt` and `Doubao` were out of scope for
+        that supplement.
+    The resource was regenerated with `tools/prepare_english_lexicon.sh`
+    (no hand edits), and `manifest.json` / `NOTICE` are script output, so
+    the configure-time SHA-256 gate over `im/pinyin/english_lexicon.tsv`
+    still holds. Entry count moves 22,477 → 22,517, size 434,970 →
+    435,666 bytes, SHA-256
+    `2506539f4f96a4603507a11ba23d7f4291346b08e1551d6e64cc7ac9fc6571b1` →
+    `bb35d6467d0f3a439e4255f6218928834ee88ca962984cc6116890ad01a9f89a`,
+    `prepared` 2026-10-18T16:38:59Z. The result is a pure superset: no
+    existing row changed key, tier, display or flag. Arc admission,
+    ranking and placement semantics are untouched — this entry is data
+    only.
+
 ## 7. Package size and performance (targets, not measured)
 
   * Target entry count: a curated common-word core, not a maximal
