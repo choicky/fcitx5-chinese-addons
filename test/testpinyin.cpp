@@ -2143,8 +2143,12 @@ void testMoQiTabFilter(Instance *instance) {
         findAndSelectCandidate(ic, "西");
         FCITX_ASSERT(findCandidate(ic, "安") >= 0);
 
-        // Continue composing after the selected prefix. No text is committed,
-        // and the next candidates start at the advanced selection frontier.
+        // A MoQi session now survives the partial selection, so letters typed
+        // here would be read as the auxiliary codes of the next segment.
+        // Escape leaves the session, and composing then continues as ordinary
+        // pinyin: no text is committed, and the next candidates start at the
+        // advanced selection frontier.
+        testfrontend->call<ITestFrontend::keyEvent>(uuid, Key("Escape"), false);
         for (const auto key : {"m", "e", "n"}) {
             testfrontend->call<ITestFrontend::keyEvent>(uuid, Key(key), false);
         }
@@ -2167,6 +2171,235 @@ void testMoQiTabFilter(Instance *instance) {
         FCITX_ASSERT(findCandidate(ic, "门") >= 0);
     });
 }
+
+// A MoQi filtering session lasts until the whole input is committed. Every
+// partial selection rebuilds the candidate list, so before the sticky session
+// the rebuilt list dropped back to no filter mode and the letters typed next
+// were read as ordinary pinyin. The cases below are the paths a user actually
+// takes: selection through the candidate object (mouse click, Android touch),
+// number-key selection, Escape, backspace on an empty buffer, and the Stroke
+// filter, which must keep its upstream end-on-selection behavior.
+//
+// MoQi codes are queried from the shipped table at runtime through pinyinhelper
+// (reverseLookupMoQi), never hardcoded. Preconditions are asserted loudly, so a
+// table or candidate change fails the test instead of silently skipping it.
+void testMoQiStickyFilterSession(Instance *instance) {
+    instance->eventDispatcher().schedule([instance]() {
+        auto *testfrontend = instance->addonManager().addon("testfrontend");
+        auto *ph = instance->addonManager().addon("pinyinhelper");
+        FCITX_ASSERT(ph);
+        pinyinWithAuxiliaryFilter(instance, "MoQi");
+
+        auto uuid =
+            testfrontend->call<ITestFrontend::createInputContext>("testapp");
+        auto *ic = instance->inputContextManager().findByUUID(uuid);
+        FCITX_ASSERT(ic);
+        instance->setCurrentInputMethod(ic, "pinyin", true);
+
+        auto codeOf = [ph](const std::string &chr) {
+            return ph->call<IPinyinHelper::reverseLookupMoQi>(chr);
+        };
+        auto type = [testfrontend, uuid](const std::string &text) {
+            for (const char c : text) {
+                testfrontend->call<ITestFrontend::keyEvent>(
+                    uuid, Key(std::string(1, c)), false);
+            }
+        };
+        auto press = [testfrontend, uuid](const char *key) {
+            testfrontend->call<ITestFrontend::keyEvent>(uuid, Key(key), false);
+        };
+        auto preedit = [ic]() { return ic->inputPanel().preedit().toString(); };
+        auto letterCount = [](const std::string &s) {
+            return std::ranges::count_if(s, [](char c) {
+                return c >= 'a' && c <= 'z';
+            });
+        };
+
+        // Selection through the candidate object, which is what a mouse click
+        // or an Android touch on a candidate does.
+        auto selectByText = [ic](const std::string &text) {
+            auto candList = ic->inputPanel().candidateList();
+            auto *bulk = candList ? candList->toBulk() : nullptr;
+            FCITX_ASSERT(bulk);
+            for (int i = 0; i < bulk->totalSize(); ++i) {
+                const auto &cw = bulk->candidateFromAll(i);
+                if (cw.text().toString() == text) {
+                    cw.select(ic);
+                    return true;
+                }
+            }
+            return false;
+        };
+        // Index of a candidate within the page that is actually displayed,
+        // which is what a selection key addresses.
+        auto currentPageIndexOf = [ic](const std::string &text) {
+            auto candList = ic->inputPanel().candidateList();
+            auto *pageable = candList ? candList->toPageable() : nullptr;
+            FCITX_ASSERT(pageable);
+            // On a pageable list the CandidateList accessors are page-relative,
+            // which is exactly the address space a selection key uses.
+            for (int i = 0; i < candList->size(); ++i) {
+                if (candList->candidate(i).text().toString() == text) {
+                    return i;
+                }
+            }
+            return -1;
+        };
+        // The engine binds selection keys 1..9,0 to page-relative indices.
+        static constexpr char selectionKeyChars[] = "1234567890";
+
+        const auto codeNi = codeOf("你");
+        const auto codeHao = codeOf("好");
+        FCITX_ASSERT(!codeNi.empty()) << "the MoQi table maps no code for 你";
+        FCITX_ASSERT(!codeHao.empty()) << "the MoQi table maps no code for 好";
+
+        // 1. Mouse/touch path. Arm MoQi, filter 你, select it partially, then
+        // continue with the code of the next segment without re-entering.
+        std::string armedEmpty;
+        {
+            ic->reset();
+            type("nihao");
+            FCITX_ASSERT(findCandidate(ic, "你") >= 0)
+                << "precondition: nihao must offer 你 as a partial candidate";
+            press("grave");
+            armedEmpty = auxUpText(ic);
+            FCITX_ASSERT(!armedEmpty.empty())
+                << "grave must arm MoQi filtering";
+            type(std::string(1, codeNi[0]));
+            FCITX_ASSERT(findCandidate(ic, "你") >= 0)
+                << "你 must survive its own MoQi code";
+            testfrontend->call<ITestFrontend::pushCommitExpectation>("你好");
+            FCITX_ASSERT(selectByText("你"))
+                << "selecting 你 through the candidate object must work";
+            // Still filtering, buffer cleared, and nothing committed: an early
+            // commit would trip the expectation queue pushed above.
+            FCITX_ASSERT(auxUpText(ic) == armedEmpty)
+                << "a partial selection must keep MoQi armed with an empty "
+                   "buffer";
+            FCITX_ASSERT(!preedit().empty())
+                << "the composition must still be live after the partial "
+                   "selection";
+            type(std::string(1, codeHao[0]));
+            FCITX_ASSERT(findCandidate(ic, "好") >= 0)
+                << "好 must be reachable through its own code in the kept "
+                   "session";
+            {
+                auto candList = ic->inputPanel().candidateList();
+                auto *bulk = candList->toBulk();
+                for (int i = 0; i < bulk->totalSize(); ++i) {
+                    const auto text =
+                        bulk->candidateFromAll(i).text().toString();
+                    const auto first = utf8CharsOf(text).front();
+                    const auto code = codeOf(first);
+                    FCITX_ASSERT(!code.empty() &&
+                                 code.starts_with(codeHao[0]))
+                        << "survivor without the frontier MoQi code: " << text;
+                }
+            }
+            FCITX_ASSERT(selectByText("好"))
+                << "selecting 好 through the candidate object must work";
+            FCITX_ASSERT(auxUpText(ic).empty())
+                << "committing the whole input must end the session";
+            // No residue: the next letter is ordinary pinyin again.
+            type("a");
+            FCITX_ASSERT(preedit().find('a') != std::string::npos)
+                << "a must enter the pinyin input after the commit";
+            FCITX_ASSERT(auxUpText(ic).empty());
+        }
+
+        // 2. Number-key path: only the trigger and one code are typed, then the
+        // candidate is chosen with its selection key.
+        {
+            ic->reset();
+            type("nihao");
+            press("grave");
+            FCITX_ASSERT(auxUpText(ic) == armedEmpty)
+                << "the armed band must be the same as in case 1";
+            type(std::string(1, codeNi[0]));
+            const int index = currentPageIndexOf("你");
+            FCITX_ASSERT(index >= 0)
+                << "你 must be on the displayed page for the number-key case";
+            testfrontend->call<ITestFrontend::pushCommitExpectation>("你好");
+            press(std::string(1, selectionKeyChars[index]).c_str());
+            FCITX_ASSERT(auxUpText(ic) == armedEmpty)
+                << "number-key selection must keep MoQi armed with an empty "
+                   "buffer";
+            type(std::string(1, codeHao[0]));
+            const int haoIndex = currentPageIndexOf("好");
+            FCITX_ASSERT(haoIndex >= 0)
+                << "好 must be reachable after the number-key selection";
+            press(std::string(1, selectionKeyChars[haoIndex]).c_str());
+            FCITX_ASSERT(auxUpText(ic).empty())
+                << "the last selection must end the session";
+        }
+
+        // 3. Escape after a partial selection leaves filtering, and the next
+        // letter keeps composing pinyin.
+        {
+            ic->reset();
+            type("nihao");
+            press("grave");
+            type(std::string(1, codeNi[0]));
+            FCITX_ASSERT(selectByText("你"));
+            FCITX_ASSERT(auxUpText(ic) == armedEmpty);
+            press("Escape");
+            FCITX_ASSERT(auxUpText(ic).empty())
+                << "Escape must leave the MoQi session";
+            const auto before = preedit();
+            type("a");
+            FCITX_ASSERT(preedit() != before &&
+                         preedit().find('a') != std::string::npos)
+                << "a must be appended to the pinyin input after Escape";
+        }
+
+        // 4. Backspace on the empty buffer exits filtering; the next Backspace
+        // is an ordinary one and unselects 你.
+        {
+            ic->reset();
+            type("nihao");
+            press("grave");
+            type(std::string(1, codeNi[0]));
+            FCITX_ASSERT(selectByText("你"));
+            FCITX_ASSERT(auxUpText(ic) == armedEmpty);
+            press("BackSpace");
+            FCITX_ASSERT(auxUpText(ic).empty())
+                << "backspace on an empty buffer must exit MoQi filtering";
+            const auto selected = preedit();
+            FCITX_ASSERT(letterCount(selected) == 3)
+                << "precondition: only hao must remain as pinyin, got "
+                << selected;
+            press("BackSpace");
+            FCITX_ASSERT(letterCount(preedit()) == 5)
+                << "the second backspace must unselect 你, got " << preedit();
+        }
+
+        // 5. Stroke keeps the upstream behavior: a selection ends filtering.
+        pinyinWithAuxiliaryFilter(instance, "Stroke");
+        {
+            ic->reset();
+            type("nihao");
+            press("grave");
+            FCITX_ASSERT(!auxUpText(ic).empty())
+                << "grave must still arm Stroke filtering";
+            FCITX_ASSERT(selectByText("你"))
+                << "precondition: 你 must be selectable in Stroke mode";
+            FCITX_ASSERT(auxUpText(ic).empty())
+                << "Stroke must still end its filter on a selection";
+            const auto before = preedit();
+            type("a");
+            FCITX_ASSERT(preedit() != before)
+                << "letters after a Stroke selection must compose pinyin";
+        }
+
+        std::fprintf(
+            stderr,
+            "MOQISTICKY product path OK: session survives partial selection by "
+            "candidate object and by selection key, next-segment codes filter "
+            "directly, commit ends it, Escape and empty-buffer backspace exit "
+            "it, and Stroke is unchanged\n");
+    });
+}
+
 
 void testMoQiShuangpinFilter(Instance *instance) {
     instance->eventDispatcher().schedule([instance]() {
@@ -3420,6 +3653,7 @@ int main() {
     testDisabledAuxiliaryFilter(&instance);
     testPinyinTabFilter(&instance);
     testMoQiTabFilter(&instance);
+    testMoQiStickyFilterSession(&instance);
     testMoQiShuangpinFilter(&instance);
     testShuangpinContinueInputAfterSelection(&instance);
     testAuxiliaryFilterEntryGuards(&instance);

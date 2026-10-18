@@ -960,12 +960,19 @@ void PinyinTabbedCandidateList::setAuxiliaryFilterMode(
     AuxiliaryFilterMode mode) {
     auxiliaryFilterBuffer_.clear();
     auxiliaryFilterMode_ = mode;
+    // Every entry and exit point of filtering passes through here, so the
+    // session flag is maintained in this one place: a MoQi session outlives
+    // the candidate-list rebuilds that partial selections cause, while Stroke
+    // and mode changes do not start or keep one.
+    inputContext_->propertyFor(&engine_->factory())->moqiFilterSession_ =
+        mode == AuxiliaryFilterMode::MoQi;
     engine_->updateFilter(inputContext_);
 }
 
 void PinyinTabbedCandidateList::resetAuxiliaryFilterMode() {
     auxiliaryFilterBuffer_.clear();
     auxiliaryFilterMode_ = AuxiliaryFilterMode::None;
+    inputContext_->propertyFor(&engine_->factory())->moqiFilterSession_ = false;
     engine_->updateFilter(inputContext_);
 }
 
