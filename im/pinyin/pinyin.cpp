@@ -586,6 +586,11 @@ void PinyinEngine::updateUI(InputContext *inputContext) {
 
     do {
         if (context.userInput().empty()) {
+            // Nothing is left to compose: the string has been committed or
+            // discarded, so the filtering session is over. A commit that
+            // empties the buffer does not go through doReset, and this is
+            // where updateUI notices the buffer is gone.
+            state->moqiFilterSession_ = false;
             break;
         }
         // Update Preedit.
@@ -1083,12 +1088,6 @@ void PinyinEngine::updateUI(InputContext *inputContext) {
         // from the input panel. The empty buffer of the new list means the mode
         // is armed but does not filter yet, and the call repaints the
         // "[MoQi Filtering]" auxiliary band.
-        // A commit that leaves no input behind (Enter-commit, cloud pinyin)
-        // ends the whole-string session right here, even though it did not go
-        // through doReset.
-        if (state->context_.empty()) {
-            state->moqiFilterSession_ = false;
-        }
         if (state->moqiFilterSession_) {
             if (*config_.auxiliaryFilter == AuxiliaryFilter::MoQi) {
                 if (auto *tabbed = currentPinyinTabbed(inputContext)) {
