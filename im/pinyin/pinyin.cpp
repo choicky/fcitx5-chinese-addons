@@ -802,15 +802,15 @@ void PinyinEngine::updateUI(InputContext *inputContext) {
             //       (win/long/game/pin/an/ai: provenance Exact) and
             //       speculative Completion/Correction arcs keep the old
             //       conservative placement.
-            //       Guard (corpus evidence): the class is suppressed when
-            //       the classical decoder has a SINGLE-syllable pure-Han
-            //       reading of the whole raw. Valid pinyin syllables that
-            //       are also English proper names ("chang" -> Chang, a
-            //       top-100 surname) are Chinese-input-first raws; without
-            //       this guard the class would displace 长/常 with Latin
-            //       surnames. Multi-segment forced coverages (chatgpt ->
-            //       茶通过平台, macos -> 马车哦是) are abbreviation
-            //       artefacts, not syllables, and do not suppress.
+            //       Bound: there is no single-syllable suppression — no such
+            //       guard exists in this placement code or in any test, and
+            //       the text previously here described a suppression that
+            //       never shipped. What keeps the class off Chinese input is
+            //       that its slots start after the classical head, plus the
+            //       single-slot rule below: at most ONE class member takes a
+            //       front-row slot per input, and every remaining member of
+            //       the class goes behind the whole classical list, still
+            //       reachable by paging.
             //       See UnifiedRanker::isBoundedInsertionClass.
             const bool strongChinese =
                 isStrongChinese(pyBeforeCursor, context.useShuangpin(),
@@ -822,6 +822,7 @@ void PinyinEngine::updateUI(InputContext *inputContext) {
             std::size_t position = 0;
             std::size_t row1Position = 0;
             std::size_t insertionPosition = strongChinese ? 1 : 0;
+            bool insertionTaken = false;
             for (const auto &cand : mixedPool) {
                 bool hasEnglish = false;
                 for (const auto src : cand.sources) {
@@ -888,8 +889,9 @@ void PinyinEngine::updateUI(InputContext *inputContext) {
                 if (row1) {
                     slot = row1Position == 0 ? 0 : row1Position;
                     ++row1Position;
-                } else if (classLead) {
-                    slot = insertionPosition++;
+                } else if (classLead && !insertionTaken) {
+                    slot = insertionPosition;
+                    insertionTaken = true;
                 }
                 auto clone = std::make_unique<pinyin::UnifiedCandidate>(cand);
                 std::string text = clone->composedText;
