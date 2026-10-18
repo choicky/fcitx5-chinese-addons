@@ -231,6 +231,7 @@ adapters	9	adapters
 adaptive	9	adaptive	
 adaptor	9	adaptor	
 adaptors	9	adaptors	
+adb	9	ADB	t
 adc	9	ADC	
 add	9	add	
 added	9	added	
@@ -2664,6 +2665,7 @@ bumble	9	bumble
 bumblebee	9	bumblebee	
 bump	9	bump	
 bumper	9	bumper	
+bun	9	Bun	p
 bunch	9	bunch	
 bundle	9	bundle	
 bundled	9	bundled	
@@ -2763,6 +2765,7 @@ cached	9	cached
 caching	9	caching	
 cactus	9	cactus	
 cad	9	cad	
+caddy	9	Caddy	p
 cadet	9	cadet	
 cadillac	9	Cadillac	
 cadmium	9	cadmium	
@@ -3210,6 +3213,7 @@ cert	9	cert
 certain	9	certain	
 certainly	9	certainly	
 certainty	9	certainty	
+certbot	9	Certbot	p
 certificate	9	certificate	
 certificates	9	certificates	
 certification	9	certification	
@@ -4185,6 +4189,7 @@ concordance	9	concordance
 concordia	9	Concordia	
 concrete	9	concrete	
 concurrent	9	concurrent	
+conda	9	Conda	p
 condemn	9	condemn	
 condemned	9	condemned	
 condense	9	condense	
@@ -4718,6 +4723,7 @@ cowboys	9	cowboys
 cows	9	cows	
 cox	9	cox	
 coyote	9	coyote	
+coze	9	Coze	p
 cozy	9	cozy	
 cp	8	CP	
 cpu	9	CPU	t
@@ -5110,6 +5116,7 @@ daytona	9	Daytona
 dazzle	9	dazzle	
 dbeaver	8	DBeaver	
 dbmesh	8	DBMesh	
+ddns	9	DDNS	t
 ddos	8	DDoS	
 dead	9	dead	
 deadline	9	deadline	
@@ -5384,6 +5391,7 @@ denise	9	Denise
 denmark	9	Denmark	
 dennis	9	Dennis	
 denny	9	Denny	
+deno	9	Deno	p
 denote	9	denote	
 denoted	9	denoted	
 denotes	9	denotes	
@@ -6955,6 +6963,7 @@ estimation	9	estimation
 estonia	9	Estonia	
 estonian	9	Estonian	
 estrogen	9	estrogen	
+esxi	9	ESXi	p
 eta	9	eta	
 etc	9	etc	
 etcd	8	etcd	
@@ -7683,6 +7692,7 @@ fir	9	fir
 fire	9	fire	
 firearm	9	firearm	
 firearms	9	firearms	
+firebase	9	Firebase	p
 fired	9	fired	
 firefighter	9	firefighter	
 firefighters	9	firefighters	
@@ -8164,6 +8174,7 @@ frost	9	frost
 frown	9	frown	
 froze	9	froze	
 frozen	9	frozen	
+frp	9	frp	t
 fruit	9	fruit	
 fruitful	9	fruitful	
 fruits	9	fruits	
@@ -8196,6 +8207,7 @@ fully	9	fully
 fulton	9	Fulton	
 fume	9	fume	
 fun	9	fun	
+funasr	9	FunASR	p
 func	9	func	
 function	9	function	
 functional	9	functional	
@@ -9066,6 +9078,7 @@ happiest	9	happiest
 happily	9	happily	
 happiness	9	happiness	
 happy	9	happy	
+haproxy	9	HAProxy	p
 haptic	9	haptic	
 harass	9	harass	
 harassed	9	harassed	
@@ -9210,6 +9223,7 @@ headphones	9	headphones
 headquartered	9	headquartered	
 headquarters	9	headquarters	
 heads	9	heads	
+headscale	9	Headscale	p
 headset	9	headset	
 headsets	9	headsets	
 heal	9	heal	
@@ -9901,6 +9915,7 @@ immigration	9	immigration
 imminent	9	imminent	
 imminently	9	imminently	
 immortal	9	immortal	
+immortalwrt	9	ImmortalWrt	p
 immune	9	immune	
 immunity	9	immunity	
 immunization	9	immunization	
@@ -10563,6 +10578,7 @@ ipod	8	iPod
 ipoe	8	IPoE	
 ipsec	9	IPSec	
 ipswich	9	Ipswich	
+iptables	9	iptables	t
 iptv	8	IPTV	
 iq	8	IQ	
 iqiyi	8	IQIYI	
@@ -10728,6 +10744,7 @@ jefferson	9	Jefferson
 jeffrey	9	Jeffrey	
 jekyll	8	Jekyll	
 jelly	9	jelly	
+jellyfin	9	Jellyfin	p
 jellyfish	9	jellyfish	
 jelsoft	9	jelsoft	
 jenkins	9	Jenkins	
@@ -10886,6 +10903,7 @@ juniper	9	juniper
 junk	9	junk	
 juno	9	Juno	
 jupiter	9	Jupiter	
+jupyter	9	Jupyter	p
 jurisdiction	9	jurisdiction	
 jurisdictions	9	jurisdictions	
 jury	9	jury	
@@ -10970,6 +10988,7 @@ keras	8	Keras
 kern	9	kern	
 kernel	9	kernel	
 kernels	9	kernels	
+kernelsu	9	KernelSU	p
 kerr	9	Kerr	
 kerry	9	Kerry	
 ketchup	9	ketchup	
@@ -12005,6 +12024,7 @@ maggie	9	maggie
 magic	9	magic	
 magical	9	magical	
 magician	9	magician	
+magisk	9	Magisk	p
 magistrate	9	magistrate	
 magnesium	9	magnesium	
 magnet	9	magnet	
@@ -13437,6 +13457,7 @@ nextel	9	nextel
 nexus	9	nexus	
 nfc	8	NFC	
 nft	8	NFT	
+nftables	9	nftables	t
 ng	8	NG	
 ngff	8	NGFF	
 nginx	9	Nginx	t
@@ -13633,6 +13654,7 @@ nox	9	nox
 nozzle	9	nozzle	
 npc	8	NPC	
 npm	9	npm	t
+npu	9	NPU	t
 nsfw	8	NSFW	
 ntfs	8	NTFS	
 ntr	8	NTR	
@@ -13661,6 +13683,7 @@ numbing	9	numbing
 numeric	9	numeric	
 numerical	9	numerical	
 numerous	9	numerous	
+numpy	9	NumPy	p
 nun	9	nun	
 nunavut	9	Nunavut	
 nurse	9	nurse	
@@ -13725,6 +13748,7 @@ oblivion	9	oblivion
 oblivious	9	oblivious	
 obliviously	9	obliviously	
 oblong	9	oblong	
+obs	9	OBS	t
 obscene	9	obscene	
 obscenities	9	obscenities	
 obscenity	9	obscenity	
@@ -13954,6 +13978,7 @@ opensearch	8	OpenSearch
 openstreetmap	8	OpenStreetMap	
 opensuse	8	openSUSE	
 opentofu	8	OpenTofu	
+openvpn	9	OpenVPN	p
 openwrt	9	OpenWrt	p
 opera	9	opera	
 operate	9	operate	
@@ -14349,6 +14374,7 @@ panasonic	8	Panasonic
 pancakeswap	8	PancakeSwap	
 pancreatic	9	pancreatic	
 panda	9	panda	
+pandas	9	Pandas	p
 pandemic	9	pandemic	
 pandoc	8	pandoc	
 pane	9	pane	
@@ -14952,6 +14978,7 @@ pioneering	9	pioneering
 pioneers	9	pioneers	
 pionex	8	Pionex	
 pious	9	pious	
+pip	9	pip	t
 pipe	9	pipe	
 pipeline	9	pipeline	
 pipelines	9	pipelines	
@@ -15081,6 +15108,7 @@ pledged	9	pledged
 plenary	9	plenary	
 plentiful	9	plentiful	
 plenty	9	plenty	
+plex	9	Plex	p
 plight	9	plight	
 plistedit	8	PlistEdit	
 plot	9	plot	
@@ -15112,12 +15140,14 @@ plymouth	9	Plymouth
 pneumatic	9	pneumatic	
 pneumonia	9	pneumonia	
 png	9	PNG	
+pnpm	9	pnpm	t
 pocket	9	pocket	
 pockets	9	pockets	
 pod	9	pod	
 podcast	9	podcast	
 podcasting	9	podcasting	
 podcasts	9	podcasts	
+podman	9	Podman	p
 poe	9	Poe	
 poem	9	poem	
 poems	9	poems	
@@ -15808,6 +15838,7 @@ provoke	9	provoke
 provost	9	provost	
 proxifier	8	Proxifier	
 proximity	9	proximity	
+proxmox	9	Proxmox	p
 proxy	9	proxy	
 proxychains	8	ProxyChains	
 proxyman	8	Proxyman	
@@ -17821,6 +17852,7 @@ sense	9	sense
 senseless	9	senseless	
 senses	9	senses	
 sensetime	6	SenseTime	
+sensevoice	9	SenseVoice	p
 sensible	9	sensible	
 sensing	9	sensing	
 sensitive	9	sensitive	
@@ -19705,6 +19737,7 @@ syndicated	9	syndicated
 syndication	9	syndication	
 syndrome	9	syndrome	
 synergy	9	synergy	
+synology	9	Synology	p
 synonym	9	synonym	
 synonymous	9	synonymous	
 synonyms	9	synonyms	
@@ -20521,6 +20554,7 @@ toy	9	toy
 toyota	9	Toyota	
 toys	9	toys	
 tpm	8	TPM	
+tpu	9	TPU	t
 trace	9	trace	
 traced	9	traced	
 traces	9	traces	
@@ -20785,6 +20819,7 @@ trudgers	9	trudgers
 trudges	9	trudges	
 trudging	9	trudging	
 true	9	true	
+truenas	9	TrueNAS	p
 truly	9	truly	
 truman	9	Truman	
 trump	9	trump	
@@ -20803,6 +20838,7 @@ truths	9	truths
 try	9	try	
 trying	9	trying	
 tsunami	9	tsunami	
+tts	9	TTS	t
 tube	9	tube	
 tuber	9	tuber	
 tubercle	9	tubercle	
@@ -21103,6 +21139,7 @@ unpleasant	9	unpleasant
 unprecedented	9	unprecedented	
 unpredictable	9	unpredictable	
 unpublished	9	unpublished	
+unraid	9	Unraid	p
 unrated	9	unrated	
 unread	9	unread	
 unreal	9	unreal	
@@ -21597,6 +21634,7 @@ vivo	8	vivo
 viz	9	viz	
 vladimir	9	Vladimir	
 vlan	9	VLAN	
+vlc	9	VLC	t
 vless	8	VLESS	
 vmess	8	VMess	
 vmware	8	VMware	
@@ -22357,6 +22395,7 @@ xml	9	XML	t
 xnip	8	Xnip	
 xpeng	6	XPeng	
 xperia	8	Xperia	
+xray	9	Xray	p
 xscope	8	xScope	
 xshell	8	Xshell	
 xtrafinder	8	XtraFinder	
@@ -22451,6 +22490,7 @@ zen	9	zen
 zenith	9	zenith	
 zeppelin	9	zeppelin	
 zero	9	zero	
+zerotier	9	ZeroTier	p
 zest	9	zest	
 zeta	9	zeta	
 zettlr	8	Zettlr	

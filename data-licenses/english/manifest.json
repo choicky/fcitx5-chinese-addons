@@ -24,9 +24,9 @@
   "frequency_source": "none - no frequency-rank corpus is consumed",
   "curated": ["data-licenses/english/proper.allow", "data-licenses/english/technical.allow"],
   "offensive_filter": "data-licenses/english/profanity-severe.allow (MIT; canonical severe entries)",
-  "sha256": "2506539f4f96a4603507a11ba23d7f4291346b08e1551d6e64cc7ac9fc6571b1",
-  "bytes": 434970,
-  "entries": 22477,
+  "sha256": "bb35d6467d0f3a439e4255f6218928834ee88ca962984cc6116890ad01a9f89a",
+  "bytes": 435666,
+  "entries": 22517,
   "prepared_by": "tools/prepare_english_lexicon.sh",
-  "prepared": "2026-10-12T08:09:01Z"
+  "prepared": "2026-10-18T16:38:59Z"
 }

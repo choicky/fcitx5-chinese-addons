@@ -3617,6 +3617,181 @@ void testMixedPlacementWindow(Instance *instance) {
     });
 }
 
+// Fusion.11 §3a — the bounded insertion class may take at most ONE front-row
+// slot per input. Ziranma "ui" = shi, so "UI + one Han character" readings are
+// all class members of a strong-Chinese raw and used to occupy slots 1, 2, 3…,
+// pushing 实际/实施/世界 out of the head rows. Every member after the
+// best-ranked one now goes behind the whole classical list, still reachable by
+// paging. Existing expectations are untouched: this only runs new assertions.
+void testMixedInsertionCapFusion11(Instance *instance) {
+    instance->eventDispatcher().schedule([instance]() {
+        auto *testfrontend = instance->addonManager().addon("testfrontend");
+        auto *pinyin = instance->addonManager().addon("pinyin", true);
+        FCITX_ASSERT(pinyin);
+        auto uuid =
+            testfrontend->call<ITestFrontend::createInputContext>("testcap");
+        auto *ic = instance->inputContextManager().findByUUID(uuid);
+        FCITX_ASSERT(ic);
+        RawConfig lcfg;
+        lcfg.setValueByPath("Fuzzy/Correction", "None");
+        pinyin->setConfig(lcfg);
+
+        auto type = [&](const char *mode, const std::string &raw) {
+            instance->setCurrentInputMethod(ic, mode, true);
+            ic->reset();
+            for (const char p : raw) {
+                testfrontend->call<ITestFrontend::keyEvent>(
+                    ic->uuid(), Key(std::string(1, p)), false);
+            }
+        };
+        auto window = [&ic]() -> std::vector<std::string> {
+            std::vector<std::string> out;
+            auto list = ic->inputPanel().candidateList();
+            FCITX_ASSERT(list && !list->empty());
+            auto *bulk = list->toBulk();
+            FCITX_ASSERT(bulk);
+            for (int i = 0; i < bulk->totalSize(); ++i) {
+                out.push_back(std::string(
+                    bulk->candidateFromAll(i).text().toString()));
+            }
+            return out;
+        };
+        // ASCII letters only: a UTF-8 continuation byte must never read as
+        // Latin, or the Han candidates would count as Latin.
+        const auto hasLatin = [](const std::string &t) {
+            return std::any_of(t.begin(), t.end(), [](char ch) {
+                const unsigned char c = static_cast<unsigned char>(ch);
+                return (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z');
+            });
+        };
+        // The placement loop skips every Chinese-only mixed candidate
+        // (!hasEnglish -> continue), so a pure-Han candidate in the panel is
+        // by construction produced by the classical decoder.
+        const auto isPureHan = [&](const std::string &t) {
+            return !t.empty() && !hasLatin(t);
+        };
+        auto indexOf = [](const std::vector<std::string> &w,
+                          const std::string &text) {
+            const auto it = std::find(w.begin(), w.end(), text);
+            return it == w.end() ? -1
+                                 : static_cast<int>(it - w.begin());
+        };
+
+        struct CapCase {
+            const char *mode;
+            const char *raw;
+            std::vector<std::string> needles;
+        };
+        const std::vector<CapCase> cases = {
+            {"shuangpin", "uiji", {"实际", "世纪"}},
+            {"shuangpin", "uiui", {"实施", "事实"}},
+            {"shuangpin", "uijx", {"世界"}},
+            {"pinyin", "aiqing", {"爱情"}},
+        };
+
+        for (const auto &c : cases) {
+            type(c.mode, c.raw);
+            const auto w = window();
+            // Precondition, reported separately from the cap assertion: the
+            // Chinese words the cap protects must really be classical
+            // candidates for this raw, otherwise the test below is vacuous.
+            bool classicalPresent = false;
+            for (const auto &needle : c.needles) {
+                const int idx = indexOf(w, needle);
+                std::fprintf(stderr,
+                             "MIXEDCAP mode=%s raw=%s classical=%s idx=%d\n",
+                             c.mode, c.raw, needle.c_str(), idx);
+                if (idx >= 0 && isPureHan(needle)) {
+                    classicalPresent = true;
+                }
+            }
+            FCITX_ASSERT(classicalPresent)
+                << "MIXEDCAP PRECONDITION FAIL: no classical needle in the "
+                   "candidate list for mode="
+                << c.mode << " raw=" << c.raw;
+
+            const int head =
+                std::min<int>(5, static_cast<int>(w.size()));
+            int latin = 0;
+            for (int i = 0; i < head; ++i) {
+                if (hasLatin(w[i])) {
+                    ++latin;
+                }
+                std::fprintf(stderr, "MIXEDCAP mode=%s raw=%s [%d] %s\n",
+                             c.mode, c.raw, i, w[i].c_str());
+            }
+            FCITX_ASSERT(latin <= 1)
+                << "MIXEDCAP FAIL: " << latin << " Latin candidates in the top "
+                << head << " for mode=" << c.mode << " raw=" << c.raw;
+
+            bool needleLeads = false;
+            for (const auto &needle : c.needles) {
+                const int idx = indexOf(w, needle);
+                if (idx >= 0 && idx <= 2) {
+                    needleLeads = true;
+                }
+            }
+            FCITX_ASSERT(needleLeads)
+                << "MIXEDCAP FAIL: no protected Chinese word inside the top 3 "
+                << "for mode=" << c.mode << " raw=" << c.raw;
+        }
+
+        // The members that lost the slot must stay reachable: this raw has
+        // several class readings, exactly one may hold the insertion slot and
+        // every other one must sit behind the head rows (and down the list).
+        type("shuangpin", "uiji");
+        {
+            const auto w = window();
+            std::vector<int> latinIdx;
+            for (std::size_t i = 0; i < w.size(); ++i) {
+                if (hasLatin(w[i])) {
+                    latinIdx.push_back(static_cast<int>(i));
+                }
+            }
+            std::fprintf(stderr,
+                         "MIXEDCAP-SPLIT mode=shuangpin raw=uiji latin=%zu "
+                         "total=%zu",
+                         latinIdx.size(), w.size());
+            for (std::size_t k = 0; k < latinIdx.size() && k < 4; ++k) {
+                std::fprintf(stderr, " #%zu=[%d]%s", k + 1, latinIdx[k],
+                             w[static_cast<std::size_t>(latinIdx[k])].c_str());
+            }
+            std::fprintf(stderr, "\n");
+            FCITX_ASSERT(latinIdx.size() >= 2)
+                << "MIXEDCAP FAIL: raw=uiji offers no capped member to place "
+                   "behind the head rows (latin count="
+                << latinIdx.size() << ")";
+            FCITX_ASSERT(latinIdx[1] >= 5)
+                << "MIXEDCAP FAIL: raw=uiji places a second class member at "
+                   "panel index "
+                << latinIdx[1];
+        }
+
+        // v0.1.3-fusion.11 lexicon additions must be reachable through the
+        // product path (full list; this is not a front-row promise).
+        for (const auto &[raw, display] :
+             std::vector<std::pair<std::string, std::string>>{
+                 {"caddy", "Caddy"},
+                 {"zerotier", "ZeroTier"},
+                 {"proxmox", "Proxmox"}}) {
+            type("pinyin", raw);
+            const auto w = window();
+            const int idx = indexOf(w, display);
+            std::fprintf(stderr,
+                         "MIXEDCAP-LEX raw=%s display=%s idx=%d total=%zu\n",
+                         raw.c_str(), display.c_str(), idx, w.size());
+            FCITX_ASSERT(idx >= 0)
+                << "MIXEDCAP FAIL: curated lexicon display " << display
+                << " unreachable for raw=" << raw;
+        }
+
+        ic->reset();
+        std::fprintf(stderr,
+                     "MIXEDCAP OK: one front-row insertion slot per input, "
+                     "classical head rows protected, capped members reachable\n");
+    });
+}
+
 } // namespace
 
 int main() {
@@ -3643,6 +3818,7 @@ int main() {
     testMixedR13ChineseQuality(&instance);
     testMixedSingleSyllableGuard(&instance);
     testMixedPlacementWindow(&instance);
+    testMixedInsertionCapFusion11(&instance);
     testMixedProductCorpus(&instance);
     testMixedRankingCorpus(&instance);
     testMixedLearning(&instance);
