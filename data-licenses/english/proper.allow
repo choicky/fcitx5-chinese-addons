@@ -77,3 +77,35 @@ Midjourney
 Huawei
 Xiaomi
 Copilot
+# Self-hosting / infrastructure and tooling brands requested for
+# v0.1.3-fusion.11 (owner-reviewed list; none of these keys exist in the
+# pinned Ice/Frost inventory, so every entry below adds a key rather than
+# overriding an existing display).
+Caddy
+HAProxy
+Xray
+OpenVPN
+ZeroTier
+Headscale
+ImmortalWrt
+Certbot
+Podman
+Firebase
+Conda
+Jupyter
+Deno
+Bun
+NumPy
+Pandas
+Coze
+FunASR
+SenseVoice
+Proxmox
+ESXi
+Unraid
+TrueNAS
+Synology
+Magisk
+KernelSU
+Jellyfin
+Plex

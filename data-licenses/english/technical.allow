@@ -76,3 +76,22 @@ ASR
 # K8s was reviewed the same day and dropped: digit-bearing keys are not
 # reachable through PinyinEngine::keyEvent and no engine change is
 # authorized to admit them (AUDIT.md §3/§6).
+# v0.1.3-fusion.11 additions (owner-reviewed list):
+frp
+iptables
+nftables
+DDNS
+pnpm
+pip
+TPU
+NPU
+ADB
+OBS
+VLC
+TTS
+# Reviewed for the same release and NOT added: sing-box, Node.js, Next.js,
+# llama.cpp, Pi-hole, fine-tune. Their display forms need "-" or ".", which
+# the generator's surface filter skips, and admitting them would break the
+# shipped resource invariant key == lowercase(display), which holds for every
+# row of the resource (22477 before these additions, 22517 after) - see the
+# release report.
