@@ -3792,6 +3792,252 @@ void testMixedInsertionCapFusion11(Instance *instance) {
     });
 }
 
+// Fusion.12 §4 (owner decision) — whole-word Exact lead is Shuangpin-only
+// (rule (d)), and rule-(b) lead rows are capped at kRow1FrontMax = 3 (rule
+// (b) cap). No existing expectation is changed here; every measurement is
+// printed before it is asserted, and every precondition is asserted loudly.
+void testMixedWholeWordLeadFusion12(Instance *instance) {
+    instance->eventDispatcher().schedule([instance]() {
+        auto *testfrontend = instance->addonManager().addon("testfrontend");
+        auto *pinyin = instance->addonManager().addon("pinyin", true);
+        FCITX_ASSERT(pinyin);
+        auto uuid = testfrontend->call<ITestFrontend::createInputContext>(
+            "fusion12");
+        auto *ic = instance->inputContextManager().findByUUID(uuid);
+        FCITX_ASSERT(ic);
+
+        auto setLayout = [&](const char *layout) {
+            RawConfig lcfg;
+            lcfg.setValueByPath("Fuzzy/Correction", layout);
+            pinyin->setConfig(lcfg);
+        };
+        auto type = [&](const char *mode, const std::string &raw) {
+            instance->setCurrentInputMethod(ic, mode, true);
+            ic->reset();
+            for (const char p : raw) {
+                testfrontend->call<ITestFrontend::keyEvent>(
+                    ic->uuid(), Key(std::string(1, p)), false);
+            }
+        };
+        auto window = [&ic]() -> std::vector<std::string> {
+            std::vector<std::string> out;
+            auto list = ic->inputPanel().candidateList();
+            FCITX_ASSERT(list && !list->empty());
+            auto *bulk = list->toBulk();
+            FCITX_ASSERT(bulk);
+            for (int i = 0; i < bulk->totalSize(); ++i) {
+                out.push_back(std::string(
+                    bulk->candidateFromAll(i).text().toString()));
+            }
+            return out;
+        };
+        // ASCII letters only, same convention as the fusion.11 cap test: a
+        // UTF-8 continuation byte must never read as Latin.
+        const auto hasLatin = [](const std::string &t) {
+            return std::any_of(t.begin(), t.end(), [](char ch) {
+                const unsigned char c = static_cast<unsigned char>(ch);
+                return (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z');
+            });
+        };
+        auto indexOf = [](const std::vector<std::string> &w,
+                          const std::string &text) {
+            const auto it = std::find(w.begin(), w.end(), text);
+            return it == w.end() ? -1
+                                 : static_cast<int>(it - w.begin());
+        };
+
+        std::vector<std::string> failures;
+        auto fail = [&](const std::string &line) {
+            failures.push_back(line);
+            std::fprintf(stderr, "FUSION12 FAIL %s\n", line.c_str());
+        };
+
+        // (1) Rule (d) fires for strong-Chinese Ziranma raws: the whole-word
+        // Exact reading takes the single front insertion slot (panel index
+        // 0 or 1) and is the only Latin-bearing candidate near the head.
+        for (const char *raw : {"merge", "server", "deploy"}) {
+            setLayout("None");
+            type("shuangpin", raw);
+            const auto w = window();
+            const int idx = indexOf(w, raw);
+            std::fprintf(stderr,
+                         "FUSION12-R1 raw=%s idx=%d total=%zu\n", raw, idx,
+                         w.size());
+            FCITX_ASSERT(idx >= 0)
+                << "FUSION12 precondition: exact word " << raw
+                << " unreachable for Ziranma raw";
+            FCITX_ASSERT(w.size() > 3 && !hasLatin(w[0]))
+                << "FUSION12 precondition: forced Chinese head missing for "
+                << raw << " (w[0]=" << w[0] << ")";
+            if (idx > 1) {
+                fail(std::string("R1 placement: ") + raw + " at index " +
+                     std::to_string(idx) + " > 1");
+            }
+            int latinInTop5 = 0;
+            for (std::size_t i = 0;
+                 i < std::min<std::size_t>(5, w.size()); ++i) {
+                if (hasLatin(w[i])) {
+                    ++latinInTop5;
+                }
+            }
+            if (latinInTop5 > 1) {
+                fail(std::string("R1 flooding: ") +
+                     std::to_string(latinInTop5) +
+                     " Latin candidates in top 5 for " + raw);
+            }
+        }
+
+        // (2) Negative control: Ziranma "push" has no whole-word Exact shape
+        // (and no class member), so no Latin may enter the head rows.
+        {
+            setLayout("None");
+            type("shuangpin", "push");
+            const auto w = window();
+            FCITX_ASSERT(w.size() > 2)
+                << "FUSION12 precondition: push window too small";
+            std::fprintf(stderr,
+                         "FUSION12-CTRL raw=push w0=%s w1=%s total=%zu\n",
+                         w[0].c_str(), w[1].c_str(), w.size());
+            if (hasLatin(w[0]) || hasLatin(w[1])) {
+                fail("R1 leaked onto push: Latin in head rows");
+            }
+        }
+
+        // (3) Owner gate: rule (d) must not fire in full-Pinyin mode. The
+        // whole-word raws whose intended reading is Chinese keep a fully Han
+        // head block under both correction layouts.
+        for (const char *layout : {"None", "QWERTY"}) {
+            setLayout(layout);
+            for (const char *raw : {"women", "change"}) {
+                type("pinyin", raw);
+                const auto w = window();
+                const int head = std::min<std::size_t>(7, w.size());
+                FCITX_ASSERT(head == 7)
+                    << "FUSION12 precondition: fewer than 7 candidates for "
+                    << raw;
+                int latin = 0;
+                for (int i = 0; i < head; ++i) {
+                    if (hasLatin(w[i])) {
+                        ++latin;
+                    }
+                }
+                std::fprintf(stderr,
+                             "FUSION12-R1GATE layout=%s raw=%s "
+                             "latinInHead7=%d\n",
+                             layout, raw, latin);
+                if (latin) {
+                    fail(std::string("R1 fired in full-pinyin mode: ") + raw +
+                         " layout=" + layout);
+                }
+            }
+        }
+
+        // (4) Rule-(b) cap: at most kRow1FrontMax = 3 Latin-bearing
+        // candidates lead the panel before the classical head resumes.
+        // "Latin-bearing" is measured as *Latin-initial*: every row1 reading
+        // begins with its leading English arc, while classical candidates
+        // may contain a literal ASCII letter (e.g. 色弱V而 for raw "server")
+        // without being an English lead at all.
+        for (const char *layout : {"None", "QWERTY"}) {
+            setLayout(layout);
+            struct Row1Case {
+                const char *mode;
+                const char *raw;
+            };
+            const auto latinInitial = [](const std::string &t) {
+                if (t.empty()) {
+                    return false;
+                }
+                const unsigned char c =
+                    static_cast<unsigned char>(t.front());
+                return (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z');
+            };
+            for (const auto &c : std::vector<Row1Case>{{"shuangpin", "caddy"},
+                                                       {"pinyin", "merge"},
+                                                       {"pinyin", "server"}}) {
+                type(c.mode, c.raw);
+                const auto w = window();
+                int front = 0;
+                int totalLatin = 0;
+                while (front < static_cast<int>(w.size()) &&
+                       latinInitial(w[static_cast<std::size_t>(front)])) {
+                    ++front;
+                }
+                for (const auto &t : w) {
+                    if (latinInitial(t)) {
+                        ++totalLatin;
+                    }
+                }
+                std::fprintf(stderr,
+                             "FUSION12-R2 layout=%s mode=%s raw=%s "
+                             "frontLatin=%d totalLatin=%d total=%zu\n",
+                             layout, c.mode, c.raw, front, totalLatin,
+                             w.size());
+                // Precondition: the panel really contains more than the cap
+                // worth of row1 members (§2: 4-8 admitted per raw here).
+                FCITX_ASSERT(totalLatin > 3)
+                    << "FUSION12 precondition: " << c.raw
+                    << " offers no over-cap row1 candidates";
+                if (front > 3) {
+                    fail(std::string("R2 cap: ") + c.raw + " layout=" +
+                         layout + " leads with " + std::to_string(front) +
+                         " Latin candidates");
+                }
+                if (front >= static_cast<int>(w.size())) {
+                    fail(std::string("R2 precondition: ") + c.raw +
+                         " panel has no Chinese tail to protect");
+                }
+            }
+        }
+
+        // (5) The measured cap=3 consequence: the two needles that sat at
+        // panel index 2 at baseline (the third front row) stay at baseline
+        // rank — they are not demoted behind the classical list.
+        {
+            setLayout("None");
+            auto rankOfNeedle = [&](const char *raw,
+                                    const char *needle) -> int {
+                type("pinyin", raw);
+                const auto w = window();
+                for (std::size_t i = 0; i < w.size(); ++i) {
+                    if (w[i].find(needle) != std::string::npos) {
+                        return static_cast<int>(i);
+                    }
+                }
+                return -1;
+            };
+            const int g = rankOfNeedle("githbu", "GitHub");
+            const int p =
+                rankOfNeedle("wodakaigithubheiphonexiuxian", "phone");
+            std::fprintf(stderr,
+                         "FUSION12-NEEDLE githbu->GitHub=%d "
+                         "heiphonexiuxian->phone=%d\n",
+                         g, p);
+            FCITX_ASSERT(g >= 0)
+                << "FUSION12 precondition: githbu -> GitHub unreachable";
+            FCITX_ASSERT(p >= 0)
+                << "FUSION12 precondition: ...phone needle unreachable";
+            if (g != 2) {
+                fail("R2 demoted githbu GitHub needle: rank " +
+                     std::to_string(g) + " != baseline 2");
+            }
+            if (p != 2) {
+                fail("R2 demoted heiphonexiuxian phone needle: rank " +
+                     std::to_string(p) + " != baseline 2");
+            }
+        }
+
+        ic->reset();
+        setLayout("None");
+        FCITX_ASSERT(failures.empty())
+            << "FUSION12 FAIL count=" << failures.size();
+        std::fprintf(stderr,
+                     "FUSION12 OK: whole-word Exact leads in Ziranma only, "
+                     "full-Pinyin head rows untouched, row1 front block "
+                     "capped at three with index-2 needles preserved\n");
+    });
+}
+
 } // namespace
 
 int main() {
@@ -3819,6 +4065,7 @@ int main() {
     testMixedSingleSyllableGuard(&instance);
     testMixedPlacementWindow(&instance);
     testMixedInsertionCapFusion11(&instance);
+    testMixedWholeWordLeadFusion12(&instance);
     testMixedProductCorpus(&instance);
     testMixedRankingCorpus(&instance);
     testMixedLearning(&instance);
