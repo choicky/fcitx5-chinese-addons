@@ -302,6 +302,44 @@ Alternative considered and rejected:
     ranking and placement semantics are untouched — this entry is data
     only.
 
+  * **2026-10-19 — Finance acronym and two-letter abbreviation supplement
+    (v0.1.3-fusion.13, owner-reviewed list).** Twenty-one curated surfaces
+    join `technical.allow`, all acronym-shaped and all provenanced to the
+    established acronym convention itself (no third-party list was
+    imported):
+      - R1, two-letter uppercase abbreviations — `IH`, `IF`, `IM`, `PE`,
+        `PB`. `IC` already shipped with the canonical uppercase display
+        from the pinned inventory, so it was not repeated (repeating it
+        would change no observable behavior). `IF` replaces the shipped
+        lowercase display `if`; the lowercase literal stays a parallel arc
+        (D071) and user-typed case stays authoritative (D069).
+      - R2, finance/technical acronyms — `ETF`, `LOF`, `CPI`, `PPI`,
+        `PMI`, `MLF`, `LPR`, `VIX`, `QDII`, `FOF`, `REITs`, `ESG`, `ROE`,
+        `EPS`, `CTA`. `ROE` replaces the shipped lowercase display `roe`
+        (same parallel-arc treatment). None of the other thirteen existed
+        in the pinned inventory, so each adds a new key at tier 9.
+      - `REITs` is the one mixed-case surface in the batch. The generator's
+        documented reachable-surface filter (`^[A-Za-z]+(?:'[A-Za-z]+)*$`)
+        accepts it and the curated merge ships the canonical display, so it
+        ships unmodified; no filter or rule needed a workaround.
+    The source pins are unchanged (rime-ice @
+    `da1fbe602e38f26db846fa10120ee64c2b0324c0`, rime-frost @
+    `f1bc68b308adcca916c51bcaad25a267876e6efe`). The resource was
+    regenerated with `tools/prepare_english_lexicon.sh` (no hand edits),
+    and `manifest.json` / `NOTICE` are script output, so the
+    configure-time SHA-256 gate still holds. Entry count moves 22,517 →
+    22,535 (eighteen new keys; `if` and `roe` change display in place),
+    size 435,666 → 435,882 bytes, SHA-256
+    `bb35d6467d0f3a439e4255f6218928834ee88ca962984cc6116890ad01a9f89a` →
+    `0d14dd0e70b19934981a3877ee59b67732077d11ad3b18b495bd70bf9b098d29`,
+    `prepared` 2026-10-19T03:09:58Z. The diff against the previous
+    resource is exactly those twenty rows: eighteen additions and the two
+    display/flag changes, nothing else. Arc admission, ranking and
+    placement semantics are untouched by this entry — the accompanying
+    fusion.13 change to the English correction floor (spans shorter than
+    four bytes are never corrected) is engine behavior and is documented
+    in the code and the release report, not in this data log.
+
 ## 7. Package size and performance (targets, not measured)
 
   * Target entry count: a curated common-word core, not a maximal
