@@ -99,6 +99,8 @@ add_executable(testenglishcorrection testenglishcorrection.cpp
 target_include_directories(testenglishcorrection PRIVATE
     ${PROJECT_SOURCE_DIR}/im/pinyin ${PROJECT_SOURCE_DIR}/im/pinyin/mixed
     ${PROJECT_SOURCE_DIR}/im/pinyin/mixed/english)
+target_compile_definitions(testenglishcorrection PRIVATE
+    FUSION_ENGLISH_LEXICON_PATH="${PROJECT_SOURCE_DIR}/im/pinyin/english_lexicon.tsv")
 add_test(NAME testenglishcorrection COMMAND testenglishcorrection)
 
 add_executable(testmixedpipeline testmixedpipeline.cpp

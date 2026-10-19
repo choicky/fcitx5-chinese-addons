@@ -27,6 +27,9 @@ namespace pinyin {
 // batch-3 EnglishArcOracle Completion path; those provenance channels stay
 // distinct so UnifiedRanker can weight them differently (§19).
 //
+// Only spans of at least Config::minSpanLength bytes are attempted; a span of
+// exactly that length IS attempted, the bound is inclusive.
+//
 // Neighbor generation is bounded: for a span of length L we generate at
 // most L * K substitution neighbors (K is the average adjacency fanout of
 // the QWERTY row, small) plus (L - 1) transposition neighbors, then look
@@ -44,10 +47,22 @@ public:
     struct Config {
         // Per-span cap on correction arcs. Internal knob, not user-exposed.
         std::size_t maxCorrectionsPerSpan = 3;
-        // Only correction spans strictly longer than this are attempted, to
-        // avoid over-eager corrections on 1-2 byte spans that are legitimately
-        // short words or valid prefixes. Set to 3 by default.
-        std::size_t minSpanLength = 3;
+        // Spans at least this long are correction candidates; shorter spans
+        // are never corrected. The loop in arcsAt() starts at
+        // `begin + max(2, minSpanLength)`, so a span of exactly
+        // `minSpanLength` bytes IS attempted — this is a floor, not a
+        // "strictly longer than" bound.
+        //
+        // fusion.13 raised the floor 3 -> 4. Three-letter finance/technical
+        // abbreviations typed literally (ETF, CPI, VIX, FOF, ...) are not
+        // typos, but the correction neighborhood is dense at length 3: a
+        // measured sample of random 3-letter non-words had a lexicon
+        // neighbour for 41.7% of them (etf -> wtf/etc/eff, cpi -> cpu,
+        // vix -> fix, fof -> for), versus 7.1% at length 4 and 0.6% at
+        // length 5. So the corrections a real 3-letter mistype could have
+        // won are worth far less than the false corrections the same span
+        // kept producing.
+        std::size_t minSpanLength = 4;
     };
 
     EnglishCorrectionOracle(const EnglishLexicon *systemLex, Config config);

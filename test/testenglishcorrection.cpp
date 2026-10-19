@@ -7,6 +7,7 @@
 #include "english/englishlexicon.h"
 
 #include <cstdio>
+#include <fstream>
 #include <string>
 #include <vector>
 
@@ -194,6 +195,122 @@ int main() {
         EnglishCorrectionOracle e(&empty);
         auto arcs = e.arcsAt("gello", 0, 5);
         check(arcs.empty(), "empty lex: no arcs, safe");
+    }
+
+    // 11. fusion.13 correction floor on the PRODUCTION resource with the
+    //     PRODUCTION config (the default Config — pinyin.cpp constructs the
+    //     oracle through the single-argument constructor, so what the product
+    //     uses IS this default). Spans of three bytes are never corrected;
+    //     spans of four and more still are. The preconditions are asserted
+    //     loudly first: if the shipped lexicon stopped containing the
+    //     3-letter neighbours that made this observable, or the 4-letter
+    //     control stopped correcting, the case below would silently stop
+    //     testing anything.
+    {
+        EnglishLexicon realLex;
+#ifdef FUSION_ENGLISH_LEXICON_PATH
+        {
+            std::ifstream in(FUSION_ENGLISH_LEXICON_PATH);
+            check(in.is_open(), "floor: shipped english_lexicon.tsv readable");
+            realLex.load(in);
+        }
+#else
+        check(false, "floor: FUSION_ENGLISH_LEXICON_PATH not defined");
+#endif
+        check(realLex.size() >= 20000,
+              "floor: shipped resource has >= 20k entries");
+
+        // Precondition A: every 3-letter raw below is NOT itself a lexicon
+        // word (so the oracle's false-correction guard cannot be the reason
+        // it stops correcting) and DOES have a real lexicon neighbour one
+        // QWERTY edit away (so "no arcs" below can only come from the floor,
+        // not from a dead neighbourhood). Both halves are measured facts of
+        // the shipped resource, asserted loudly.
+        struct ThreeCase {
+            const char *raw;
+            const char *neighbor;
+        };
+        const std::vector<ThreeCase> threes = {
+            {"xat", "cat"}, {"eht", "eth"}, {"fpr", "for"}, {"jat", "hat"},
+            {"kot", "lot"}, {"mof", "mod"}, {"pof", "pod"},
+        };
+        for (const auto &t : threes) {
+            const auto foldedRaw = EnglishLexicon::foldKey(t.raw);
+            check(foldedRaw && realLex.lookup(*foldedRaw) == nullptr,
+                  (std::string("floor precondition: raw '") + t.raw +
+                   "' is not a lexicon word")
+                      .c_str());
+            const auto folded = EnglishLexicon::foldKey(t.neighbor);
+            check(folded && realLex.lookup(*folded) != nullptr,
+                  (std::string("floor precondition: neighbour '") + t.neighbor +
+                   "' is in the shipped lexicon")
+                      .c_str());
+        }
+
+        // Precondition B: the same oracle with the OLD floor (3) DOES emit a
+        // correction for every one of these spans, so the case below is live
+        // and the neighbourhood is reachable.
+        {
+            EnglishCorrectionOracle::Config old3;
+            old3.minSpanLength = 3;
+            EnglishCorrectionOracle probe(&realLex, old3);
+            std::size_t corrected = 0;
+            for (const auto &t : threes) {
+                const std::string s = t.raw;
+                auto arcs = probe.arcsAt(s, 0, s.size());
+                for (const auto &a : arcs) {
+                    if (a.provenance == CandidateProvenance::Correction) {
+                        ++corrected;
+                        break;
+                    }
+                }
+            }
+            check(corrected == threes.size(),
+                  "floor precondition: with minSpanLength=3 all seven "
+                  "3-letter spans DO correct (else this test proves nothing)");
+        }
+
+        // The product config: no Correction arc for any 3-letter span —
+        // neither a literal abbreviation typed on purpose (etf, cpi, ...)
+        // nor a genuine 3-letter mistype (xat, eht, ...), whose corrections
+        // precondition B just showed to be reachable.
+        EnglishCorrectionOracle production(&realLex);
+        for (const char *raw :
+             {"xat", "eht", "fpr", "jat", "kot", "mof", "pof", "etf", "cpi",
+              "vix", "fof", "kpi", "the", "and", "xyz"}) {
+            const std::string s = raw;
+            auto arcs = production.arcsAt(s, 0, s.size());
+            bool anyCorrection = false;
+            for (const auto &a : arcs) {
+                if (a.provenance == CandidateProvenance::Correction) {
+                    anyCorrection = true;
+                }
+            }
+            check(!anyCorrection, (std::string("floor: 3-letter raw '") + raw +
+                                   "' emits no Correction arc")
+                                      .c_str());
+        }
+
+        // 4-letter spans still correct (transposition control taht -> that,
+        // plus the substitution controls gello -> hello and owrd -> word).
+        {
+            const std::string s = "taht";
+            auto arcs = production.arcsAt(s, 0, s.size());
+            bool hitsThat = false;
+            for (const auto &a : arcs) {
+                if (a.provenance == CandidateProvenance::Correction &&
+                    a.rawBegin == 0 && a.rawEnd == 4 &&
+                    a.resolvedOutput == "that") {
+                    hitsThat = true;
+                }
+            }
+            check(hitsThat, "floor: the 4-letter control taht still gets a "
+                            "Correction arc for 'that'");
+            check(hasCorrection(production.arcsAt("gello", 0, 5), 0, 5),
+                  "floor: the 5-letter control gello still corrects");
+            check(hasCorrection(production.arcsAt("owrd", 0, 4), 0, 4),
+                  "floor: the 4-letter control owrd still corrects");
+        }
     }
 
     if (failures == 0) {
