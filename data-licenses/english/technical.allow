@@ -95,3 +95,29 @@ TTS
 # shipped resource invariant key == lowercase(display), which holds for every
 # row of the resource (22477 before these additions, 22517 after) - see the
 # release report.
+# v0.1.3-fusion.13 additions (owner-reviewed list, R1 two-letter uppercase
+# abbreviations + R2 finance acronyms; per-entry provenance in AUDIT.md §6):
+IH
+IM
+PE
+PB
+IF
+ETF
+LOF
+CPI
+PPI
+PMI
+MLF
+LPR
+VIX
+QDII
+FOF
+REITs
+ESG
+ROE
+EPS
+CTA
+# `IC` is deliberately not repeated here: it already ships from the upstream
+# dictionaries with the canonical uppercase display, so adding it would change
+# no observable behavior. `IF` and `ROE` do replace a shipped lowercase display
+# (`if`, `roe`); the lowercase literal stays a parallel arc (D071).

@@ -4726,6 +4726,7 @@ coyote	9	coyote
 coze	9	Coze	p
 cozy	9	cozy	
 cp	8	CP	
+cpi	9	CPI	t
 cpu	9	CPU	t
 cpython	8	CPython	
 crab	9	crab	
@@ -4882,6 +4883,7 @@ crystals	9	crystals
 cs	9	CS	
 csdn	8	CSDN	
 css	9	CSS	t
+cta	9	CTA	t
 cto	9	CTO	t
 ctrl	9	Ctrl	
 cuba	9	Cuba	
@@ -6863,6 +6865,7 @@ episodes	9	episodes
 epoch	9	epoch	
 epoll	8	epoll	
 epoxy	9	epoxy	
+eps	9	EPS	t
 epsilon	9	epsilon	
 epson	9	epson	
 epstein	9	Epstein	
@@ -6929,6 +6932,7 @@ escherichia	9	Escherichia
 escort	9	escort	
 escorts	9	escorts	
 escrow	9	escrow	
+esg	9	ESG	t
 esim	8	eSIM	
 eslint	8	ESLint	
 espanol	9	espanol	
@@ -6969,6 +6973,7 @@ etc	9	etc
 etcd	8	etcd	
 eternal	9	eternal	
 eternity	9	eternity	
+etf	9	ETF	t
 eth	8	ETH	
 ethan	9	Ethan	
 ethanol	9	ethanol	
@@ -7895,6 +7900,7 @@ focus	9	focus
 focused	9	focused	
 focuses	9	focuses	
 focusing	9	focusing	
+fof	9	FOF	t
 fog	9	fog	
 foil	9	foil	
 fold	9	fold	
@@ -9837,7 +9843,7 @@ ielts	8	IELTS
 iepl	8	IEPL	
 ietf	9	IETF	
 iexplorer	8	iExplorer	
-if	9	if	
+if	9	IF	t
 iffmpeg	8	iFFmpeg	
 iflytek	6	iFLYTEK	
 ifttt	8	IFTTT	
@@ -9853,6 +9859,7 @@ ignore	9	ignore
 ignored	9	ignored	
 ignoring	9	ignoring	
 iguana	9	iguana	
+ih	9	IH	t
 iina	8	IINA	
 ikea	9	IKEA	p
 iklear	8	iKlear	
@@ -9877,6 +9884,7 @@ illustrates	9	illustrates
 illustration	9	illustration	
 illustrations	9	illustrations	
 illustrator	9	illustrator	
+im	9	IM	t
 imac	9	iMac	p
 image	9	image	
 imagery	9	imagery	
@@ -11792,6 +11800,7 @@ lodge	9	lodge
 lodged	9	lodged	
 lodges	9	lodges	
 lodging	9	lodging	
+lof	9	LOF	t
 loft	9	loft	
 lofty	9	lofty	
 log	9	log	
@@ -11905,6 +11914,7 @@ loyal	9	loyal
 loyalty	9	loyalty	
 lozenge	9	lozenge	
 lozenges	9	lozenges	
+lpr	9	LPR	t
 lsp	8	LSP	
 lts	8	LTS	
 ltsc	8	LTSC	
@@ -12844,6 +12854,7 @@ mixes	9	mixes
 mixing	9	mixing	
 mixture	9	mixture	
 mixtures	9	mixtures	
+mlf	9	MLF	t
 moan	9	moan	
 moaned	9	moaned	
 moaning	9	moaning	
@@ -14590,6 +14601,7 @@ payouts	9	payouts
 paypal	9	PayPal	
 payroll	9	payroll	
 pays	9	pays	
+pb	9	PB	t
 pc	9	PC	
 pcdn	8	PCDN	
 pci	9	PCI	
@@ -14597,6 +14609,7 @@ pcie	8	PCIe
 pcmcia	9	PCMCIA	
 pdf	9	PDF	t
 pdfs	8	PDFs	
+pe	9	PE	t
 pea	9	pea	
 peace	9	peace	
 peaceful	9	peaceful	
@@ -15137,6 +15150,7 @@ plush	9	plush
 pluto	9	Pluto	
 ply	9	ply	
 plymouth	9	Plymouth	
+pmi	9	PMI	t
 pneumatic	9	pneumatic	
 pneumonia	9	pneumonia	
 png	9	PNG	
@@ -15371,6 +15385,7 @@ powers	9	powers
 powerseller	7	powerseller	
 powershell	8	PowerShell	
 powershot	7	powershot	
+ppi	9	PPI	t
 pppoe	8	PPPoE	
 ppt	9	PPT	t
 pr	9	PR	t
@@ -15988,6 +16003,7 @@ pywebio	8	PyWebIO
 qa	9	QA	t
 qatar	9	Qatar	
 qbittorrent	8	qBittorrent	
+qdii	9	QDII	t
 qoder	8	Qoder	
 qomolangma	9	Qomolangma	
 qos	9	QoS	
@@ -16552,6 +16568,7 @@ rein	9	rein
 reinforce	9	reinforce	
 reinforced	9	reinforced	
 reinforcement	9	reinforcement	
+reits	9	REITs	t
 reject	9	reject	
 rejected	9	rejected	
 rejection	9	rejection	
@@ -17144,7 +17161,7 @@ rodgers	9	Rodgers
 rodney	9	Rodney	
 rodriguez	9	Rodriguez	
 rods	9	rods	
-roe	9	roe	
+roe	9	ROE	t
 roger	9	roger	
 rogers	9	Rogers	
 rogue	9	rogue	
@@ -21631,6 +21648,7 @@ vivaldi	8	Vivaldi
 vivian	9	Vivian	
 vivid	9	vivid	
 vivo	8	vivo	
+vix	9	VIX	t
 viz	9	viz	
 vladimir	9	Vladimir	
 vlan	9	VLAN	
