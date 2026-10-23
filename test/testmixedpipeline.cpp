@@ -481,6 +481,56 @@ int main() {
         }
         check(UnifiedRanker::isBoundedInsertionClass(single, 6),
               "ranker-B: whole-raw single canonical arc stays a member");
+        // fusion.14: the same evidence when the canonical word TRAILS the
+        // Chinese part — Ziranma "woxdmliphone" -> [我想买][iPhone], where
+        // the Chinese decoder also accepts "ip ho ne" as a forced 蠢货呢.
+        // Before this case existed the fused candidate was buried behind the
+        // entire classical list (measured: index 127).
+        UnifiedCandidate trailChinese;
+        {
+            SegmentationPath p;
+            SegmentationArc a;
+            a.rawBegin = 0;
+            a.rawEnd = 6;
+            a.source = SegmentSource::Chinese;
+            a.provenance = CandidateProvenance::Exact;
+            a.resolvedOutput = "我想买";
+            SegmentationArc b;
+            b.rawBegin = 6;
+            b.rawEnd = 12;
+            b.source = SegmentSource::English;
+            b.provenance = CandidateProvenance::Canonical;
+            b.resolvedOutput = "iPhone";
+            p.arcs = {a, b};
+            check(composer.compose(p, trailChinese),
+                  "ranker-B: Chinese + trailing English composes");
+        }
+        check(UnifiedRanker::isBoundedInsertionClass(trailChinese, 12),
+              "ranker-B: [Chinese][canonical English] is a bounded insertion");
+        // Two English arcs are outside the class wherever they sit.
+        {
+            UnifiedCandidate bad = trailChinese;
+            bad.sources[0] = SegmentSource::English;
+            check(!UnifiedRanker::isBoundedInsertionClass(bad, 12),
+                  "ranker-B: two English arcs rejected");
+        }
+        // A trailing word whose surface equals the typed span is Exact, and
+        // exactness inside a Chinese reading is rule (d)'s business, not this
+        // class: ambiguous lowercase overlaps must keep the old placement.
+        {
+            UnifiedCandidate bad = trailChinese;
+            bad.provenances[1] = CandidateProvenance::Exact;
+            check(!UnifiedRanker::isBoundedInsertionClass(bad, 12),
+                  "ranker-B: trailing Exact word is not the canonical class");
+        }
+        // A trailing word that stops short of the end is not a whole-raw
+        // reading.
+        {
+            UnifiedCandidate bad = trailChinese;
+            bad.alignment[1].rawEnd = 11;
+            check(!UnifiedRanker::isBoundedInsertionClass(bad, 12),
+                  "ranker-B: trailing tiling that misses the raw end rejected");
+        }
         // English remainder (not Chinese) is rejected by structure.
         {
             UnifiedCandidate bad = leadChinese;

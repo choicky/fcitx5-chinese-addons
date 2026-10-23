@@ -117,36 +117,45 @@ bool UnifiedRanker::isBoundedInsertionClass(const UnifiedCandidate &c,
         c.alignment.size() != c.arcCount) {
         return false;
     }
-    if (c.sources[0] != SegmentSource::English) {
-        return false;
-    }
-    if (c.provenances[0] != CandidateProvenance::Canonical &&
-        c.provenances[0] != CandidateProvenance::CustomPhrase) {
-        return false;
-    }
-    if (c.alignment[0].rawBegin != 0) {
-        return false;
-    }
-    if (c.arcCount == 1) {
-        return c.alignment[0].rawEnd == rawSize;
-    }
-    // fusion.7 device blocker B: the same provenance argument holds when the
-    // canonical English word is only the leading part of the raw and the rest
-    // reads as Chinese ("openaimoxing" -> [OpenAI][模型]). The class stays
-    // bounded by structure, not by a length: one leading canonical English
-    // arc, every remaining arc Chinese, and the tilings consume the raw
-    // exactly once with no gap and no overlap.
-    std::size_t cursor = c.alignment[0].rawEnd;
-    for (std::size_t i = 1; i < c.arcCount; ++i) {
-        if (c.sources[i] != SegmentSource::Chinese) {
-            return false;
-        }
-        if (c.alignment[i].rawBegin != cursor || c.alignment[i].rawEnd <= cursor) {
+    // Exactly one English arc, every other arc Chinese, and the tilings
+    // consume the raw exactly once with no gap and no overlap.
+    //
+    // fusion.7 device blocker B introduced the leading form
+    // ("openaimoxing" -> [OpenAI][模型]). The evidence does not depend on
+    // where the word sits: a Canonical/CustomPhrase arc exists only when the
+    // dictionary surface differs from the typed span (or the user confirmed
+    // the word), so it cannot be a Chinese respelling of those letters, and
+    // the candidate still has to explain the whole raw. The trailing form is
+    // the same reading of the same evidence ("woxdmliphone" ->
+    // [我想买][iPhone], where the Chinese decoder also accepts "ip ho ne" as
+    // a forced 蠢货呢); leaving it out buried the fused candidate behind the
+    // entire classical list, 127 candidates deep, which is why the class now
+    // looks at the arc, not at its position. The class stays bounded by
+    // structure — one slot, one member per input (fusion.11 §3a) — so a
+    // Chinese head still keeps row 0.
+    std::size_t cursor = 0;
+    std::size_t englishArcs = 0;
+    for (std::size_t i = 0; i < c.arcCount; ++i) {
+        if (c.alignment[i].rawBegin != cursor ||
+            c.alignment[i].rawEnd <= cursor) {
             return false;
         }
         cursor = c.alignment[i].rawEnd;
+        if (c.sources[i] == SegmentSource::English) {
+            if (++englishArcs > 1) {
+                return false;
+            }
+            if (c.provenances[i] != CandidateProvenance::Canonical &&
+                c.provenances[i] != CandidateProvenance::CustomPhrase) {
+                return false;
+            }
+            continue;
+        }
+        if (c.sources[i] != SegmentSource::Chinese) {
+            return false;
+        }
     }
-    return cursor == rawSize;
+    return englishArcs == 1 && cursor == rawSize;
 }
 
 float UnifiedRanker::score(const RankFeatures &f) const {
