@@ -110,7 +110,11 @@ public:
     // puts every English candidate behind the whole Chinese list" rule).
     // A candidate belongs to this class when it explains the WHOLE raw
     // stream with a SINGLE English arc whose provenance is Canonical or
-    // CustomPhrase. Pure property test, no score comparison and no word
+    // CustomPhrase, every other arc Chinese, and the arcs tiling the raw
+    // exactly once — with the English arc leading
+    // (openaimoxing -> [OpenAI][模型]), trailing
+    // (woxdmliphone -> [我想买][iPhone]) or between Chinese arcs alike.
+    // Pure property test, no score comparison and no word
     // list (§3): Canonical re-spelling only exists when the dictionary
     // surface differs from the typed span in case form (chatgpt ->
     // ChatGPT, macos -> macOS, openwrt -> OpenWrt), which ambiguous

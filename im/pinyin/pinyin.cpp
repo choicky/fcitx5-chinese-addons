@@ -814,7 +814,12 @@ void PinyinEngine::updateUI(InputContext *inputContext) {
             //       the user confirmed it, so ambiguous lowercase overlaps
             //       (win/long/game/pin/an/ai: provenance Exact) and
             //       speculative Completion/Correction arcs keep the old
-            //       conservative placement.
+            //       conservative placement. The arc's position does not
+            //       matter (fusion.14): the same class holds when the word
+            //       trails the Chinese part, because "woxdmliphone" ->
+            //       [我想买][iPhone] was generated and then buried 127
+            //       candidates deep for no reason other than that the
+            //       Ziranma decoder also accepts "ip ho ne" as 蠢货呢.
             //       Bound: there is no single-syllable suppression — no such
             //       guard exists in this placement code or in any test, and
             //       the text previously here described a suppression that
