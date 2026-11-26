@@ -41,6 +41,7 @@
 #include <iterator>
 #include <string>
 #include <string_view>
+#include <type_traits>
 #include <unordered_map>
 #include <utility>
 #include <vector>
@@ -132,7 +133,10 @@ void PunctuationProfile::load(std::istream &in) {
 void PunctuationProfile::set(const RawConfig &config) {
     PunctuationMapConfig newConfig;
     newConfig.load(config);
+    set(newConfig);
+}
 
+void PunctuationProfile::set(const PunctuationMapConfig &newConfig) {
     puncMap_.clear();
     auto *configValue = punctuationMapConfig_.entries.mutableValue();
     configValue->clear();
@@ -152,7 +156,29 @@ void PunctuationProfile::set(const RawConfig &config) {
     }
 }
 
+void PunctuationProfile::adopt(PunctuationProfile &&prepared) noexcept {
+    // Only the two current values move: this profile keeps its own entries option, and with
+    // it the shipped table loadSystem() installed as that option's default value — the table
+    // "restore defaults" submits. The prepared rows and lookup map are then already built, so
+    // exchanging the containers publishes them without parsing, copying or allocating.
+    puncMap_.swap(prepared.puncMap_);
+    punctuationMapConfig_.entries.mutableValue()->swap(
+        *prepared.punctuationMapConfig_.entries.mutableValue());
+}
+
 namespace {
+
+// Publishing a prepared profile runs after the canonical file has been replaced. If it could
+// throw — a rehash, a copy, an allocation — the file would describe a table the live map is not
+// serving and nothing could report it. Both halves of the exchange are therefore required to be
+// non-throwing by the types themselves, not by inspection of the call site.
+static_assert(
+    std::is_nothrow_swappable_v<std::unordered_map<
+        uint32_t, std::vector<std::pair<std::string, std::string>>>>,
+    "the live lookup map must be publishable without allocating");
+static_assert(
+    std::is_nothrow_swappable_v<std::vector<PunctuationMapEntryConfig>>,
+    "the live rows must be publishable without allocating");
 
 // fs::safeWrite reports how much it stored instead of writing the whole buffer, so a single
 // unchecked call could leave a truncated file that still looks like a completed save. Every
@@ -638,19 +664,25 @@ Punctuation::setSubConfigChecked(const std::string &path,
     if (iter == profiles_.end()) {
         return fcitx::PunctuationMapSaveResult::UnknownLanguage;
     }
-    // Prepare the complete replacement beside the live profile, built exactly the way set()
-    // builds it. The live profile is not touched, so its DefaultValue — the shipped table
-    // loadSystem() installed, which "restore defaults" reads — survives every save.
-    PunctuationMapConfig prepared;
-    prepared.load(config);
-    if (!storable(prepared)) {
+    // Parse the submission once, and build everything the live profile would gain beside it:
+    // the canonical rows, the lookup map the keystroke path reads, and the bytes about to be
+    // written. Nothing here touches the live profile, so a refusal or a failed write leaves its
+    // rows, its map and its entries option — including the shipped table that option holds as
+    // its default value — exactly as they were.
+    PunctuationMapConfig submitted;
+    submitted.load(config);
+    if (!storable(submitted)) {
         return fcitx::PunctuationMapSaveResult::Invalid;
     }
-    if (!PunctuationProfile::saveAs(prepared, lang)) {
+    PunctuationProfile prepared;
+    prepared.set(submitted);
+    if (!PunctuationProfile::saveAs(prepared.config(), lang)) {
         return fcitx::PunctuationMapSaveResult::SaveFailed;
     }
-    // Persisted. Only now does the live map adopt the rows that are already on disk.
-    iter->second.set(config);
+    // Persisted. The prepared profile is published by exchanging its containers, so no parse,
+    // copy or allocation happens after the file is committed — the answer Ok cannot be followed
+    // by a throw that would leave the file and the live map disagreeing.
+    iter->second.adopt(std::move(prepared));
     return fcitx::PunctuationMapSaveResult::Ok;
 }
 

@@ -54,9 +54,23 @@ FCITX_ADDON_DECLARE_FUNCTION(
 /**
  * Checked counterpart of AddonInstance::setSubConfig for a punctuation map.
  *
- * The map is validated as a complete replacement, persisted once through the addon's own
- * serializer and Fcitx's atomic save, and only then published as the live map. The generic
- * setSubConfig keeps its fire-and-forget contract.
+ * `path` names a loaded profile the way getSubConfig does: "punctuationmap/<language>",
+ * i.e. "punctuationmap/zh_CN" for the zh_CN table. `config` is the complete replacement
+ * map, in the shape getSubConfig returns it — an "Entries" list of rows carrying "Key",
+ * "Mapping" and "AltMapping". It replaces the whole table rather than merging into it;
+ * submitted order is the candidate order, repeated keys stay separate candidates, and an
+ * empty "Entries" list is a valid, deliberately empty table.
+ *
+ * The addon parses the submission once, builds the complete replacement — rows, lookup map
+ * and serialized bytes — beside the live profile, and refuses it as a whole if any row
+ * cannot be stored. Only an accepted map is written, once, through the addon's own
+ * serializer and Fcitx's atomic save; only after that write succeeds does the prepared
+ * profile become the live map. Nothing is written for a rejected map, and nothing is
+ * published for a failed write.
+ *
+ * Every result other than Ok leaves the canonical punc.mb file and the live map at the
+ * table they held before the call, so the same submission can be corrected or retried.
+ * The generic AddonInstance::setSubConfig callers keep its fire-and-forget void contract.
  */
 FCITX_ADDON_DECLARE_FUNCTION(
     Punctuation, setSubConfigChecked,
