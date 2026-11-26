@@ -7,6 +7,7 @@
 #include "punctuation.h"
 #include "notifications_public.h"
 #include <algorithm>
+#include <cctype>
 #include <cstdint>
 #include <exception>
 #include <fcitx-config/iniparser.h>
@@ -151,25 +152,75 @@ void PunctuationProfile::set(const RawConfig &config) {
     }
 }
 
-void PunctuationProfile::save(std::string_view name) const {
-    StandardPaths::global().safeSave(
+namespace {
+
+// fs::safeWrite reports how much it stored instead of writing the whole buffer, so a single
+// unchecked call could leave a truncated file that still looks like a completed save. Every
+// write inside the profile is re-issued until all of it is on the descriptor.
+bool writeAll(int fd, std::string_view text) {
+    while (!text.empty()) {
+        const auto written = fs::safeWrite(fd, text.data(), text.size());
+        if (written <= 0) {
+            return false;
+        }
+        text.remove_prefix(static_cast<std::size_t>(written));
+    }
+    return true;
+}
+
+bool writeEntries(int fd, const PunctuationMapConfig &config) {
+    for (const auto &entry : *config.entries) {
+        if (!writeAll(fd, *entry.key) || !writeAll(fd, " ") ||
+            !writeAll(fd, *entry.mapResult1)) {
+            return false;
+        }
+        if (!entry.mapResult2->empty() &&
+            (!writeAll(fd, " ") || !writeAll(fd, *entry.mapResult2))) {
+            return false;
+        }
+        if (!writeAll(fd, "\n")) {
+            return false;
+        }
+    }
+    return true;
+}
+
+bool storableColumn(const std::string &value) {
+    return std::none_of(value.begin(), value.end(), [](unsigned char character) {
+        return std::isspace(character) != 0;
+    });
+}
+
+// The canonical file separates a row's columns with single spaces, so a column holding a
+// space cannot be read back as the same row. set() would keep such a row, which is why a
+// checked save has to refuse it: a successful answer must mean every submitted row is now
+// in the file. The other three conditions are the ones set() silently drops.
+bool storable(const PunctuationMapConfig &config) {
+    return std::all_of(
+        config.entries->begin(), config.entries->end(),
+        [](const PunctuationMapEntryConfig &entry) {
+            return !entry.key->empty() && !entry.mapResult1->empty() &&
+                   utf8::lengthValidated(*entry.key) == 1 &&
+                   storableColumn(*entry.key) &&
+                   storableColumn(*entry.mapResult1) &&
+                   storableColumn(*entry.mapResult2);
+        });
+}
+
+} // namespace
+
+bool PunctuationProfile::saveAs(const PunctuationMapConfig &config,
+                                std::string_view name) {
+    return StandardPaths::global().safeSave(
         StandardPathsType::PkgData,
         stringutils::concat("punctuation/", profilePrefix, name),
-        [this](int fd) {
-            for (const auto &entry : *punctuationMapConfig_.entries) {
-                fs::safeWrite(fd, entry.key->data(), entry.key->size());
-                fs::safeWrite(fd, " ", sizeof(char));
-                fs::safeWrite(fd, entry.mapResult1->data(),
-                              entry.mapResult1->size());
-                if (!entry.mapResult2->empty()) {
-                    fs::safeWrite(fd, " ", sizeof(char));
-                    fs::safeWrite(fd, entry.mapResult2->data(),
-                                  entry.mapResult2->size());
-                }
-                fs::safeWrite(fd, "\n", sizeof(char));
-            }
-            return true;
-        });
+        [&config](int fd) { return writeEntries(fd, config); });
+}
+
+void PunctuationProfile::save(std::string_view name) const {
+    // The generic, fire-and-forget path: AddonInstance::setSubConfig has no way to report a
+    // result, so the outcome is still dropped here. saveAs is shared with the checked path.
+    saveAs(punctuationMapConfig_, name);
 }
 
 const std::pair<std::string, std::string> &
@@ -577,6 +628,30 @@ void Punctuation::setSubConfig(const std::string &path,
     }
     iter->second.set(config);
     iter->second.save(lang);
+}
+
+fcitx::PunctuationMapSaveResult
+Punctuation::setSubConfigChecked(const std::string &path,
+                                 const fcitx::RawConfig &config) {
+    const std::string lang = langByPath(path);
+    auto iter = profiles_.find(lang);
+    if (iter == profiles_.end()) {
+        return fcitx::PunctuationMapSaveResult::UnknownLanguage;
+    }
+    // Prepare the complete replacement beside the live profile, built exactly the way set()
+    // builds it. The live profile is not touched, so its DefaultValue — the shipped table
+    // loadSystem() installed, which "restore defaults" reads — survives every save.
+    PunctuationMapConfig prepared;
+    prepared.load(config);
+    if (!storable(prepared)) {
+        return fcitx::PunctuationMapSaveResult::Invalid;
+    }
+    if (!PunctuationProfile::saveAs(prepared, lang)) {
+        return fcitx::PunctuationMapSaveResult::SaveFailed;
+    }
+    // Persisted. Only now does the live map adopt the rows that are already on disk.
+    iter->second.set(config);
+    return fcitx::PunctuationMapSaveResult::Ok;
 }
 
 FCITX_ADDON_FACTORY_V2(punctuation, PunctuationFactory);

@@ -74,6 +74,14 @@ public:
     void load(std::istream &in);
     void set(const fcitx::RawConfig &config);
     void save(std::string_view name) const;
+    /**
+     * Serializes a complete map into the canonical punc.mb.<name> file with one
+     * StandardPaths::safeSave, checking every write.
+     *
+     * Shared by save() and Punctuation::setSubConfigChecked so the generic and the checked
+     * path can never produce different bytes for the same rows.
+     */
+    static bool saveAs(const PunctuationMapConfig &config, std::string_view name);
     void resetDefaultValue();
 
     const std::pair<std::string, std::string> &
@@ -150,12 +158,22 @@ public:
     getSubConfig(const std::string &path) const override;
     void setSubConfig(const std::string &path,
                       const fcitx::RawConfig &config) override;
+    /**
+     * Checked save for a punctuation map.
+     *
+     * Builds the complete replacement beside the live profile, refuses a map whose rows
+     * cannot be stored, persists it once, and only then publishes it. A refusal or a failed
+     * save leaves both the canonical file and the live map at the previous table.
+     */
+    fcitx::PunctuationMapSaveResult
+    setSubConfigChecked(const std::string &path, const fcitx::RawConfig &config);
 
     FCITX_ADDON_EXPORT_FUNCTION(Punctuation, getPunctuation);
     FCITX_ADDON_EXPORT_FUNCTION(Punctuation, pushPunctuation);
     FCITX_ADDON_EXPORT_FUNCTION(Punctuation, pushPunctuationV2);
     FCITX_ADDON_EXPORT_FUNCTION(Punctuation, cancelLast);
     FCITX_ADDON_EXPORT_FUNCTION(Punctuation, getPunctuationCandidates)
+    FCITX_ADDON_EXPORT_FUNCTION(Punctuation, setSubConfigChecked);
 
     bool enabled() const { return *config_.enabled; }
     void setEnabled(bool enabled, fcitx::InputContext *ic) {
