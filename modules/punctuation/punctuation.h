@@ -73,8 +73,32 @@ public:
     void loadSystem(std::istream &in);
     void load(std::istream &in);
     void set(const fcitx::RawConfig &config);
+    /**
+     * Builds this profile from a map that has already been parsed.
+     *
+     * Same rows, same order and the same dropped rows as set(const RawConfig &), without
+     * going back through the raw tree: a checked save parses the submission once and builds
+     * the replacement from that parse.
+     */
+    void set(const PunctuationMapConfig &config);
     void save(std::string_view name) const;
+    /**
+     * Serializes a complete map into the canonical punc.mb.<name> file with one
+     * StandardPaths::safeSave, checking every write.
+     *
+     * Shared by save() and Punctuation::setSubConfigChecked so the generic and the checked
+     * path can never produce different bytes for the same rows.
+     */
+    static bool saveAs(const PunctuationMapConfig &config, std::string_view name);
     void resetDefaultValue();
+    /**
+     * Makes an already prepared profile this one, by exchanging the two containers it owns.
+     *
+     * It neither parses nor allocates, which is the point: the checked save calls it only
+     * after the canonical file has been replaced, so it must not be able to fail and leave
+     * the file describing a table the live map is not serving.
+     */
+    void adopt(PunctuationProfile &&prepared) noexcept;
 
     const std::pair<std::string, std::string> &
     getPunctuation(uint32_t unicode) const;
@@ -150,12 +174,23 @@ public:
     getSubConfig(const std::string &path) const override;
     void setSubConfig(const std::string &path,
                       const fcitx::RawConfig &config) override;
+    /**
+     * Checked save for a punctuation map.
+     *
+     * Parses the submission once, builds the complete replacement — rows, lookup map and
+     * bytes — beside the live profile, refuses a map whose rows cannot be stored, persists it
+     * once, and publishes the prepared profile with an exchange that cannot fail. A refusal
+     * or a failed save leaves both the canonical file and the live map at the previous table.
+     */
+    fcitx::PunctuationMapSaveResult
+    setSubConfigChecked(const std::string &path, const fcitx::RawConfig &config);
 
     FCITX_ADDON_EXPORT_FUNCTION(Punctuation, getPunctuation);
     FCITX_ADDON_EXPORT_FUNCTION(Punctuation, pushPunctuation);
     FCITX_ADDON_EXPORT_FUNCTION(Punctuation, pushPunctuationV2);
     FCITX_ADDON_EXPORT_FUNCTION(Punctuation, cancelLast);
     FCITX_ADDON_EXPORT_FUNCTION(Punctuation, getPunctuationCandidates)
+    FCITX_ADDON_EXPORT_FUNCTION(Punctuation, setSubConfigChecked);
 
     bool enabled() const { return *config_.enabled; }
     void setEnabled(bool enabled, fcitx::InputContext *ic) {

@@ -7,6 +7,7 @@
 #include "punctuation.h"
 #include "notifications_public.h"
 #include <algorithm>
+#include <cctype>
 #include <cstdint>
 #include <exception>
 #include <fcitx-config/iniparser.h>
@@ -40,6 +41,7 @@
 #include <iterator>
 #include <string>
 #include <string_view>
+#include <type_traits>
 #include <unordered_map>
 #include <utility>
 #include <vector>
@@ -131,7 +133,10 @@ void PunctuationProfile::load(std::istream &in) {
 void PunctuationProfile::set(const RawConfig &config) {
     PunctuationMapConfig newConfig;
     newConfig.load(config);
+    set(newConfig);
+}
 
+void PunctuationProfile::set(const PunctuationMapConfig &newConfig) {
     puncMap_.clear();
     auto *configValue = punctuationMapConfig_.entries.mutableValue();
     configValue->clear();
@@ -151,25 +156,97 @@ void PunctuationProfile::set(const RawConfig &config) {
     }
 }
 
-void PunctuationProfile::save(std::string_view name) const {
-    StandardPaths::global().safeSave(
+void PunctuationProfile::adopt(PunctuationProfile &&prepared) noexcept {
+    // Only the two current values move: this profile keeps its own entries option, and with
+    // it the shipped table loadSystem() installed as that option's default value — the table
+    // "restore defaults" submits. The prepared rows and lookup map are then already built, so
+    // exchanging the containers publishes them without parsing, copying or allocating.
+    puncMap_.swap(prepared.puncMap_);
+    punctuationMapConfig_.entries.mutableValue()->swap(
+        *prepared.punctuationMapConfig_.entries.mutableValue());
+}
+
+namespace {
+
+// Publishing a prepared profile runs after the canonical file has been replaced. If it could
+// throw — a rehash, a copy, an allocation — the file would describe a table the live map is not
+// serving and nothing could report it. Both halves of the exchange are therefore required to be
+// non-throwing by the types themselves, not by inspection of the call site.
+static_assert(
+    std::is_nothrow_swappable_v<std::unordered_map<
+        uint32_t, std::vector<std::pair<std::string, std::string>>>>,
+    "the live lookup map must be publishable without allocating");
+static_assert(
+    std::is_nothrow_swappable_v<std::vector<PunctuationMapEntryConfig>>,
+    "the live rows must be publishable without allocating");
+
+// fs::safeWrite reports how much it stored instead of writing the whole buffer, so a single
+// unchecked call could leave a truncated file that still looks like a completed save. Every
+// write inside the profile is re-issued until all of it is on the descriptor.
+bool writeAll(int fd, std::string_view text) {
+    while (!text.empty()) {
+        const auto written = fs::safeWrite(fd, text.data(), text.size());
+        if (written <= 0) {
+            return false;
+        }
+        text.remove_prefix(static_cast<std::size_t>(written));
+    }
+    return true;
+}
+
+bool writeEntries(int fd, const PunctuationMapConfig &config) {
+    for (const auto &entry : *config.entries) {
+        if (!writeAll(fd, *entry.key) || !writeAll(fd, " ") ||
+            !writeAll(fd, *entry.mapResult1)) {
+            return false;
+        }
+        if (!entry.mapResult2->empty() &&
+            (!writeAll(fd, " ") || !writeAll(fd, *entry.mapResult2))) {
+            return false;
+        }
+        if (!writeAll(fd, "\n")) {
+            return false;
+        }
+    }
+    return true;
+}
+
+bool storableColumn(const std::string &value) {
+    return std::none_of(value.begin(), value.end(), [](unsigned char character) {
+        return std::isspace(character) != 0;
+    });
+}
+
+// The canonical file separates a row's columns with single spaces, so a column holding a
+// space cannot be read back as the same row. set() would keep such a row, which is why a
+// checked save has to refuse it: a successful answer must mean every submitted row is now
+// in the file. The other three conditions are the ones set() silently drops.
+bool storable(const PunctuationMapConfig &config) {
+    return std::all_of(
+        config.entries->begin(), config.entries->end(),
+        [](const PunctuationMapEntryConfig &entry) {
+            return !entry.key->empty() && !entry.mapResult1->empty() &&
+                   utf8::lengthValidated(*entry.key) == 1 &&
+                   storableColumn(*entry.key) &&
+                   storableColumn(*entry.mapResult1) &&
+                   storableColumn(*entry.mapResult2);
+        });
+}
+
+} // namespace
+
+bool PunctuationProfile::saveAs(const PunctuationMapConfig &config,
+                                std::string_view name) {
+    return StandardPaths::global().safeSave(
         StandardPathsType::PkgData,
         stringutils::concat("punctuation/", profilePrefix, name),
-        [this](int fd) {
-            for (const auto &entry : *punctuationMapConfig_.entries) {
-                fs::safeWrite(fd, entry.key->data(), entry.key->size());
-                fs::safeWrite(fd, " ", sizeof(char));
-                fs::safeWrite(fd, entry.mapResult1->data(),
-                              entry.mapResult1->size());
-                if (!entry.mapResult2->empty()) {
-                    fs::safeWrite(fd, " ", sizeof(char));
-                    fs::safeWrite(fd, entry.mapResult2->data(),
-                                  entry.mapResult2->size());
-                }
-                fs::safeWrite(fd, "\n", sizeof(char));
-            }
-            return true;
-        });
+        [&config](int fd) { return writeEntries(fd, config); });
+}
+
+void PunctuationProfile::save(std::string_view name) const {
+    // The generic, fire-and-forget path: AddonInstance::setSubConfig has no way to report a
+    // result, so the outcome is still dropped here. saveAs is shared with the checked path.
+    saveAs(punctuationMapConfig_, name);
 }
 
 const std::pair<std::string, std::string> &
@@ -577,6 +654,36 @@ void Punctuation::setSubConfig(const std::string &path,
     }
     iter->second.set(config);
     iter->second.save(lang);
+}
+
+fcitx::PunctuationMapSaveResult
+Punctuation::setSubConfigChecked(const std::string &path,
+                                 const fcitx::RawConfig &config) {
+    const std::string lang = langByPath(path);
+    auto iter = profiles_.find(lang);
+    if (iter == profiles_.end()) {
+        return fcitx::PunctuationMapSaveResult::UnknownLanguage;
+    }
+    // Parse the submission once, and build everything the live profile would gain beside it:
+    // the canonical rows, the lookup map the keystroke path reads, and the bytes about to be
+    // written. Nothing here touches the live profile, so a refusal or a failed write leaves its
+    // rows, its map and its entries option — including the shipped table that option holds as
+    // its default value — exactly as they were.
+    PunctuationMapConfig submitted;
+    submitted.load(config);
+    if (!storable(submitted)) {
+        return fcitx::PunctuationMapSaveResult::Invalid;
+    }
+    PunctuationProfile prepared;
+    prepared.set(submitted);
+    if (!PunctuationProfile::saveAs(prepared.config(), lang)) {
+        return fcitx::PunctuationMapSaveResult::SaveFailed;
+    }
+    // Persisted. The prepared profile is published by exchanging its containers, so no parse,
+    // copy or allocation happens after the file is committed — the answer Ok cannot be followed
+    // by a throw that would leave the file and the live map disagreeing.
+    iter->second.adopt(std::move(prepared));
+    return fcitx::PunctuationMapSaveResult::Ok;
 }
 
 FCITX_ADDON_FACTORY_V2(punctuation, PunctuationFactory);
